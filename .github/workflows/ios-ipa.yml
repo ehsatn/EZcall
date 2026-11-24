@@ -37,6 +37,12 @@ jobs:
           test "$(plutil -extract CFBundleDisplayName raw "$app/Info.plist")" = ezcall
           test "$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw "$app/Info.plist")" = EzcallAppIcon
           xcrun lipo "$app/ezcall" -verify_arch arm64
+          widget="$app/PlugIns/ezcallWidgets.appex"
+          test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$widget/Info.plist")" = com.apple.widgetkit-extension
+          test "$(plutil -extract CFBundleIdentifier raw "$widget/Info.plist")" = "$(plutil -extract CFBundleIdentifier raw "$app/Info.plist").widgets"
+          test "$(plutil -extract CFBundleShortVersionString raw "$widget/Info.plist")" = "$(plutil -extract CFBundleShortVersionString raw "$app/Info.plist")"
+          test "$(plutil -extract CFBundleVersion raw "$widget/Info.plist")" = "$(plutil -extract CFBundleVersion raw "$app/Info.plist")"
+          xcrun lipo "$widget/ezcallWidgets" -verify_arch arm64
           package="$(mktemp -d)"
           mkdir "$package/Payload"
           ditto "$app" "$package/Payload/ezcall.app"

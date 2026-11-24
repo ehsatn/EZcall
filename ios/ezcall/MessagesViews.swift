@@ -247,7 +247,7 @@ struct ConversationView: View {
                 Button("Delete Message", role: .destructive) { relay.discardOutgoingSMS(pending.id) }
             }
         } message: {
-            if let message = relay.smsStatus?.message { Text(message) }
+            if let message = relay.smsStatus?.message { Text(ezText(message)) }
         }
     }
 
@@ -272,7 +272,7 @@ struct ConversationView: View {
     }
 
     private func separator(_ date: Date, first: Bool) -> some View {
-        let time = date.formatted(date: .omitted, time: .shortened)
+        let time = date.formatted(.dateTime.hour().minute().locale(EzcallLanguage.current.locale))
         return VStack(spacing: 2) {
             if first { Text("Text Message · SMS") }
             Text("\(Text(RelayDates.day(date)).fontWeight(.semibold)) \(time)")
@@ -314,7 +314,7 @@ struct ConversationView: View {
                 .contextMenu {
                     Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = row.body }
                 }
-                .accessibilityLabel(row.received ? relay.name(for: address) + ", " + row.body : String(localized: "You") + ", " + row.body)
+                .accessibilityLabel(row.received ? relay.name(for: address) + ", " + row.body : ezText("You") + ", " + row.body)
                 .containerRelativeFrame(.horizontal, count: 4, span: 3, spacing: 0,
                                         alignment: row.received ? .leading : .trailing)
             if row.pending && pendingFailed {
@@ -355,7 +355,7 @@ struct ConversationView: View {
         guard let pending else { return }
         relay.discardOutgoingSMS(pending.id)
         if relay.sendSMS(to: address, body: pending.body) == nil {
-            relay.notice = String(localized: "Android isn’t ready to send SMS. Check the connection and try again.")
+            relay.notice = ezText("Android isn’t ready to send SMS. Check the connection and try again.")
         }
     }
 
@@ -421,7 +421,7 @@ struct NewMessageView: View {
                 let numberMatches = !digits.isEmpty && number.filter(\.isNumber).contains(digits)
                 guard nameMatches || numberMatches else { return nil }
                 return Suggestion(id: contact.id + "|" + number,
-                                  name: contact.name.isEmpty ? String(localized: "No Name") : contact.name,
+                                  name: contact.name.isEmpty ? ezText("No Name") : contact.name,
                                   number: number)
             }
         }.prefix(50))
@@ -519,7 +519,7 @@ private struct SMSRecipientView: View {
                         dismiss()
                     } label: {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(contact.name.isEmpty ? String(localized: "No Name") : contact.name)
+                            Text(contact.name.isEmpty ? ezText("No Name") : contact.name)
                                 .foregroundStyle(.primary)
                             Text(number).font(.subheadline).foregroundStyle(.secondary)
                         }
@@ -569,7 +569,7 @@ private struct SMSComposer: View {
     var body: some View {
         VStack(spacing: 6) {
             if let hint {
-                Text(hint)
+                Text(ezText(hint))
                     .font(.footnote)
                     .foregroundStyle(problem == nil ? Color.secondary : Color.red)
                     .multilineTextAlignment(.center)
@@ -595,8 +595,8 @@ private struct SMSComposer: View {
 
     private var hint: String? {
         if let problem { return problem }
-        if relay.status != .connected { return String(localized: "Waiting for your Android to connect") }
-        if !relay.canSendSMS { return String(localized: "Turn on Send SMS from the receiving phone in ezcall on Android.") }
+        if relay.status != .connected { return ezText("Waiting for your Android to connect") }
+        if !relay.canSendSMS { return ezText("Turn on Send SMS from the receiving phone in ezcall on Android.") }
         return nil
     }
 
@@ -643,19 +643,19 @@ private struct SMSComposer: View {
         problem = nil
         let recipient = address.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !recipient.isEmpty else {
-            problem = String(localized: "Enter a phone number or choose a contact.")
+            problem = ezText("Enter a phone number or choose a contact.")
             return
         }
         if isNewMessage, !recipient.allSatisfy({ $0.isNumber || " +-().".contains($0) }) || !recipient.contains(where: \.isNumber) {
-            problem = String(localized: "Choose a contact or enter a phone number.")
+            problem = ezText("Choose a contact or enter a phone number.")
             return
         }
         guard text.utf8.count <= 1_024 else {
-            problem = String(localized: "This message is too long to send as SMS.")
+            problem = ezText("This message is too long to send as SMS.")
             return
         }
         guard let id = relay.sendSMS(to: recipient, body: text) else {
-            problem = String(localized: "Android isn’t ready to send SMS. Try again when connected.")
+            problem = ezText("Android isn’t ready to send SMS. Try again when connected.")
             return
         }
         requestID = id

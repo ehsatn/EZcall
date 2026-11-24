@@ -16,6 +16,17 @@
     <string>ezcall</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>app.xcall.relay.widget</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>app.xcall.relay.widget</string>
+            </array>
+        </dict>
+    </array>
     <key>CFBundleShortVersionString</key>
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>

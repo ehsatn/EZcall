@@ -11,7 +11,6 @@ enum CallAudioError: Error {
 final class CallAudio: @unchecked Sendable {
     static let sampleRate = 48_000.0
     static let frameLength = 960
-    private static let bitRate = 20_000
     private static let logger = Logger(subsystem: "app.xcall.relay", category: "CallAudio")
 
     let uplink: Bool
@@ -21,6 +20,7 @@ final class CallAudio: @unchecked Sendable {
     private let decoder: AVAudioConverter
     private let encoder: AVAudioConverter?
     private let maxPacket: Int
+    private let payloadLimit: Int
     private let playback: OSAllocatedUnfairLock<Jitter>
     private let tones = OSAllocatedUnfairLock(initialState: ArraySlice<Float>())
     private let mute = OSAllocatedUnfairLock(initialState: false)
@@ -44,7 +44,7 @@ final class CallAudio: @unchecked Sendable {
         }
     }
 
-    init(key: Data, uplink: Bool, routeChanged: @escaping @Sendable () -> Void,
+    init(key: Data, uplink: Bool, payloadLimit: Int, routeChanged: @escaping @Sendable () -> Void,
          send: @escaping @Sendable (Data) -> Void) throws {
         guard let pcm = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Self.sampleRate,
                                       channels: 1, interleaved: false) else { throw CallAudioError.format }
@@ -57,10 +57,10 @@ final class CallAudio: @unchecked Sendable {
         var encoder: AVAudioConverter?
         if uplink {
             guard let made = AVAudioConverter(from: pcm, to: opus) else { throw CallAudioError.codec }
-            if let rates = made.applicableEncodeBitRates?.map(\.intValue),
-               let best = rates.min(by: { abs($0 - Self.bitRate) < abs($1 - Self.bitRate) }) {
-                made.bitRate = best
-            }
+            // Leave room for variable-size frames within one encrypted Bluetooth write.
+            let target = min(56_000, payloadLimit * 400 * 2 / 3)
+            let rates = made.applicableEncodeBitRates?.map(\.intValue) ?? []
+            made.bitRate = rates.filter { $0 <= target }.max() ?? target
             encoder = made
         }
         let playback = OSAllocatedUnfairLock(uncheckedState: Jitter())
@@ -69,6 +69,7 @@ final class CallAudio: @unchecked Sendable {
         self.decoder = decoder
         self.encoder = encoder
         self.maxPacket = max(encoder?.maximumOutputPacketSize ?? 0, 1_500)
+        self.payloadLimit = payloadLimit
         self.uplink = uplink
         self.playback = playback
         self.routeChanged = routeChanged
@@ -242,7 +243,7 @@ final class CallAudio: @unchecked Sendable {
         let description = output.packetDescriptions?.pointee
         let size = description.map { Int($0.mDataByteSize) } ?? Int(output.byteLength)
         let start = Int(description?.mStartOffset ?? 0)
-        guard (1...AudioSeal.maxPayload).contains(size), start >= 0, start <= Int(output.byteLength) - size else { return nil }
+        guard size > 0, size <= payloadLimit, start >= 0, start <= Int(output.byteLength) - size else { return nil }
         return Data(bytes: output.data.advanced(by: start), count: size)
     }
 

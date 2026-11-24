@@ -520,7 +520,7 @@ final class RelayController: NSObject, ObservableObject {
     }
 
     func name(for address: String) -> String {
-        if address.isEmpty { return "Unknown" }
+        if address.isEmpty { return ezText("Unknown") }
         return contactName(for: address) ?? address
     }
 
@@ -922,7 +922,7 @@ final class RelayController: NSObject, ObservableObject {
         case "pong":
             guard let ping, ping.id == header.id else { return }
             let elapsed = (ProcessInfo.processInfo.systemUptime - ping.started) * 1_000
-            finishTest("Round-trip verified · \(max(1, Int(elapsed.rounded()))) ms")
+            finishTest(ezText("Round-trip verified · %lld ms", Int64(max(1, Int(elapsed.rounded())))))
         case "sms":
             let message = try decoder.decode(RelaySMS.self, from: payload)
             guard valid(message) else { throw WireError.malformed }
@@ -932,7 +932,7 @@ final class RelayController: NSObject, ObservableObject {
             persist()
             if isNew && message.direction == "in" && UIApplication.shared.applicationState != .active {
                 let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? String(localized: "New message on Android") : message.body
+                    ? ezText("New message on Android") : message.body
                 alert(body, title: name(for: message.address), id: notificationID("message", message.id))
             }
         case "call":
@@ -989,7 +989,7 @@ final class RelayController: NSObject, ObservableObject {
             startAudio(try decoder.decode(AudioStart.self, from: payload))
         case "audio_stop":
             let notice = try decoder.decode(Notice.self, from: payload)
-            guard let id = UUID(uuidString: notice.id), id == audioCallID else { return }
+            guard let id = UUID(uuidString: notice.id), id == audioCallID || (audioCallID == nil && calls.has(id)) else { return }
             stopAudio()
             if let message = notice.message { feedback = String(message.prefix(200)) }
         case "call_resumed":
@@ -1026,10 +1026,10 @@ final class RelayController: NSObject, ObservableObject {
                 let alertID = notificationID("call", call.id)
                 calls.reportIncoming(id, address: call.address, name: name(for: call.address),
                                      simulated: call.simulated == true) { [weak self] in
-                    self?.alert("Incoming call on Android", id: alertID)
+                    self?.alert(ezText("Incoming call on Android"), id: alertID)
                 }
             } else if isNew {
-                alert("Incoming call on Android", id: notificationID("call", call.id))
+                alert(ezText("Incoming call on Android"), id: notificationID("call", call.id))
             }
         case .active:
             guard let id else { return }
@@ -1051,9 +1051,12 @@ final class RelayController: NSObject, ObservableObject {
         stopAudio()
         audioCallID = id
         armSyncDeadline()
-        let uplink = start.uplink && AVAudioApplication.shared.recordPermission == .granted
+        let maxWrite = peripheral?.maximumWriteValueLength(for: .withoutResponse) ?? 0
+        let payloadLimit = min(AudioSeal.maxPayload, maxWrite - AudioSeal.overhead)
+        let uplink = start.uplink && audioChannel != nil && payloadLimit > 0 &&
+            AVAudioApplication.shared.recordPermission == .granted
         do {
-            let audio = try CallAudio(key: key, uplink: uplink, routeChanged: { [weak self] in
+            let audio = try CallAudio(key: key, uplink: uplink, payloadLimit: payloadLimit, routeChanged: { [weak self] in
                 DispatchQueue.main.async {
                     guard let self, self.audioCallID == id, self.calls.audioActive else { return }
                     self.callAudioSession(false)

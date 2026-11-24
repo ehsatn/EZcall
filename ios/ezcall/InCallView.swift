@@ -37,9 +37,9 @@ struct InCallView: View {
                         if call.endFailed {
                             Text("Couldn’t end the call. Try again.")
                         } else if let outputError {
-                            Text(outputError)
+                            Text(ezText(outputError))
                         } else if let feedback = relay.feedback {
-                            Text(feedback)
+                            Text(ezText(feedback))
                         } else if call.connectedAt != nil && !relay.callAudioActive && !relay.callReconnecting {
                             Text("Audio on Android").foregroundStyle(.secondary)
                         }

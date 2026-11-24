@@ -59,7 +59,7 @@ final class CallBridge: NSObject {
     func setReconnecting(_ id: UUID, name: String, reconnecting: Bool) {
         guard entries[id] != nil else { return }
         let details = CXCallUpdate()
-        details.localizedCallerName = reconnecting ? "\(name) · Reconnecting…" : name
+        details.localizedCallerName = reconnecting ? ezText("%@ · Reconnecting…", name) : name
         provider.reportCall(with: id, updated: details)
     }
 

@@ -49,6 +49,7 @@ struct AudioSeal {
     static let androidToIPhone: UInt32 = 1
     static let iPhoneToAndroid: UInt32 = 2
     static let maxPayload = 1_024
+    static let overhead = 21
 
     private let key: SymmetricKey
     private let outgoing: UInt32
@@ -73,7 +74,7 @@ struct AudioSeal {
 
     mutating func open(_ packet: Data) -> Data? {
         let bytes = [UInt8](packet)
-        guard (22...(Self.maxPayload + 21)).contains(bytes.count), bytes[0] == 5 else { return nil }
+        guard ((Self.overhead + 1)...(Self.maxPayload + Self.overhead)).contains(bytes.count), bytes[0] == 5 else { return nil }
         let sequence = bytes[1...4].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         guard Int64(sequence) > lastReceived,
               let nonce = try? Self.nonce(incoming, sequence),

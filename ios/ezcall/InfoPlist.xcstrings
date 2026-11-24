@@ -1,0 +1,147 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSBluetoothAlwaysUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to your Android and receive the calls, SMS, and contacts you share."
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "به گوشی اندرویدی وصل شوید تا تماس‌ها، پیامک‌ها و مخاطبینی را که به اشتراک می‌گذارید دریافت کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اتصل بهاتف Android لتلقّي المكالمات والرسائل النصية وجهات الاتصال التي تشاركها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conéctate a tu Android para recibir las llamadas, los SMS y los contactos que compartas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connectez-vous à votre Android pour recevoir les appels, les SMS et les contacts que vous partagez."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paylaştığınız aramaları, SMS’leri ve kişileri almak için Android telefonunuza bağlanın."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connettiti al tuo Android per ricevere le chiamate, gli SMS e i contatti che condividi."
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan the pairing code on your Android."
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کد جفت‌سازی را از روی گوشی اندرویدی اسکن کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح رمز الاقتران المعروض على هاتف Android."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanea el código de vinculación que aparece en tu Android."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scannez le code de jumelage affiché sur votre Android."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android telefonunuzda gösterilen eşleştirme kodunu tarayın."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scansiona il codice di abbinamento mostrato sul tuo Android."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Talk on calls that you answer or place through your Android."
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "در تماس‌هایی که از طریق گوشی اندرویدی پاسخ می‌دهید یا برقرار می‌کنید، صحبت کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدّث في المكالمات التي تردّ عليها أو تجريها عبر هاتف Android."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Habla en las llamadas que contestes o realices a través de tu Android."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parlez pendant les appels que vous prenez ou passez via votre Android."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android telefonunuz üzerinden yanıtladığınız veya başlattığınız aramalarda konuşun."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parla durante le chiamate che ricevi o effettui tramite il tuo Android."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -17,7 +17,9 @@ struct EzcallApp: App {
     @State private var showRedialError = false
     @State private var tab = HomeTab.recents
     @State private var lastCallTab = HomeTab.recents
+    @State private var callListID = UUID()
     @AppStorage("setupComplete") private var setupComplete = false
+    @AppStorage(EzcallLanguage.preference) private var language = EzcallLanguage.en
     @Environment(\.scenePhase) private var scenePhase
 
     private struct PendingRedial: Equatable {
@@ -26,7 +28,7 @@ struct EzcallApp: App {
     }
 
     private enum HomeTab: String, CaseIterable {
-        case recents = "Recents", contacts = "Contacts", keypad = "Keypad", messages = "Messages"
+        case recents = "Calls", contacts = "Contacts", keypad = "Keypad", messages = "Messages"
 
         var icon: String {
             switch self {
@@ -41,6 +43,7 @@ struct EzcallApp: App {
     var body: some Scene {
         WindowGroup {
             appContent
+                .onOpenURL(perform: openWidget)
                 .onContinueUserActivity("INStartCallIntent", perform: redial)
                 .onContinueUserActivity("INStartAudioCallIntent", perform: redial)
                 .onChange(of: relay.canDial) { dialRecentIfReady() }
@@ -54,8 +57,10 @@ struct EzcallApp: App {
                 .alert("Couldn’t Redial", isPresented: $showRedialError) {
                     Button("OK", role: .cancel) {}
                 } message: {
-                    Text(redialError)
+                    Text(ezText(redialError))
                 }
+                .environment(\.locale, language.locale)
+                .environment(\.layoutDirection, language.direction)
         }
         .onChange(of: visibleCallID, initial: true) {
             appDelegate.presentCall(visibleCallID, relay: relay) { minimizedCall = $0 }
@@ -75,6 +80,19 @@ struct EzcallApp: App {
         }
     }
 
+    private func openWidget(_ url: URL) {
+        switch WidgetDestination(rawValue: url.absoluteString) {
+        case .calls:
+            settings = false
+            callListID = UUID()
+            tab = .recents
+        case .messages:
+            UIApplication.shared.open(URL(string: "sms:")!)
+        case nil:
+            break
+        }
+    }
+
     private var visibleCallID: UUID? {
         guard scenePhase == .active, let id = relay.phoneCall?.id, id != minimizedCall else { return nil }
         return id
@@ -90,13 +108,23 @@ struct EzcallApp: App {
                 .sheet(isPresented: $settings) {
                     NavigationStack { RelaySettings(relay: relay) }
                 }
-                .alert(relay.notice ?? "", isPresented: noticeShown) {
+                .alert(ezText(relay.notice ?? ""), isPresented: noticeShown) {
                     Button("OK", role: .cancel) {}
                 }
         } else if !relay.isPaired {
-            NavigationStack { PairView(relay: relay) }
+            NavigationStack { PairView(relay: relay).toolbar { languageMenu } }
         } else {
-            NavigationStack { SetupPermissionsView(relay: relay) { setupComplete = true } }
+            NavigationStack { SetupPermissionsView(relay: relay) { setupComplete = true }.toolbar { languageMenu } }
+        }
+    }
+
+    private var languageMenu: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                EzcallLanguagePicker()
+            } label: {
+                Label("Language", systemImage: "globe")
+            }
         }
     }
 
@@ -155,7 +183,7 @@ struct EzcallApp: App {
     private var homeTabs: some View {
         if #available(iOS 26, *) {
             TabView(selection: $tab) {
-                Tab("Recents", systemImage: HomeTab.recents.icon, value: .recents) { homeContent(.recents) }
+                Tab("Calls", systemImage: HomeTab.recents.icon, value: .recents) { homeContent(.recents) }
                 Tab("Contacts", systemImage: HomeTab.contacts.icon, value: .contacts) { homeContent(.contacts) }
                 Tab("Keypad", systemImage: HomeTab.keypad.icon, value: .keypad) { homeContent(.keypad) }
                 Tab("Messages", systemImage: HomeTab.messages.icon, value: .messages, role: .search) {
@@ -182,6 +210,7 @@ struct EzcallApp: App {
         case .recents:
             NavigationStack { RecentsView(relay: relay, openSettings: openSettings, openCall: { minimizedCall = nil })
                     .settingsButton(openSettings) }
+                .id(callListID)
         case .contacts:
             NavigationStack { ContactsView(relay: relay).settingsButton(openSettings) }
         case .messages:
@@ -228,7 +257,10 @@ private final class EzcallDelegate: NSObject, UIApplicationDelegate, UNUserNotif
         let window = callWindow ?? UIWindow(windowScene: scene)
         if callWindow == nil { previousKeyWindow = scene.keyWindow }
         window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue + 1)
-        window.rootViewController = UIHostingController(rootView: InCallView(relay: relay) { minimize(id) })
+        let language = EzcallLanguage.current
+        window.rootViewController = UIHostingController(rootView: InCallView(relay: relay) { minimize(id) }
+            .environment(\.locale, language.locale)
+            .environment(\.layoutDirection, language.direction))
         window.accessibilityViewIsModal = true
         callWindow = window
         window.makeKeyAndVisible()
@@ -337,7 +369,7 @@ private struct PairView: View {
                 }
 
                 if let feedback = relay.feedback {
-                    Label(feedback, systemImage: "exclamationmark.circle")
+                    Label(LocalizedStringKey(feedback), systemImage: "exclamationmark.circle")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .accessibilityAddTraits(.updatesFrequently)
@@ -357,7 +389,6 @@ private struct PairView: View {
                 .frame(maxWidth: .infinity)
                 .background(Color(uiColor: .systemBackground))
         }
-        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $scanner) {
             ScannerSheet { scannedCode in
                 if relay.pair(with: scannedCode) {
@@ -384,7 +415,7 @@ private struct PairView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 10) {
                     if relay.status.inProgress { ProgressView() }
-                    Text(relay.status.title).font(.headline)
+                    Text(LocalizedStringKey(relay.status.title)).font(.headline)
                 }
                 .frame(minHeight: 50)
                 .accessibilityElement(children: .combine)
@@ -427,12 +458,12 @@ private struct SetupPermissionsView: View {
                     .foregroundStyle(.tint)
                     .padding(.bottom, 8)
                     .accessibilityHidden(true)
-                Text(microphoneStep ? "Talk Through iPhone" : "Get Call and Text Alerts")
+                Text(LocalizedStringKey(microphoneStep ? "Talk Through iPhone" : "Get Call and Text Alerts"))
                     .font(.largeTitle.bold())
                     .accessibilityAddTraits(.isHeader)
-                Text(microphoneStep
+                Text(LocalizedStringKey(microphoneStep
                      ? "Allow the microphone so callers can hear you on calls you answer or place through your Android."
-                     : "ezcall can notify you when your Android gets a call or SMS. SMS alerts show the sender and message according to your iPhone’s Show Previews setting.")
+                     : "ezcall can notify you when your Android gets a call or SMS. SMS alerts show the sender and message according to your iPhone’s Show Previews setting."))
                     .foregroundStyle(.secondary)
             }
             .multilineTextAlignment(.center)
@@ -453,7 +484,6 @@ private struct SetupPermissionsView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
         }
-        .toolbar(.hidden, for: .navigationBar)
         .animation(.easeInOut(duration: 0.25), value: microphoneStep)
         .onChange(of: relay.alerts) { old, new in
             if !microphoneStep, old == .notDetermined, new != .notDetermined { next() }
@@ -546,7 +576,7 @@ private struct RecentsView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             if let call = relay.phoneCall { ongoingBar(call) }
         }
-        .navigationTitle("Recents")
+        .navigationTitle("Calls")
         .navigationDestination(item: $detail) { detail in card(for: detail) }
         .task(id: relay.status == .connected) {
             // Launch and short reconnects stay quiet; only a lasting problem shows the status row.
@@ -567,7 +597,7 @@ private struct RecentsView: View {
                 } else {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 }
-                Text(relay.status.title).foregroundStyle(.secondary)
+                Text(LocalizedStringKey(relay.status.title)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
@@ -609,7 +639,7 @@ private struct RecentsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .accessibilityHint(call.address.isEmpty ? "Shows details" : "Calls through your Android")
+            .accessibilityHint(ezText(call.address.isEmpty ? "Shows details" : "Calls through your Android"))
 
             Button { showDetail(group) } label: {
                 Image(systemName: "info.circle").font(.title3)
@@ -806,13 +836,13 @@ private struct KeypadView: View {
                         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = number }
                     }
                 }
-                .accessibilityLabel(number.isEmpty ? String(localized: "No number entered") : number)
+                .accessibilityLabel(number.isEmpty ? ezText("No number entered") : number)
 
             HStack(spacing: 6) {
                 if let first = candidates.first {
                     Button(first.name) { select(first) }
                     if candidates.count > 1 {
-                        Button("\(candidates.count - 1) more") { showingMatches = true }
+                        Button(ezText("%lld more", Int64(candidates.count - 1))) { showingMatches = true }
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -842,7 +872,7 @@ private struct KeypadView: View {
                     formattedInternational && (1...3).contains { normalized.dropFirst($0).hasPrefix(local) }
                 } ?? false
                 guard normalized.hasPrefix(prefix) || matchesLocal else { return nil }
-                let name = contact.name.isEmpty ? String(localized: "No Name") : contact.name
+                let name = contact.name.isEmpty ? ezText("No Name") : contact.name
                 return Match(id: contact.id + "|" + address, name: name, number: address)
             }
         }
@@ -985,7 +1015,7 @@ private struct ContactsView: View {
                     }
                 }
                 if !visible.isEmpty {
-                    Text("^[\(visible.count) Contact](inflect: true)")
+                    Text(ezText("Contacts: %lld", Int64(visible.count)))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -1019,7 +1049,7 @@ private struct ContactsView: View {
     private func contactRow(_ contact: RelayContact) -> some View {
         ZStack(alignment: .leading) {
             NavigationLink(value: ContactRoute(id: contact.id)) { EmptyView() }.opacity(0)
-            Text(contact.name.isEmpty ? String(localized: "No Name") : contact.name)
+            Text(contact.name.isEmpty ? ezText("No Name") : contact.name)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -1035,27 +1065,30 @@ private struct RelaySettings: View {
     var body: some View {
         Form {
             Section {
+                EzcallLanguagePicker()
+            }
+            Section {
                 LabeledContent("Status") {
                     HStack(spacing: 8) {
                         if relay.status.inProgress { ProgressView() }
-                        Text(relay.status.title)
+                        Text(LocalizedStringKey(relay.status.title))
                     }
                 }
-                Button(relay.testing ? "Testing…" : "Test Connection") { relay.testConnection() }
+                Button(LocalizedStringKey(relay.testing ? "Testing…" : "Test Connection")) { relay.testConnection() }
                     .disabled(relay.status != .connected || relay.testing)
                 if let result = relay.testResult {
-                    Text(result).font(.footnote).foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(result)).font(.footnote).foregroundStyle(.secondary)
                 }
-                Button(relay.syncing ? "Syncing…" : "Sync Messages and Contacts") { relay.syncNow() }
+                Button(LocalizedStringKey(relay.syncing ? "Syncing…" : "Sync Messages and Contacts")) { relay.syncNow() }
                     .disabled(relay.status != .connected || relay.syncing)
                 if let result = relay.syncResult {
-                    Text(result).font(.footnote).foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(result)).font(.footnote).foregroundStyle(.secondary)
                 }
                 if relay.status == .denied {
                     Button("Allow Bluetooth in Settings", action: openSettings)
                 }
                 if relay.status != .connected, let feedback = relay.feedback {
-                    Text(feedback).font(.footnote).foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(feedback)).font(.footnote).foregroundStyle(.secondary)
                 }
             } header: {
                 Text("Android")
@@ -1064,12 +1097,12 @@ private struct RelaySettings: View {
             }
 
             Section {
-                LabeledContent("Answer and Decline", value: relay.callControl ? "On" : "Off")
-                LabeledContent("Call from iPhone", value: relay.canDial ? "On" : "Off")
-                LabeledContent("Call Audio", value: relay.audioMode.title)
+                LabeledContent("Answer and Decline") { Text(LocalizedStringKey(relay.callControl ? "On" : "Off")) }
+                LabeledContent("Call from iPhone") { Text(LocalizedStringKey(relay.canDial ? "On" : "Off")) }
+                LabeledContent("Call Audio") { Text(LocalizedStringKey(relay.audioMode.title)) }
                 switch relay.microphone {
                 case .granted:
-                    LabeledContent("Microphone", value: "Allowed")
+                    LabeledContent("Microphone") { Text("Allowed") }
                 case .denied:
                     Button("Allow Microphone in Settings", action: openSettings)
                 default:
@@ -1084,7 +1117,7 @@ private struct RelaySettings: View {
             Section {
                 switch relay.alerts {
                 case .authorized, .provisional, .ephemeral:
-                    LabeledContent("Notifications", value: "On")
+                    LabeledContent("Notifications") { Text("On") }
                 case .denied:
                     Button("Turn On Notifications in Settings", action: openSettings)
                 default:
@@ -1199,7 +1232,7 @@ private struct TipButton: View {
             Button {
                 Task { await tip(product) }
             } label: {
-                Label("Tip \(product.displayPrice)", systemImage: "heart")
+                Label(ezText("Tip %@", product.displayPrice), systemImage: "heart")
             }
             .disabled(purchasing)
         } else if message == nil {
@@ -1214,7 +1247,7 @@ private struct TipButton: View {
                 }
         }
         if let message {
-            Text(message).font(.footnote).foregroundStyle(.secondary)
+            Text(LocalizedStringKey(message)).font(.footnote).foregroundStyle(.secondary)
         }
     }
 
