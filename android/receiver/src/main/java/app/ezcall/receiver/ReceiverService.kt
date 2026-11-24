@@ -282,6 +282,7 @@ internal class ReceiverService : Service() {
     fun mute() {
         if (audio != null && microphone) {
             muted = !muted
+            if (muted) link?.clearMicrophonePackets()
             state.microphoneLive = !muted
             state.changed()
         }
@@ -290,6 +291,7 @@ internal class ReceiverService : Service() {
     fun setSystemMuted(id: String, value: Boolean) {
         if (systemCall?.id != id) return
         muted = value
+        if (muted) link?.clearMicrophonePackets()
         state.microphoneLive = microphone && audio != null && !value
         state.changed()
     }
@@ -548,6 +550,7 @@ internal class ReceiverService : Service() {
     }
 
     private fun stopPlayback() {
+        link?.clearMicrophonePackets()
         if (supportsAudioRoute) audioID?.let { send("audio_paused", it) }
         audio?.close()
         audio = null

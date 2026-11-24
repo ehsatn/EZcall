@@ -96,6 +96,7 @@ internal class RelayConnection(private val relay: ReceiverService, val id: Strin
             })
             else -> {
                 display(call)
+                connectionCapabilities = if (ReceiverState.microphoneAvailable) CAPABILITY_MUTE else 0
                 if (call.state == "active" && state != STATE_ACTIVE) {
                     if (outgoing || relay.answeredHere == id) setActive() else close(DisconnectCause.ANSWERED_ELSEWHERE)
                 }

@@ -16,7 +16,9 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
+import android.text.Spanned
 import android.text.TextUtils
+import android.text.style.RelativeSizeSpan
 import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.MenuItem
@@ -24,6 +26,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.BaseAdapter
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -36,6 +39,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
+import androidx.core.text.buildSpannedString
+import androidx.core.widget.doAfterTextChanged
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
@@ -55,8 +60,6 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
 import com.google.zxing.RGBLuminanceSource
@@ -150,6 +153,9 @@ open class ReceiverActivity : AppCompatActivity() {
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         render()
+        if (savedInstanceState == null && checkSelfPermission(permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(permission.RECORD_AUDIO), MIC)
+        }
     }
 
     private fun buildToolbar() = MaterialToolbar(this).apply {
@@ -671,44 +677,81 @@ open class ReceiverActivity : AppCompatActivity() {
 
     private fun dial(initial: String = "") {
         if (state.inCall != null || state.pendingCall) return
-        val fields = column().apply { setPadding(dp(24), dp(12), dp(24), 0) }
-        val input = field(fields, getString(R.string.r_phone_number), InputType.TYPE_CLASS_PHONE, initial)
-        val dialog = MaterialAlertDialogBuilder(this).setTitle(getString(R.string.r_new_call)).setView(fields)
-            .setNegativeButton(getString(R.string.ez_cancel), null).setPositiveButton(getString(R.string.r_call), null).create()
-        dialog.setOnShowListener {
-            dialog.getButton(android.app.Dialog.BUTTON_POSITIVE).setOnClickListener {
-                val number = normalizedNumber(input.text.toString())
-                if (number.none(Char::isDigit)) input.error = getString(R.string.r_enter_number)
-                else {
-                    dialog.dismiss()
-                    microphone { ReceiverService.current?.dial(number, it) }
+        val dialog = BottomSheetDialog(this)
+        val pad = column().apply { setPadding(dp(24), 0, dp(24), dp(16)) }
+        pad.addView(BottomSheetDragHandleView(this), fullWidth())
+        pad.addView(heading(getString(R.string.r_new_call), R.style.TextAppearance_ezcall_HeadlineSmall))
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_PHONE
+            setSingleLine()
+            showSoftInputOnFocus = false
+            textDirection = View.TEXT_DIRECTION_LTR
+            gravity = Gravity.CENTER
+            textSize = 28f
+            background = null
+            hint = getString(R.string.r_phone_number)
+            setText(initial)
+            setSelection(length())
+        }
+        fun edit(key: String) {
+            val start = minOf(input.selectionStart, input.selectionEnd).coerceAtLeast(0)
+            val end = maxOf(input.selectionStart, input.selectionEnd).coerceAtLeast(0)
+            val from = if (key.isEmpty() && start == end) (start - 1).coerceAtLeast(0) else start
+            input.text.replace(from, end, key)
+        }
+        val erase = iconButton(R.drawable.ic_backspace, getString(R.string.r_delete_digit)) { edit("") }
+        pad.addView(row().apply {
+            addView(input, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(erase, LinearLayout.LayoutParams(dp(48), dp(48)))
+        }, fullWidth(top = 8, bottom = 8))
+
+        val legends = listOf("", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "", "+", "")
+        "123456789*0#".chunked(3).forEachIndexed { index, keys ->
+            val keyRow = row().apply { layoutDirection = View.LAYOUT_DIRECTION_LTR }
+            keys.forEachIndexed { col, digit ->
+                val legend = legends[index * 3 + col]
+                val key = MaterialButton(this, null, MaterialR.attr.materialButtonTonalStyle).apply {
+                    isAllCaps = false
+                    textSize = 25f
+                    minimumHeight = dp(60)
+                    setPadding(dp(4), dp(4), dp(4), dp(4))
+                    insetTop = dp(2)
+                    insetBottom = dp(2)
+                    text = buildSpannedString {
+                        append(digit)
+                        if (legend.isNotEmpty()) {
+                            append('\n')
+                            append(legend, RelativeSizeSpan(0.44f), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                    }
+                    setOnClickListener { edit(digit.toString()) }
+                    if (digit == '0') setOnLongClickListener { edit("+"); true }
                 }
+                keyRow.addView(key, actionWidth(spacing = col < 2))
+            }
+            pad.addView(keyRow, fullWidth())
+        }
+        val call = button(getString(R.string.r_call), R.drawable.ic_call) {
+            val number = normalizedNumber(input.text.toString())
+            if (number.any(Char::isDigit)) {
+                dialog.dismiss()
+                microphone { ReceiverService.current?.dial(number, it) }
             }
         }
+        fun updateActions() {
+            erase.isEnabled = input.length() > 0
+            call.isEnabled = input.text.any(Char::isDigit)
+        }
+        input.doAfterTextChanged { updateActions() }
+        updateActions()
+        pad.addView(call, fullWidth(top = 8))
+        dialog.setContentView(ScrollView(this).apply { addView(pad) })
+        dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         dialog.show()
     }
 
     private fun compose(initial: String? = null) {
         startActivity(Intent(this, ConversationActivity::class.java).putExtra("address", initial))
-    }
-
-    private fun field(parent: LinearLayout, hint: String, type: Int, value: String): TextInputEditText {
-        val input = TextInputEditText(this).apply {
-            inputType = type
-            if (type == InputType.TYPE_CLASS_PHONE) textDirection = View.TEXT_DIRECTION_LTR
-            setText(value)
-        }
-        parent.addView(TextInputLayout(this, null, MaterialR.attr.textInputOutlinedStyle).apply {
-            this.hint = hint
-            if (type and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0) {
-                input.minLines = 3
-                input.gravity = Gravity.TOP or Gravity.START
-                isCounterEnabled = true
-                counterMaxLength = 1_000
-            }
-            addView(input)
-        }, fullWidth(bottom = 12))
-        return input
     }
 
     private fun microphone(action: (Boolean) -> Unit) {

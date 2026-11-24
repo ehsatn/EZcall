@@ -53,6 +53,7 @@
     <string name="r_call">تماس</string>
     <string name="r_send_sms">ارسال پیامک</string>
     <string name="r_phone_number">شمارهٔ تلفن</string>
+    <string name="r_delete_digit">پاک کردن رقم</string>
     <string name="r_enter_number">یک شمارهٔ تلفن وارد کنید.</string>
     <string name="r_message">متن پیام</string>
     <string name="r_send">ارسال</string>

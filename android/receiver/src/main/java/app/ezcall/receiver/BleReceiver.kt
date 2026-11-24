@@ -48,6 +48,7 @@ internal class BleReceiver(
     private var discovering = false
     private var maxWrite = 20
     private val frames = ArrayDeque<ByteArray>()
+    private val microphonePackets = ArrayDeque<ByteArray>()
     private var frameOffset = 0
     private var writing: BluetoothGattCharacteristic? = null
     private var lastScan = -6_500L
@@ -80,7 +81,17 @@ internal class BleReceiver(
     }
 
     fun sendAudio(packet: ByteArray) {
-        if (!ready || writing != null || frames.isNotEmpty() || packet.size > maxWrite) return
+        if (!ready || audioRx == null || packet.size > maxWrite) return
+        // Keep up to 60 ms of speech across bursts of GATT write callbacks.
+        if (microphonePackets.size == 3) microphonePackets.removeFirst()
+        microphonePackets.addLast(packet)
+        if (writing == null && frames.isEmpty()) writeNextMicrophonePacket()
+    }
+
+    fun clearMicrophonePackets() = microphonePackets.clear()
+
+    private fun writeNextMicrophonePacket() {
+        val packet = microphonePackets.removeFirstOrNull() ?: return
         val target = audioRx ?: return
         val gatt = peer ?: return
         if (runCatching { write(gatt, target, packet, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) }.getOrDefault(false)) {
@@ -257,7 +268,8 @@ internal class BleReceiver(
     }
 
     private fun pump() {
-        if (writing != null || frames.isEmpty()) return
+        if (writing != null) return
+        if (frames.isEmpty()) return writeNextMicrophonePacket()
         val frame = frames.first()
         val target = checkNotNull(rx)
         val end = minOf(frame.size, frameOffset + maxWrite)
@@ -323,6 +335,7 @@ internal class BleReceiver(
         discovering = false
         maxWrite = 20
         frames.clear()
+        clearMicrophonePackets()
         frameOffset = 0
         writing = null
     }

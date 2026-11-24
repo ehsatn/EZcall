@@ -6,6 +6,7 @@ import android.content.AttributionSource
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ApplicationInfo
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -286,6 +287,10 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
             val candidate = runCatching { hidden("getCallUplinkInjectionAudioTrack", format) as? AudioTrack }.getOrNull() ?: return
             if (candidate.state == AudioTrack.STATE_INITIALIZED) {
+                // Some audio policies otherwise route the call-assistant track to the handset earpiece.
+                audio?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                    ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_TELEPHONY }
+                    ?.let { candidate.setPreferredDevice(it) }
                 runCatching {
                     candidate.setBufferSizeInFrames(AudioBridge.FRAME_SAMPLES * AudioBridge.LIVE_QUEUE_FRAMES)
                     candidate.setStartThresholdInFrames(AudioBridge.FRAME_SAMPLES)

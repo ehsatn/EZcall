@@ -53,6 +53,7 @@
     <string name="r_call">Call</string>
     <string name="r_send_sms">Send SMS</string>
     <string name="r_phone_number">Phone number</string>
+    <string name="r_delete_digit">Delete digit</string>
     <string name="r_enter_number">Enter a phone number.</string>
     <string name="r_message">Message</string>
     <string name="r_send">Send</string>
