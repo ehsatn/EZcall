@@ -161,6 +161,7 @@ final class CallBridge: NSObject {
     private func prepareAudioSession() {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
+        try? session.setPreferredSampleRate(CallAudio.sampleRate)
         try? session.setPreferredIOBufferDuration(0.01)
     }
 }

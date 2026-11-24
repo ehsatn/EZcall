@@ -569,7 +569,7 @@ private struct RecentsView: View {
         .listStyle(.plain)
         .overlay {
             if relay.data.calls.isEmpty {
-                ContentUnavailableView("No Recents", systemImage: "clock",
+                ContentUnavailableView("No Calls", systemImage: "clock",
                     description: Text("Calls from your Android will appear here."))
             }
         }

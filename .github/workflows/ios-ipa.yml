@@ -36,6 +36,7 @@ jobs:
           app="$RUNNER_TEMP/ezcallBuild/Build/Products/Release-iphoneos/ezcall.app"
           test "$(plutil -extract CFBundleDisplayName raw "$app/Info.plist")" = ezcall
           test "$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw "$app/Info.plist")" = EzcallAppIcon
+          test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = app.xcall.relay.widget
           xcrun lipo "$app/ezcall" -verify_arch arm64
           widget="$app/PlugIns/ezcallWidgets.appex"
           test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$widget/Info.plist")" = com.apple.widgetkit-extension

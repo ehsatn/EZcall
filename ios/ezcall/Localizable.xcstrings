@@ -6315,43 +6315,43 @@
         }
       }
     },
-    "No Recents": {
+    "No Calls": {
       "extractionState": "manual",
       "localizations": {
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "تماس اخیری وجود ندارد"
+            "value": "تماسی وجود ندارد"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد مكالمات حديثة"
+            "value": "لا توجد مكالمات"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin llamadas recientes"
+            "value": "Sin llamadas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun appel récent"
+            "value": "Aucun appel"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Son arama yok"
+            "value": "Arama yok"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna chiamata recente"
+            "value": "Nessuna chiamata"
           }
         }
       }
