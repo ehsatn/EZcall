@@ -28,7 +28,7 @@ When **Call control** is on in ezcall on Android, incoming Android calls appear 
 
 When CallKit handles an ezcall call, iPhone also records it in Phone → Recents. Tap an ezcall entry there to redial through the paired Android. Turn on Call control on Android for redialing.
 
-To add either shortcut widget, edit the iPhone Home Screen, tap **Add Widget**, search for **ezcall**, and add **Calls** or **Messages**. **Calls** opens the call list in ezcall. **Messages** opens the iPhone’s Messages app.
+To add the shortcut widget, edit the iPhone Home Screen, tap **Add Widget**, search for **ezcall**, and add **Calls & Messages**. Tap the phone icon to open the call list in ezcall or the message icon to open the iPhone’s Messages app. If the previous standalone **Messages** widget is still on the Home Screen after updating, remove it.
 
 ## Device checks
 

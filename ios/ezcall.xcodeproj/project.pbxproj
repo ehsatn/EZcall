@@ -259,9 +259,9 @@
                 CLANG_ENABLE_MODULES = YES;
                 DEBUG_INFORMATION_FORMAT = dwarf;
                 ENABLE_TESTABILITY = YES;
-                CURRENT_PROJECT_VERSION = 27;
+                CURRENT_PROJECT_VERSION = 28;
                 EZCALL_BUNDLE_IDENTIFIER = app.xcall.relay;
-                MARKETING_VERSION = 0.1.26;
+                MARKETING_VERSION = 0.1.27;
                 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
                 SWIFT_OPTIMIZATION_LEVEL = "-Onone";
             };
@@ -272,9 +272,9 @@
             buildSettings = {
                 CLANG_ENABLE_MODULES = YES;
                 DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-                CURRENT_PROJECT_VERSION = 27;
+                CURRENT_PROJECT_VERSION = 28;
                 EZCALL_BUNDLE_IDENTIFIER = app.xcall.relay;
-                MARKETING_VERSION = 0.1.26;
+                MARKETING_VERSION = 0.1.27;
                 SWIFT_COMPILATION_MODE = wholemodule;
                 VALIDATE_PRODUCT = YES;
             };

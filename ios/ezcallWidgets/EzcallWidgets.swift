@@ -2,44 +2,33 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct EzcallWidgets: WidgetBundle {
-    var body: some Widget {
-        CallsWidget()
-        MessagesWidget()
-    }
-}
-
-private struct CallsWidget: Widget {
+struct EzcallWidgets: Widget {
     var body: some WidgetConfiguration {
-        shortcutConfiguration(.calls)
-    }
-}
-
-private struct MessagesWidget: Widget {
-    var body: some WidgetConfiguration {
-        shortcutConfiguration(.messages)
-    }
-}
-
-private func shortcutConfiguration(_ destination: WidgetDestination) -> some WidgetConfiguration {
-    let isCalls = destination == .calls
-    let title: LocalizedStringKey = isCalls ? "Calls" : "Messages"
-    let subtitle: LocalizedStringKey = isCalls ? "Open the call history in ezcall." : "Open your iPhone’s Messages app."
-    return StaticConfiguration(kind: isCalls ? "ezcall.calls" : "ezcall.messages", provider: ShortcutProvider()) { _ in
-        Image(systemName: isCalls ? "phone" : "text.bubble")
-            .font(.system(size: 48, weight: .medium))
-            .foregroundStyle(.white)
-            .widgetAccentable()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel(Text(title))
-            .containerBackground(for: .widget) {
-                Color(red: 0, green: 0.20, blue: 0.82)
+        // Keep the Calls kind so widgets placed by earlier versions update in place.
+        StaticConfiguration(kind: "ezcall.calls", provider: ShortcutProvider()) { _ in
+            HStack(spacing: 8) {
+                shortcut(.calls, title: "Calls", symbol: "phone.fill")
+                shortcut(.messages, title: "Messages", symbol: "message.fill")
             }
-            .widgetURL(destination.url)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .containerBackground(for: .widget) { Color(uiColor: .systemBackground) }
+        }
+        .configurationDisplayName("Calls & Messages")
+        .description("Open ezcall’s call history or the iPhone’s Messages app.")
+        .supportedFamilies([.systemSmall])
     }
-    .configurationDisplayName(Text(title))
-    .description(Text(subtitle))
-    .supportedFamilies([.systemSmall])
+
+    private func shortcut(_ destination: WidgetDestination, title: LocalizedStringKey, symbol: String) -> some View {
+        Link(destination: destination.url) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.primary)
+                .widgetAccentable()
+                .frame(width: 50, height: 50)
+                .background(.green.opacity(0.16), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .accessibilityLabel(Text(title))
+    }
 }
 
 private struct ShortcutProvider: TimelineProvider {
