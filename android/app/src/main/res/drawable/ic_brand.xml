@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M 48 0 H 144 A 48 48 0 0 1 192 48 V 144 A 48 48 0 0 1 144 192 H 48 A 48 48 0 0 1 0 144 V 48 A 48 48 0 0 1 48 0 Z" />
+    <path android:fillColor="@color/launcher_background"
+        android:pathData="@string/ezcall_mark_path" />
+</vector>

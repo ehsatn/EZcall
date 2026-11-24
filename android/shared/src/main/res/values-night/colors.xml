@@ -1,0 +1,16 @@
+<resources>
+    <color name="ezcall_background">#101728</color>
+    <color name="ezcall_surface">#182136</color>
+    <color name="ezcall_surface_container">#232F4B</color>
+    <color name="ezcall_on_surface">#E7EDFC</color>
+    <color name="ezcall_on_surface_variant">#B5C3DF</color>
+    <color name="ezcall_primary">#AEC0FF</color>
+    <color name="ezcall_on_primary">#092664</color>
+    <color name="ezcall_primary_container">#212F64</color>
+    <color name="ezcall_on_primary_container">#D9E3FF</color>
+    <color name="ezcall_secondary">#B9CAFF</color>
+    <color name="ezcall_secondary_container">#2C3F71</color>
+    <color name="ezcall_outline">#8998BD</color>
+    <color name="ezcall_outline_variant">#414F71</color>
+    <bool name="ezcall_light_system_bars">false</bool>
+</resources>

@@ -1,0 +1,13 @@
+<resources>
+    <string name="ez_language">زبان برنامه</string>
+    <string name="ez_settings">تنظیمات</string>
+    <string name="ez_pair_phones">جفت‌سازی گوشی‌ها</string>
+    <string name="ez_cancel_pairing">لغو جفت‌سازی</string>
+    <string name="ez_test_passed">آزمایش اتصال موفق بود.</string>
+    <string name="ez_cancel">لغو</string>
+    <string name="ez_forget">حذف اتصال</string>
+    <string name="ez_close">بستن</string>
+    <string name="ez_continue">ادامه</string>
+    <string name="ez_contacts">مخاطبان</string>
+    <string name="ez_brand">ایزی کال</string>
+</resources>

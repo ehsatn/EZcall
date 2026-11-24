@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <group android:translateX="32" android:translateY="32">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="@string/ezcall_mark_path" />
+    </group>
+</vector>

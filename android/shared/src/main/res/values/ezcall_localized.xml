@@ -1,0 +1,13 @@
+<resources>
+    <string name="ez_language">Language</string>
+    <string name="ez_settings">Settings</string>
+    <string name="ez_pair_phones">Pair your phones</string>
+    <string name="ez_cancel_pairing">Cancel pairing</string>
+    <string name="ez_test_passed">Connection test passed.</string>
+    <string name="ez_cancel">Cancel</string>
+    <string name="ez_forget">Forget</string>
+    <string name="ez_close">Close</string>
+    <string name="ez_continue">Continue</string>
+    <string name="ez_contacts">Contacts</string>
+    <string name="ez_brand">ezcall</string>
+</resources>

@@ -1,0 +1,17 @@
+.gradle/
+.idea/
+**/build/
+**/DerivedData/
+**/xcuserdata/
+local.properties
+*.jks
+*.keystore
+*.xcuserstate
+.kotlin/
+android/releases/
+ezcall-landing/
+docs/reference-app.md
+*.ipa
+*.apk
+*.p12
+*.mobileprovision

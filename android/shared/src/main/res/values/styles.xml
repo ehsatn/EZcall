@@ -1,0 +1,45 @@
+<resources>
+    <style name="Theme.ezcall" parent="Theme.ezcall.FontBase">
+        <item name="textAppearanceDisplayLarge">@style/TextAppearance.ezcall.DisplayLarge</item>
+        <item name="textAppearanceDisplayMedium">@style/TextAppearance.ezcall.DisplayMedium</item>
+        <item name="textAppearanceDisplaySmall">@style/TextAppearance.ezcall.DisplaySmall</item>
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.ezcall.HeadlineLarge</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.ezcall.HeadlineMedium</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.ezcall.HeadlineSmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.ezcall.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.ezcall.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.ezcall.TitleSmall</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.ezcall.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.ezcall.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.ezcall.BodySmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.ezcall.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.ezcall.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.ezcall.LabelSmall</item>
+        <item name="colorPrimary">@color/ezcall_primary</item>
+        <item name="colorOnPrimary">@color/ezcall_on_primary</item>
+        <item name="colorPrimaryContainer">@color/ezcall_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/ezcall_on_primary_container</item>
+        <item name="colorSecondary">@color/ezcall_secondary</item>
+        <item name="colorOnSecondary">@color/ezcall_on_primary</item>
+        <item name="colorSecondaryContainer">@color/ezcall_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/ezcall_on_primary_container</item>
+        <item name="colorSurface">@color/ezcall_surface</item>
+        <item name="colorOnSurface">@color/ezcall_on_surface</item>
+        <item name="colorSurfaceVariant">@color/ezcall_surface_container</item>
+        <item name="colorOnSurfaceVariant">@color/ezcall_on_surface_variant</item>
+        <item name="colorSurfaceContainer">@color/ezcall_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/ezcall_surface_container</item>
+        <item name="colorSurfaceContainerHighest">@color/ezcall_surface_container</item>
+        <item name="colorOutline">@color/ezcall_outline</item>
+        <item name="colorOutlineVariant">@color/ezcall_outline_variant</item>
+        <item name="android:colorBackground">@color/ezcall_background</item>
+        <item name="android:windowBackground">@color/ezcall_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">@bool/ezcall_light_system_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/ezcall_light_system_bars</item>
+    </style>
+    <style name="ThemeOverlay.ezcall.TextButton" parent="">
+        <item name="materialButtonStyle">@style/Widget.Material3.Button.TextButton</item>
+    </style>
+</resources>
