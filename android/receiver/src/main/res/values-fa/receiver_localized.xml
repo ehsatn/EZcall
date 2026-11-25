@@ -1,4 +1,6 @@
 <resources>
+    <string name="r_audio_codec_failed">اندروید نتوانست کدک Opus را راه‌اندازی کند. تماس را روی گوشی فرستنده ادامه دهید.</string>
+    <string name="r_audio_setup_needed">صدای تماس را در ایزی‌کالِ گوشی فرستنده راه‌اندازی کنید.</string>
     <string name="r_phone_account">تماس‌ها در برنامهٔ تلفن</string>
     <string name="r_phone_account_detail">حساب تماس ezcall Receiver را فعال کنید</string>
     <string name="r_phone_account_help">تنظیمات حساب‌های تماس را در برنامهٔ تلفن باز کنید و اگر ezcall Receiver را در فهرست می‌بینید، آن را فعال کنید.</string>
@@ -32,6 +34,7 @@
     <string name="r_answer">پاسخ</string>
     <string name="r_mute">قطع میکروفون</string>
     <string name="r_unmute">وصل میکروفون</string>
+    <string name="r_enable_mic">فعال کردن میکروفون</string>
     <string name="r_decline">رد تماس</string>
     <string name="r_end_call">پایان تماس</string>
     <string name="r_reply">پاسخ</string>
@@ -138,4 +141,7 @@
     <string name="r_sms_check_sender">ارسال پیامک تأیید نشد. پیش از تلاش دوباره گوشی فرستنده را بررسی کنید.</string>
     <string name="r_sync_peer_failed">همگام‌سازی کامل نشد. دوباره امتحان کنید.</string>
     <string name="r_receiver_name">ایزی کال گیرنده</string>
+    <string name="r_audio_test_instructions">بعد از بوق‌ها صحبت کنید تا صدای خودتان را بشنوید.</string>
+    <string name="r_audio_test_heard">بوق‌ها را شنیدم</string>
+    <string name="r_audio_test_confirmed">پخش صدا تأیید شد</string>
 </resources>

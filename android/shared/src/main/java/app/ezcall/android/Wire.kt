@@ -189,7 +189,7 @@ internal object Wire {
             }
     }
 
-    // Live call audio travels as one sealed Opus packet per BLE write or notification. Packets can be skipped
+    // Live call audio travels as one sealed payload per BLE write or notification. Packets can be skipped
     // under congestion, so the receiver accepts any newer sequence number instead of the next one only.
     class AudioSeal(key: ByteArray, private val outgoing: Int, private val incoming: Int) {
         private val key = SecretKeySpec(key.copyOf(), "AES")
@@ -208,9 +208,14 @@ internal object Wire {
             return header + sealed
         }
 
+        fun advanceOutgoingSequence(sequence: Long) {
+            require(sequence in nextSend..0xFFFF_FFFFL)
+            nextSend = sequence
+        }
+
         fun open(packet: ByteArray): ByteArray? {
-            if (packet.size !in 22..MAX_AUDIO + 21 || packet[0] != AUDIO_PACKET) return null
-            val sequence = ByteBuffer.wrap(packet, 1, 4).int.toLong() and 0xFFFF_FFFFL
+            if (packet.size !in OVERHEAD + 1..MAX_AUDIO + OVERHEAD || packet[0] != AUDIO_PACKET) return null
+            val sequence = sequence(packet)
             if (sequence <= lastReceived) return null
             val payload = runCatching {
                 cipher(Cipher.DECRYPT_MODE, incoming, sequence, packet.copyOfRange(0, 5)).doFinal(packet, 5, packet.size - 5)
@@ -230,7 +235,25 @@ internal object Wire {
             const val ANDROID_TO_IPHONE = 1
             const val IPHONE_TO_ANDROID = 2
             const val MAX_AUDIO = 1_024
+            const val OVERHEAD = 21
             private const val AUDIO_PACKET: Byte = 5
+
+            // Callers read this only from locally sealed or successfully authenticated packets.
+            fun sequence(packet: ByteArray): Long = ByteBuffer.wrap(packet, 1, 4).int.toLong() and 0xFFFF_FFFFL
+
+            fun pair(first: ByteArray, second: ByteArray): ByteArray {
+                val size = 2 + first.size + second.size
+                require(first.isNotEmpty() && second.isNotEmpty() && size <= MAX_AUDIO)
+                return ByteBuffer.allocate(size).putShort(first.size.toShort()).put(first).put(second).array()
+            }
+
+            fun splitPair(payload: ByteArray): Pair<ByteArray, ByteArray>? {
+                if (payload.size !in 4..MAX_AUDIO) return null
+                val firstSize = ByteBuffer.wrap(payload).short.toInt() and 0xffff
+                val split = 2 + firstSize
+                if (firstSize == 0 || split >= payload.size) return null
+                return payload.copyOfRange(2, split) to payload.copyOfRange(split, payload.size)
+            }
         }
     }
 }

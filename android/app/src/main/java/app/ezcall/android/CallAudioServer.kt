@@ -11,10 +11,10 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
-import android.media.MediaRecorder
 import android.os.Build
 import android.os.Looper
 import android.os.Process
+import android.os.SystemClock
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -32,7 +32,7 @@ import kotlin.system.exitProcess
 /**
  * Call audio component. ezcall starts it through this phone's own Wireless debugging connection, so it runs as the
  * shell user, which may capture call audio. It only exchanges call audio with an authenticated ezcall relay on the
- * loopback interface and accepts no commands beyond start, stop and shutdown.
+ * loopback interface.
  */
 @SuppressLint("MissingPermission")
 class CallAudioServer private constructor(private val token: ByteArray) {
@@ -62,11 +62,11 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 when (message) {
                     AudioBridge.START -> owner = start(output)
                     AudioBridge.STOP -> owner = owner?.let { stop(it); null }
-                    AudioBridge.ROUTE -> {
-                        val route = payload.singleOrNull()?.toInt()
-                        require(route == 0 || route == 1)
+                    AudioBridge.RECEIVER_READY -> {
+                        val ready = payload.singleOrNull()?.toInt()
+                        require(ready == 0 || ready == 1)
                         synchronized(this) {
-                            if (owner === media) owner?.setPhoneReady(route == 1)
+                            if (owner === media) owner?.setReceiverReady(ready == 1)
                         }
                     }
                     AudioBridge.PCM -> owner?.play(payload)
@@ -92,16 +92,14 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             media?.close()
             media = null
             next.open()
-            if (next.record == null && next.track == null) {
+            if (next.record == null || next.track == null) {
                 next.close()
-                AudioBridge.write(output, AudioBridge.ERROR, "This phone did not allow call audio capture.".toByteArray())
-                log("No call audio route opened")
+                AudioBridge.write(output, AudioBridge.ERROR, "Call audio is on the sending phone.".toByteArray())
+                log("Two-way call audio route unavailable")
                 return null
             }
-            val active = (if (next.record != null) AudioBridge.DOWNLINK else 0) or
-                (if (next.track != null) AudioBridge.UPLINK else 0)
             try {
-                AudioBridge.write(output, AudioBridge.STARTED, byteArrayOf(active.toByte()) + next.source.toByteArray())
+                AudioBridge.write(output, AudioBridge.STARTED, byteArrayOf((AudioBridge.DOWNLINK or AudioBridge.UPLINK).toByte()))
             } catch (error: IOException) {
                 next.close()
                 throw error
@@ -109,7 +107,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             media = next
             next.begin()
         }
-        log("Call audio started, source=${next.source}, uplink=${next.track != null}")
+        log("Two-way call audio opened")
         return next
     }
 
@@ -120,28 +118,25 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         }
     }
 
+    @SuppressLint("InlinedApi") // Redirection uses telephony devices opened only on Android 13 and later.
     private inner class Media(private val output: DataOutputStream) {
         @Volatile private var running = true
         private val uplink = ArrayBlockingQueue<ByteArray>(AudioBridge.LIVE_QUEUE_FRAMES)
         private val workers = mutableListOf<Thread>()
         var record: AudioRecord? = null
         var track: AudioTrack? = null
-        var source = "none"
-        private var phoneReady = false
-        private var redirectRequested = false
+        @Volatile private var receiverReady = false
         private var failed = false
 
         fun open() {
-            val canIntercept = canIntercept()
+            if (!canIntercept()) return
             // OFFHOOK can precede Telecom entering cellular call mode.
             for (attempt in 0..10) {
-                if (canIntercept && audio?.mode == AudioManager.MODE_IN_CALL) {
+                if (audio?.mode == AudioManager.MODE_IN_CALL) {
                     if (record == null) openTelephonyDownlink()
-                    if (track == null) openUplink()
+                    if (record != null && track == null) openUplink()
                     if (record != null && track != null) return
                 }
-                if ((!canIntercept || attempt == 10) && record == null) openFallbackDownlink()
-                if (!canIntercept && record != null) return
                 if (attempt < 10) Thread.sleep(150)
             }
         }
@@ -154,69 +149,62 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         fun play(pcm: ByteArray) {
             if (pcm.isEmpty() || pcm.size % 2 != 0) return
             synchronized(this@CallAudioServer) {
-                if (media !== this || !running || failed || track == null) return
+                if (media !== this || !running || !receiverReady) return
                 while (!uplink.offer(pcm)) uplink.poll()
-                if (phoneReady) redirect(true)
             }
         }
 
-        fun setPhoneReady(ready: Boolean) {
-            phoneReady = ready
-            if (!ready) {
-                uplink.clear()
-                redirect(false)
-            }
+        fun setReceiverReady(ready: Boolean) {
+            if (!ready) return pauseRelay()
+            val sink = track ?: return
+            if (receiverReady || !running || failed) return
+            runCatching {
+                sink.play()
+                // Prime the track with silence before any receiver microphone audio is queued.
+                val silence = ByteArray(AudioBridge.FRAME_BYTES * 2)
+                val primed = sink.write(silence, 0, silence.size, AudioTrack.WRITE_NON_BLOCKING)
+                check(primed >= 0) { "Uplink priming failed: $primed" }
+                checkTelephonyOutput(sink)
+                receiverReady = true
+                log("Call audio relay active")
+            }.onFailure { mediaFailed("Android couldn't relay call audio to the receiving phone.", it) }
         }
 
         fun close() {
-            setPhoneReady(false)
             if (!running) return
             running = false
+            pauseRelay()
             runCatching { record?.stop() }
-            runCatching { track?.pause() }
-            runCatching { track?.flush() }
             workers.forEach { it.join(500) }
             runCatching { record?.release() }
             runCatching { track?.stop() }
             runCatching { track?.release() }
         }
 
-        private fun redirect(enabled: Boolean) {
-            val manager = audio ?: return
-            if (!enabled) {
-                if (!redirectRequested) return
-                // MODE_NORMAL releases this process's mode request so Telecom restores the handset.
-                runCatching { manager.mode = AudioManager.MODE_NORMAL }
-                    .onSuccess {
-                        redirectRequested = false
-                        log("Handset call audio restored")
-                    }
-                    .onFailure { log("Handset call audio restore failed: ${it.javaClass.simpleName}") }
-                return
+        private fun pauseRelay() {
+            receiverReady = false
+            uplink.clear()
+            runCatching {
+                track?.pause()
+                track?.flush()
             }
-            if (redirectRequested || source != "telephony" || track == null || !running || failed ||
-                manager.mode != AudioManager.MODE_IN_CALL) return
-            // The call redirect route replaces both local call devices without muting the injected audio.
-            runCatching { manager.mode = AudioManager.MODE_CALL_REDIRECT }
-                .onSuccess {
-                    redirectRequested = true
-                    log("Requested call audio redirection to iPhone")
-                }
-                .onFailure { log("Call audio redirection failed: ${it.javaClass.simpleName}") }
         }
 
-        private fun mediaFailed(message: String, error: Exception) {
+        private fun mediaFailed(message: String, error: Throwable) {
+            if (!running) return
             synchronized(this@CallAudioServer) {
                 if (!running || failed) return
                 failed = true
-                redirect(false)
+                pauseRelay()
             }
-            log("$message: ${error.javaClass.simpleName}")
+            log("$message: ${error.javaClass.simpleName}: ${error.message.orEmpty()}")
             runCatching { AudioBridge.write(output, AudioBridge.ERROR, message.toByteArray()) }
         }
 
         private fun capture(input: AudioRecord) {
             val frame = ByteArray(AudioBridge.FRAME_BYTES)
+            var checkCaptureAt = 0L
+            var silencedSince: Long? = null
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
                 while (running) {
@@ -226,7 +214,22 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         if (count < 0) throw IOException("Audio read failed: $count")
                         filled += count
                     }
-                    if (running) AudioBridge.write(output, AudioBridge.PCM, frame.copyOf())
+                    if (!running || !receiverReady) {
+                        silencedSince = null
+                        continue
+                    }
+                    val now = SystemClock.elapsedRealtime()
+                    if (now >= checkCaptureAt) {
+                        checkCaptureAt = now + 250
+                        if (input.activeRecordingConfiguration?.isClientSilenced == true) {
+                            val since = silencedSince ?: now
+                            silencedSince = since
+                            if (now - since >= 750) {
+                                mediaFailed("Android stopped capturing call audio.", IllegalStateException("PSTN capture silenced"))
+                            }
+                        } else silencedSince = null
+                    }
+                    if (receiverReady) AudioBridge.write(output, AudioBridge.PCM, frame)
                 }
             } catch (error: Exception) {
                 mediaFailed("Android stopped capturing call audio.", error)
@@ -239,15 +242,22 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 while (running) {
                     val pcm = uplink.poll(100, TimeUnit.MILLISECONDS) ?: continue
                     var offset = 0
-                    while (running && offset < pcm.size) {
+                    while (running && receiverReady && offset < pcm.size) {
+                        checkTelephonyOutput(sink)
                         val written = sink.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
+                        if (!receiverReady) break
                         if (written <= 0) throw IOException("Call audio injection failed: $written")
                         offset += written
                     }
                 }
             } catch (error: Exception) {
-                mediaFailed("Android stopped receiving iPhone call audio.", error)
+                mediaFailed("Android stopped receiving call audio.", error)
             }
+        }
+
+        private fun checkTelephonyOutput(sink: AudioTrack) {
+            // Some HALs only report the route after playback starts.
+            sink.routedDevice?.let { check(it.type == AudioDeviceInfo.TYPE_TELEPHONY) { "Uplink left the modem route" } }
         }
 
         private fun downlinkFormat() = AudioFormat.Builder().setSampleRate(AudioBridge.SAMPLE_RATE)
@@ -257,29 +267,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             val intercepted = runCatching {
                 hidden("getCallDownlinkExtractionAudioRecord", downlinkFormat()) as? AudioRecord
             }.getOrNull() ?: return
-            if (started(intercepted)) {
-                record = intercepted
-                source = "telephony"
-            }
-        }
-
-        private fun openFallbackDownlink() {
-            val format = downlinkFormat()
-            val size = maxOf(AudioRecord.getMinBufferSize(AudioBridge.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT), AudioBridge.FRAME_BYTES * AudioBridge.LIVE_QUEUE_FRAMES)
-            // The far-end-only source is preferred. The mixed call source also carries the receiving phone's own voice back.
-            for ((input, name) in listOf(MediaRecorder.AudioSource.VOICE_DOWNLINK to "downlink",
-                    MediaRecorder.AudioSource.VOICE_CALL to "call")) {
-                val candidate = runCatching {
-                    AudioRecord.Builder().setContext(ShellContext.context).setAudioSource(input)
-                        .setAudioFormat(format).setBufferSizeInBytes(size).build()
-                }.getOrNull() ?: continue
-                if (started(candidate)) {
-                    record = candidate
-                    source = name
-                    return
-                }
-            }
+            if (started(intercepted)) record = intercepted
         }
 
         private fun openUplink() {
@@ -287,18 +275,16 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
             val candidate = runCatching { hidden("getCallUplinkInjectionAudioTrack", format) as? AudioTrack }.getOrNull() ?: return
             if (candidate.state == AudioTrack.STATE_INITIALIZED) {
-                // Some audio policies otherwise route the call-assistant track to the handset earpiece.
                 audio?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-                    ?.firstOrNull { it.type == AudioDeviceInfo.TYPE_TELEPHONY }
+                    ?.filter { it.type == AudioDeviceInfo.TYPE_TELEPHONY }
+                    ?.singleOrNull()
                     ?.let { candidate.setPreferredDevice(it) }
                 runCatching {
                     candidate.setBufferSizeInFrames(AudioBridge.FRAME_SAMPLES * AudioBridge.LIVE_QUEUE_FRAMES)
-                    candidate.setStartThresholdInFrames(AudioBridge.FRAME_SAMPLES)
+                    candidate.setStartThresholdInFrames(AudioBridge.FRAME_SAMPLES * 2)
                 }
-                if (runCatching { candidate.play() }.isSuccess) {
-                    track = candidate
-                    return
-                }
+                track = candidate
+                return
             }
             candidate.release()
         }

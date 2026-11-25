@@ -24,7 +24,7 @@ struct ScannerSheet: View {
                     failed: { problem = true }
                 )
                 .overlay(alignment: .bottom) {
-                    Text(invalidCode ? "Use the code shown by ezcall on Android." : "Center the QR code in the camera.")
+                    Text(ezText(invalidCode ? "Use the code shown by ezcall on Android." : "Center the QR code in the camera."))
                         .font(.footnote)
                         .padding(12)
                         .background(.regularMaterial, in: Capsule())
@@ -38,9 +38,9 @@ struct ScannerSheet: View {
                 ContentUnavailableView {
                     Label("Camera Unavailable", systemImage: "camera")
                 } description: {
-                    Text(DataScannerViewController.isSupported
+                    Text(ezText(DataScannerViewController.isSupported
                          ? "Allow camera access to scan the pairing code."
-                         : "Open ezcall on an iPhone to scan the pairing code.")
+                         : "Open ezcall on an iPhone to scan the pairing code."))
                 } actions: {
                     if DataScannerViewController.isSupported {
                         Button("Open Settings") {

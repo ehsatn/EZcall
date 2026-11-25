@@ -6,9 +6,15 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SenderGuideTest {
-    @Test fun freshInstallAndUnpairedUpgradeStartWithSharing() {
-        assertEquals(Step.SHARING, Step.restore(null, null, false))
-        assertEquals(Step.SHARING, Step.restore(null, "done", false))
+    @Test fun backVisitsEachPreviousStepIncludingBluetoothAfterPairing() {
+        assertEquals(Step.LINK, Step.AUDIO.previous())
+        assertEquals(Step.SHARING, Step.LINK.previous())
+        assertNull(Step.SHARING.previous())
+    }
+
+    @Test fun freshInstallAndUnpairedUpgradeShowConnectionWelcome() {
+        assertNull(Step.restore(null, null, false))
+        assertNull(Step.restore(null, "done", false))
     }
 
     @Test fun upgradesResumeOldStepsAndShowAudioToPreviouslyPairedPhones() {

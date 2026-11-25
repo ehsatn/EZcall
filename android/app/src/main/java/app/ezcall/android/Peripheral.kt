@@ -20,9 +20,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.ParcelUuid
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import org.json.JSONObject
 import java.util.ArrayDeque
+
+internal fun audioBeforeControl(controlIsSms: Boolean?, afterAudio: Boolean, queuedAudio: Int) =
+    controlIsSms == null || (controlIsSms && (!afterAudio || queuedAudio > 1))
 
 @SuppressLint("MissingPermission")
 internal class Peripheral(
@@ -35,7 +39,8 @@ internal class Peripheral(
     private val onAudio: (ByteArray) -> Unit,
     private val onDisconnect: () -> Unit,
     private val onAdvertising: () -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val testLog: () -> AudioTestLog?
 ) {
     private val manager = context.getSystemService(BluetoothManager::class.java)
     private val advertiser = manager.adapter?.bluetoothLeAdvertiser
@@ -44,6 +49,7 @@ internal class Peripheral(
     private var advertising = false
     @Volatile private var peer: Peer? = null
     @Volatile private var audioActive = false
+    private var audioDelivery: AudioDelivery? = null
     private val audioWakeLock = context.getSystemService(PowerManager::class.java)
         .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "${context.packageName}:call-audio")
     private val discoveryDeadline = Runnable {
@@ -53,11 +59,38 @@ internal class Peripheral(
     private val receive = BluetoothGattCharacteristic(
         Wire.receive, BluetoothGattCharacteristic.PROPERTY_WRITE, BluetoothGattCharacteristic.PERMISSION_WRITE
     )
-    // Live call audio uses unacknowledged notifications and writes, one sealed Opus packet each.
+    // Live call audio uses unacknowledged notifications and writes, one sealed payload each.
     private val audioOut = BluetoothGattCharacteristic(Wire.audioOut, BluetoothGattCharacteristic.PROPERTY_NOTIFY, 0)
     private val audioIn = BluetoothGattCharacteristic(
         Wire.audioIn, BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE, BluetoothGattCharacteristic.PERMISSION_WRITE
     )
+
+    private class AudioDelivery {
+        private var firstAt = 0L
+        private var lastAt = 0L
+        private var largestGap = 0L
+        private var largestPacket = 0
+        var offered = 0
+            private set
+        var sent = 0
+        var evicted = 0
+        var failed = 0
+
+        fun offer(bytes: Int) {
+            val now = SystemClock.elapsedRealtime()
+            if (offered++ == 0) firstAt = now
+            else largestGap = maxOf(largestGap, now - lastAt)
+            lastAt = now
+            largestPacket = maxOf(largestPacket, bytes)
+        }
+
+        override fun toString() = "Audio BLE: offered=$offered sent=$sent evicted=$evicted failed=$failed " +
+            "span=${lastAt - firstAt}ms maxOfferGap=${largestGap}ms maxPacket=$largestPacket"
+    }
+
+    private data class PendingAudio(val packet: ByteArray, val expires: Long)
+    private data class ControlTrace(val log: AudioTestLog, val label: String, val queuedAt: Long)
+    private data class ControlFrame(val bytes: ByteArray, val trace: ControlTrace?, val isSms: Boolean = false)
 
     private class Peer(val device: BluetoothDevice) {
         val input = Wire.Reader()
@@ -69,15 +102,21 @@ internal class Peripheral(
         @Volatile var ready = false
         @Volatile var closing = false
         var canForget = false
-        val urgent = ArrayDeque<ByteArray>()
-        val normal = ArrayDeque<ByteArray>()
-        val audio = ArrayDeque<ByteArray>()
+        var audioPairs = false
+        val urgent = ArrayDeque<ControlFrame>()
+        val normal = ArrayDeque<ControlFrame>()
+        val audio = ArrayDeque<PendingAudio>()
         var queuedBytes = 0
         var output: ByteArray? = null
+        var outputTrace: ControlTrace? = null
+        var outputIsSms = false
+        var submittedAt = 0L
         var offset = 0
         // Android allows one outstanding notification or indication, so audio and control share this slot.
         var inFlight = false
         var audioInFlight = false
+        var audioTrace: AudioTestLog? = null
+        var audioSequence = -1L
         var retryingSend = false
         var busyRetries = 0
         var serial = 0
@@ -122,6 +161,7 @@ internal class Peripheral(
                     val connection = Peer(device)
                     peer = connection
                     trace("Gatt connected")
+                    testLog()?.add("BLE GATT connected: status=$status")
                     handler.postDelayed({
                         if (peer === connection && !connection.ready) {
                             disconnect(connection,
@@ -130,6 +170,8 @@ internal class Peripheral(
                     }, HANDSHAKE_TIMEOUT_MS)
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED && peer?.device == device) {
                     trace("Gatt closed by stack, status=$status")
+                    testLog()?.add("BLE disconnected: status=$status")
+                    peer?.let { clearAudio(it) }
                     peer = null
                     setAudioActive(false)
                     onDisconnect()
@@ -143,7 +185,14 @@ internal class Peripheral(
                 peer?.takeIf { it.device == device }?.let {
                     it.capacity = (mtu - 3).coerceIn(20, 180)
                     it.mtu = mtu.coerceIn(23, 517)
+                    testLog()?.add("BLE MTU changed: mtu=${it.mtu} controlChunk=${it.capacity}")
                 }
+            }
+        }
+
+        override fun onPhyUpdate(device: BluetoothDevice, txPhy: Int, rxPhy: Int, status: Int) {
+            handler.post {
+                if (peer?.device == device) testLog()?.add("BLE PHY update: tx=$txPhy rx=$rxPhy status=$status")
             }
         }
 
@@ -182,8 +231,9 @@ internal class Peripheral(
                     }
                     if (audio) {
                         connection.audioSubscribed = enabled
-                        if (!enabled) connection.audio.clear()
+                        if (!enabled) clearAudio(connection)
                         trace("Gatt audio subscription enabled=$enabled")
+                        testLog()?.add("BLE audio subscription: enabled=$enabled")
                         return@post
                     }
                     connection.subscribed = enabled
@@ -196,6 +246,7 @@ internal class Peripheral(
         override fun onCharacteristicWriteRequest(device: BluetoothDevice, requestId: Int,
                 characteristic: BluetoothGattCharacteristic, preparedWrite: Boolean, responseNeeded: Boolean,
                 offset: Int, value: ByteArray) {
+            val callbackAt = SystemClock.elapsedRealtime()
             val input = value.copyOf()
             if (characteristic.uuid == Wire.audioIn) {
                 // Audio skips the main thread. Packets that arrive before authentication are ignored.
@@ -224,7 +275,7 @@ internal class Peripheral(
                 try {
                     connection.input.feed(input) { body ->
                         require(peer === connection)
-                        receiveFrame(connection, body)
+                        receiveFrame(connection, body, callbackAt)
                     }
                 } catch (error: Exception) {
                     disconnect(connection, "Incoming frame failed: ${error.javaClass.simpleName}")
@@ -237,16 +288,32 @@ internal class Peripheral(
         }
 
         override fun onNotificationSent(device: BluetoothDevice, status: Int) {
+            val callbackAt = SystemClock.elapsedRealtime()
             handler.post {
                 val connection = peer?.takeIf { it.device == device && it.inFlight } ?: return@post
                 connection.inFlight = false
                 if (connection.audioInFlight) {
                     connection.audioInFlight = false
-                    pump(connection)
+                    audioDelivery?.let { if (status == BluetoothGatt.GATT_SUCCESS) it.sent++ else it.failed++ }
+                    val log = connection.audioTrace
+                    connection.audioTrace = null
+                    val metric = if (status == BluetoothGatt.GATT_SUCCESS) AudioTestMetric.DOWNLINK_NOTIFY_COMPLETED
+                        else AudioTestMetric.DOWNLINK_NOTIFY_FAILED
+                    log?.track(metric, connection.audioSequence)
+                    if (log?.count(metric) == 1) {
+                        log.add("BLE first audio notification callback: status=$status gatt=${callbackAt - connection.submittedAt}ms handler=${SystemClock.elapsedRealtime() - callbackAt}ms")
+                    }
+                    pump(connection, afterAudio = true)
                     return@post
                 }
+                connection.outputTrace?.let { (log, label) ->
+                    log.add("BLE TX $label indication callback: offset=${connection.offset}/${connection.output?.size} status=$status gatt=${callbackAt - connection.submittedAt}ms handler=${SystemClock.elapsedRealtime() - callbackAt}ms")
+                }
                 if (status == BluetoothGatt.GATT_SUCCESS) {
-                    if (connection.offset == connection.output?.size) connection.output = null
+                    if (connection.offset == connection.output?.size) {
+                        connection.output = null
+                        connection.outputTrace = null
+                    }
                     pump(connection)
                 } else disconnect(connection, "Gatt indication completion failed, status=$status")
             }
@@ -272,6 +339,7 @@ internal class Peripheral(
     fun stop() {
         stopAdvertising()
         val old = peer
+        old?.let { clearAudio(it) }
         peer = null
         setAudioActive(false)
         old?.let { runCatching { server?.cancelConnection(it.device) } }
@@ -279,18 +347,31 @@ internal class Peripheral(
         server = null
     }
 
-    fun send(message: JSONObject): Boolean = enqueue(listOf(message), highPriority = true)
+    fun send(message: JSONObject, log: AudioTestLog? = testLog()): Boolean =
+        enqueue(listOf(message), highPriority = true, log = log)
+
+    fun describeTestLink(log: AudioTestLog) {
+        val connection = peer ?: run {
+            log.add("BLE link: no peer")
+            return
+        }
+        log.add("BLE link: ready=${connection.ready} MTU=${connection.mtu} controlChunk=${connection.capacity} bytes audioSubscribed=${connection.audioSubscribed} queuedHigh=${connection.urgent.size} queuedBulk=${connection.normal.size}")
+    }
 
     fun audioReady() = peer?.let { it.ready && it.audioSubscribed } == true
+
+    fun supportsAudioPairs() = peer?.audioPairs == true
+
+    fun audioPayloadLimit() = peer?.mtu?.let { (minOf(it - 3, 512) - Wire.AudioSeal.OVERHEAD).coerceAtLeast(0) } ?: 0
 
     fun sendForget(message: JSONObject): Boolean {
         val connection = peer?.takeIf { it.ready && it.canForget } ?: return false
         connection.closing = true
         connection.urgent.clear()
         connection.normal.clear()
-        connection.audio.clear()
+        clearAudio(connection)
         val encoded = message.toString().toByteArray()
-        connection.urgent.add(encoded)
+        connection.urgent.add(ControlFrame(encoded, null))
         connection.queuedBytes = encoded.size
         pump(connection)
         return peer === connection
@@ -298,17 +379,25 @@ internal class Peripheral(
 
     fun clearBulk() {
         val connection = peer ?: return
-        connection.queuedBytes -= connection.normal.sumOf { it.size }
+        connection.queuedBytes -= connection.normal.sumOf { it.bytes.size }
         connection.normal.clear()
     }
 
     /** Queues one sealed audio packet. Stale packets are dropped rather than delayed. */
-    fun sendAudio(packet: ByteArray): Boolean {
+    fun sendAudio(packet: ByteArray, expires: Long = SystemClock.elapsedRealtime() + AudioBridge.LIVE_QUEUE_MS): Boolean {
         if (!audioActive) return false
         val connection = peer?.takeIf { it.ready && !it.closing && it.audioSubscribed } ?: return false
-        if (packet.size > connection.mtu - 3) return false
-        while (connection.audio.size >= AudioBridge.LIVE_QUEUE_FRAMES) connection.audio.pollFirst()
-        connection.audio.addLast(packet)
+        audioDelivery?.offer(packet.size)
+        if (packet.size > connection.mtu - 3) {
+            audioDelivery?.let { it.failed++ }
+            return false
+        }
+        while (connection.audio.size >= AudioBridge.LIVE_QUEUE_FRAMES) {
+            connection.audio.pollFirst()
+            audioDelivery?.let { it.evicted++ }
+            testLog()?.count(AudioTestMetric.DOWNLINK_QUEUE_DROPPED)
+        }
+        connection.audio.addLast(PendingAudio(packet, expires))
         pump(connection)
         return true
     }
@@ -316,29 +405,56 @@ internal class Peripheral(
     /** Holds back bulk sync frames while a call streams audio, since each indication blocks the shared slot. */
     @SuppressLint("WakelockTimeout")
     fun setAudioActive(active: Boolean) {
+        if (debug && active != audioActive) {
+            if (!active) audioDelivery?.let { trace("$it") }
+            audioDelivery = if (active) AudioDelivery() else null
+        }
         audioActive = active
         if (active && !audioWakeLock.isHeld) audioWakeLock.acquire()
         if (!active && audioWakeLock.isHeld) audioWakeLock.release()
         peer?.let {
-            if (!active) it.audio.clear()
+            if (!active) clearAudio(it)
             pump(it)
         }
     }
 
-    fun enqueue(messages: List<JSONObject>, highPriority: Boolean = false): Boolean {
-        val connection = peer?.takeIf { it.ready && !it.closing } ?: return false
-        val encoded = messages.map { it.toString().toByteArray() }
-        val bytes = encoded.sumOf { it.size }
-        if (connection.queuedBytes + bytes > MAX_QUEUE || encoded.any { it.size > Wire.MAX_FRAME - 25 }) return false
+    private fun clearAudio(connection: Peer) {
+        testLog()?.count(AudioTestMetric.DOWNLINK_QUEUE_DROPPED, connection.audio.size)
+        connection.audio.clear()
+    }
+
+    fun enqueue(messages: List<JSONObject>, highPriority: Boolean = false, log: AudioTestLog? = null): Boolean {
+        val encoded = messages.map { message ->
+            val trace = log?.controlLabel(message)?.let { ControlTrace(log, it, SystemClock.elapsedRealtime()) }
+            ControlFrame(message.toString().toByteArray(), trace, message.optString("type") == "sms")
+        }
+        val connection = peer?.takeIf { it.ready && !it.closing }
+        if (connection == null) {
+            encoded.forEach { it.trace?.let { (traceLog, label) -> traceLog.add("BLE TX $label rejected: no ready peer") } }
+            return false
+        }
+        val bytes = encoded.sumOf { it.bytes.size }
+        if (connection.queuedBytes + bytes > MAX_QUEUE || encoded.any { it.bytes.size > Wire.MAX_FRAME - 25 }) {
+            encoded.forEach { it.trace?.let { (traceLog, label) -> traceLog.add("BLE TX $label rejected: frame or queue limit") } }
+            return false
+        }
         val queue = if (highPriority) connection.urgent else connection.normal
         if (!highPriority) trace("Queueing sync: ${encoded.size} frames, $bytes bytes")
+        encoded.forEach { frame -> frame.trace?.let { (traceLog, label) ->
+            val inFlight = when {
+                connection.audioInFlight -> "audio"
+                connection.output != null -> connection.outputTrace?.label ?: "other control"
+                else -> "none"
+            }
+            traceLog.add("BLE TX $label queued: ahead=${queue.size} inFlight=$inFlight controlChunk=${connection.capacity}")
+        } }
         queue.addAll(encoded)
         connection.queuedBytes += bytes
         pump(connection)
         return peer === connection
     }
 
-    private fun receiveFrame(connection: Peer, body: ByteArray) {
+    private fun receiveFrame(connection: Peer, body: ByteArray, callbackAt: Long) {
         val session = connection.session
         if (session == null) {
             trace("Received encrypted-link setup frame")
@@ -353,12 +469,24 @@ internal class Peripheral(
         val message = JSONObject(Wire.decode(session.open(body)))
         if (!connection.ready) {
             connection.canForget = message.optString("unpair") == "1"
+            connection.audioPairs = message.optString("audio_pairs") == "1"
             val next = session.next.takeIf { message.optString("rekey") == "1" }
             require(message.optString("type") == "ready" && onReady(next))
             connection.ready = true
             trace("Secure link authenticated")
+            if (manager.adapter?.isLe2MPhySupported == true) {
+                // A faster PHY reduces airtime for the same audio packet when both phones support it.
+                runCatching {
+                    server?.setPreferredPhy(connection.device, BluetoothDevice.PHY_LE_2M_MASK,
+                        BluetoothDevice.PHY_LE_2M_MASK, BluetoothDevice.PHY_OPTION_NO_PREFERRED)
+                }
+            }
             check(send(JSONObject().put("type", "ready")))
             return
+        }
+        val log = testLog()
+        log?.controlLabel(message)?.let {
+            log.add("BLE RX $it authenticated: final-fragment handler/parse=${SystemClock.elapsedRealtime() - callbackAt}ms")
         }
         onRequest(message)
     }
@@ -392,18 +520,27 @@ internal class Peripheral(
     private fun disconnect(connection: Peer, reason: String) {
         if (peer !== connection) return
         trace(reason)
+        (connection.outputTrace?.log ?: testLog())?.add("BLE reconnect: $reason")
         // A fresh GATT server fences callbacks from the failed connection.
         onError("Reconnecting Bluetooth.")
     }
 
-    private fun pump(connection: Peer, retryAudio: Boolean = true) {
+    private fun pump(connection: Peer, retryAudio: Boolean = true, afterAudio: Boolean = false) {
         if (peer !== connection || connection.inFlight || connection.retryingSend) return
-        if (connection.audioSubscribed && connection.urgent.isEmpty()) {
+        val controlIsSms = if (connection.output != null) connection.outputIsSms else connection.urgent.peekFirst()?.isSms
+        // Audio uses a separate characteristic and can go between SMS fragments.
+        if (connection.audioSubscribed && audioBeforeControl(controlIsSms, afterAudio, connection.audio.size)) {
             while (true) {
-                val packet = connection.audio.pollFirst() ?: break
-                val status = notify(connection.device, audioOut, packet, confirm = false)
+                val audio = connection.audio.pollFirst() ?: break
+                if (SystemClock.elapsedRealtime() >= audio.expires) {
+                    audioDelivery?.let { it.evicted++ }
+                    testLog()?.count(AudioTestMetric.DOWNLINK_QUEUE_DROPPED)
+                    continue
+                }
+                connection.submittedAt = SystemClock.elapsedRealtime()
+                val status = notify(connection.device, audioOut, audio.packet, confirm = false)
                 if (status == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY && retryAudio) {
-                    connection.audio.addFirst(packet)
+                    connection.audio.addFirst(audio)
                     connection.retryingSend = true
                     handler.postDelayed({
                         connection.retryingSend = false
@@ -411,9 +548,25 @@ internal class Peripheral(
                     }, 8)
                     return
                 }
-                if (status != BluetoothStatusCodes.SUCCESS) continue
+                if (status != BluetoothStatusCodes.SUCCESS) {
+                    audioDelivery?.let { it.failed++ }
+                    val log = testLog()
+                    if (log?.count(AudioTestMetric.DOWNLINK_NOTIFY_FAILED) == 1) {
+                        log.add("BLE audio notification submit failed: status=$status")
+                    }
+                    continue
+                }
                 connection.inFlight = true
                 connection.audioInFlight = true
+                val log = testLog()
+                connection.audioTrace = log
+                if (log != null) {
+                    connection.audioSequence = Wire.AudioSeal.sequence(audio.packet)
+                    log.track(AudioTestMetric.DOWNLINK_NOTIFY_SUBMITTED, connection.audioSequence)
+                }
+                if (log?.count(AudioTestMetric.DOWNLINK_NOTIFY_SUBMITTED) == 1) {
+                    log.add("BLE first audio notification submitted (${audio.packet.size} bytes)")
+                }
                 watch(connection, "Gatt audio notification timed out")
                 return
             }
@@ -423,20 +576,26 @@ internal class Peripheral(
             if (connection.output == null) {
                 val next = connection.urgent.pollFirst() ?:
                     (if (audioActive) null else connection.normal.pollFirst()) ?: return
-                connection.queuedBytes -= next.size
-                connection.output = Wire.frame(checkNotNull(connection.session).seal(next))
+                connection.queuedBytes -= next.bytes.size
+                connection.outputTrace = next.trace
+                connection.outputIsSms = next.isSms
+                connection.output = Wire.frame(checkNotNull(connection.session).seal(next.bytes))
                 connection.offset = 0
             }
             val packet = checkNotNull(connection.output)
             val end = minOf(packet.size, connection.offset + connection.capacity)
             val payload = packet.copyOfRange(connection.offset, end)
+            connection.submittedAt = SystemClock.elapsedRealtime()
             val status = notify(connection.device, transmit, payload, confirm = true)
+            connection.outputTrace?.let { (log, label, queuedAt) ->
+                log.add("BLE TX $label indication submit: offset=${connection.offset}..$end/${packet.size} status=$status queued=${connection.submittedAt - queuedAt}ms")
+            }
             if (status == BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY && connection.busyRetries < 4) {
                 connection.busyRetries++
                 connection.retryingSend = true
                 handler.postDelayed({
                     connection.retryingSend = false
-                    pump(connection)
+                    pump(connection, afterAudio = afterAudio)
                 }, 40)
                 return
             }

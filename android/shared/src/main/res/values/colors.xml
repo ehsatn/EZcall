@@ -1,17 +1,20 @@
 <resources>
     <color name="launcher_background">#0032D1</color>
-    <color name="ezcall_background">#F4F7FF</color>
-    <color name="ezcall_surface">#FBFCFF</color>
-    <color name="ezcall_surface_container">#E7EDFA</color>
-    <color name="ezcall_on_surface">#18233A</color>
-    <color name="ezcall_on_surface_variant">#43516F</color>
-    <color name="ezcall_primary">#0032D1</color>
+    <color name="ezcall_background">#F8F9FD</color>
+    <color name="ezcall_surface">#F8F9FD</color>
+    <color name="ezcall_surface_container_low">#F0F3FA</color>
+    <color name="ezcall_surface_container">#E9EDF6</color>
+    <color name="ezcall_surface_container_high">#E2E8F3</color>
+    <color name="ezcall_surface_container_highest">#DAE2F0</color>
+    <color name="ezcall_on_surface">#171F2D</color>
+    <color name="ezcall_on_surface_variant">#485366</color>
+    <color name="ezcall_primary">#174AC0</color>
     <color name="ezcall_on_primary">#FFFFFF</color>
-    <color name="ezcall_primary_container">#DCE5FF</color>
-    <color name="ezcall_on_primary_container">#102D78</color>
+    <color name="ezcall_primary_container">#DDE6FF</color>
+    <color name="ezcall_on_primary_container">#102B68</color>
     <color name="ezcall_secondary">#405995</color>
     <color name="ezcall_secondary_container">#CAD9FC</color>
     <color name="ezcall_outline">#68779A</color>
-    <color name="ezcall_outline_variant">#CCD6ED</color>
+    <color name="ezcall_outline_variant">#C9D2E3</color>
     <bool name="ezcall_light_system_bars">true</bool>
 </resources>

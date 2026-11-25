@@ -1,5 +1,6 @@
 package app.ezcall.receiver
 
+import app.ezcall.android.ezcallContext
 import android.Manifest.permission
 import android.app.Notification
 import android.app.NotificationChannel
@@ -17,8 +18,13 @@ import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import app.ezcall.android.AudioTestLog
+import app.ezcall.android.AudioTestMetric
 import app.ezcall.android.PairKey
-import androidx.core.content.ContextCompat
+import app.ezcall.android.ReceiverTestStep
+import app.ezcall.android.TEST_ECHO_SEQUENCE
 import app.ezcall.android.Wire
 import org.json.JSONObject
 import java.util.UUID
@@ -43,9 +49,22 @@ internal object ReceiverState {
     fun visibleMessages() = (data.messages + attempts.filter { it.syncedID == null }.map { it.sms })
         .sortedByDescending { it.date }
     var syncing = false
+    var microphoneOffered = false
     var microphoneAvailable = false
     var microphoneLive = false
+    var audioTest: ReceiverAudioTest? = null
     fun changed() { listeners.toList().forEach { it() } }
+}
+
+internal class ReceiverAudioTest(val id: String, context: Context) {
+    val log = AudioTestLog("Receiver", id.takeIf {
+        runCatching { UUID.fromString(it).toString() == it }.getOrDefault(false)
+    }, SystemClock::elapsedRealtime).apply { describeDevice(context) }
+}
+
+internal class CallAction(val id: String, val command: String, val startedAt: Long) {
+    fun accepts(callID: String, state: String) = id == callID &&
+        (state == "ended" || (command != "call_end" && state == "active"))
 }
 
 internal class ReceiverService : Service() {
@@ -57,12 +76,16 @@ internal class ReceiverService : Service() {
     private var enrolling = false
     private var leaving = false
     private var microphone = false
+    private var microphoneDeferred = false
     private var audio: ReceiverAudio? = null
+    private var playbackReady = false
     private var seal: Wire.AudioSeal? = null
     private var audioID: String? = null
-    private var previousAudioMode: Int? = null
+    private var pairedAudio = false
+    private var audioModeRequested = false
     private var pendingSmsID: String? = null
-    private var pendingCallID: String? = null
+    private var pendingCall: CallAction? = null
+    private val pendingCallID get() = pendingCall?.id
     var systemCall: RelayConnection? = null
     var awaitingSystemCall: String? = null
         private set
@@ -105,7 +128,7 @@ internal class ReceiverService : Service() {
     }
 
     private fun updateChannels() {
-        val locale = ContextCompat.getContextForLanguage(this)
+        val locale = ezcallContext()
         // Android freezes channel sound on creation. Keep an existing user's explicit choice.
         val legacy = alerts.getNotificationChannel("calls")
         if (legacy != null && (legacy.hasUserSetImportance() || legacy.hasUserSetSound())) callChannel = legacy.id
@@ -150,7 +173,9 @@ internal class ReceiverService : Service() {
             enrolling = saved == null
             secret = credential
             val next = if (saved != null) runCatching { key.load("next") }.getOrNull() else null
-            link = BleReceiver(this, handler, credential, next, ::rekey, ::show, ::receive, ::playPacket, ::disconnected)
+            link = BleReceiver(this, handler, credential, next, ::rekey, ::show, ::receive, ::playPacket, ::disconnected) {
+                testLog(state.inCall?.id)
+            }
                 .also { it.start() }
             if (enrolling) handler.postDelayed({
                 if (enrolling) {
@@ -227,20 +252,27 @@ internal class ReceiverService : Service() {
     }
 
     fun answer(callID: String, allowMic: Boolean) {
+        testLog(callID)?.add("Receiver action: answer, microphoneRequested=$allowMic")
         if (!state.canControlCurrentCall || state.inCall?.takeIf { it.state == "ringing" }?.id != callID || state.pendingCall) return
         prepareMicrophone(allowMic)
         if (send("call_answer", callID)) {
+            testStep(ReceiverTestStep.ANSWER_QUEUED, callID)
             answeredHere = callID
-            waitForCall(callID, "Answering on the sending phone…")
-        } else releaseMicrophone()
+            waitForCall(callID, "call_answer", "Answering on the sending phone…")
+        } else {
+            testStep(ReceiverTestStep.ANSWER_FAILED, callID)
+            releaseMicrophone()
+        }
     }
 
     fun end(callID: String) {
+        testLog(callID)?.add("Receiver action: end, state=${state.inCall?.state ?: "none"}")
         if ((!state.canControlCurrentCall || state.inCall?.id != callID) && !isDialing(callID)) return
         if (send("call_end", callID)) {
+            testStep(ReceiverTestStep.END_QUEUED, callID)
             stopAudio()
-            waitForCall(callID, "Ending the call…")
-        }
+            waitForCall(callID, "call_end", "Ending the call…")
+        } else testStep(ReceiverTestStep.END_FAILED, callID)
     }
 
     fun dial(number: String, allowMic: Boolean): String? {
@@ -253,7 +285,7 @@ internal class ReceiverService : Service() {
         prepareMicrophone(allowMic)
         val request = id()
         if (send("call_dial", request, JSONObject().put("address", address))) {
-            waitForCall(request, "Dialing from the sending phone…")
+            waitForCall(request, "call_dial", "Dialing from the sending phone…")
             return request
         } else releaseMicrophone()
         return null
@@ -280,19 +312,46 @@ internal class ReceiverService : Service() {
     }
 
     fun mute() {
-        if (audio != null && microphone) {
+        if (state.microphoneAvailable) {
             muted = !muted
             if (muted) link?.clearMicrophonePackets()
             state.microphoneLive = !muted
+            testStep(if (muted) ReceiverTestStep.MIC_MUTED else ReceiverTestStep.MIC_UNMUTED)
             state.changed()
         }
+    }
+
+    fun enableMicrophone(id: String, allowed: Boolean) {
+        if (!state.connected || state.inCall?.id != id || audioID != id || !state.microphoneOffered || microphone) return
+        prepareMicrophone(allowed)
+        if (microphone) startMicrophone()
+    }
+
+    fun retryDeferredMicrophone() {
+        if (microphoneDeferred) audioID?.let { enableMicrophone(it, allowed = true) }
+    }
+
+    private fun testLog(id: String?) = state.audioTest?.takeIf { it.id == id }?.log
+
+    private fun testStep(step: ReceiverTestStep, id: String? = state.inCall?.id) {
+        val log = testLog(id) ?: return
+        if (!log.record(step)) return
+        val call = state.inCall
+        if (call != null && call.id == id && call.simulated && call.state == "active" && call.testAudioDiagnostics &&
+            step != ReceiverTestStep.LINK_LOST) {
+            if (!send("test_audio_status", call.id, JSONObject().put("step", step.name).put("elapsed_ms", log.elapsedMs()))) {
+                log.record(ReceiverTestStep.STATUS_NOT_QUEUED)
+            }
+        }
+        state.changed()
     }
 
     fun setSystemMuted(id: String, value: Boolean) {
         if (systemCall?.id != id) return
         muted = value
         if (muted) link?.clearMicrophonePackets()
-        state.microphoneLive = microphone && audio != null && !value
+        state.microphoneLive = state.microphoneAvailable && !value
+        testStep(if (muted) ReceiverTestStep.MIC_MUTED else ReceiverTestStep.MIC_UNMUTED, id)
         state.changed()
     }
 
@@ -322,6 +381,7 @@ internal class ReceiverService : Service() {
                 if (state.connected) return
                 check(state.paired && !enrolling)
                 state.connected = true
+                updateCallPriority()
                 updateForeground()
                 show("Connected over Bluetooth.")
             }
@@ -350,16 +410,20 @@ internal class ReceiverService : Service() {
             }
             "call" -> message.call()?.let(::receiveCall)
             "call_error" -> if (id == pendingCallID || id == state.inCall?.id || id == recovery?.id) {
+                testStep(ReceiverTestStep.CALL_ERROR, id)
                 if (answeredHere == id && state.inCall?.state == "ringing") answeredHere = null
-                pendingCallID = null
+                pendingCall = null
                 state.pendingCall = false
                 if (recovery?.id == id) finishRecovery()
                 else if (audio == null) releaseMicrophone()
+                updateCallPriority()
                 show(message.optString("message", "The sending phone could not complete the call action.").take(250))
             }
             "call_resumed" -> if (recovery?.id == id) {
                 recovery = null
-                if (message.optBoolean("audio") && audio != null && supportsAudioRoute && microphone) {
+                testStep(if (message.optBoolean("audio")) ReceiverTestStep.LINK_RESUMED
+                    else ReceiverTestStep.AUDIO_NOT_RESUMED, id)
+                if (message.optBoolean("audio") && supportsAudioRoute && playbackReady && state.microphoneAvailable) {
                     send("audio_ready", id)
                 } else if (!message.optBoolean("audio")) stopAudio()
                 show("Call reconnected.")
@@ -372,7 +436,8 @@ internal class ReceiverService : Service() {
                 if (sent) sync()
             }
             "audio_start" -> startAudio(id, message)
-            "audio_stop" -> if (id == audioID) {
+            "audio_stop" -> if (id == audioID || audioID == null && (id == state.inCall?.id || id == pendingCallID)) {
+                testStep(ReceiverTestStep.AUDIO_STOPPED, id)
                 stopAudio()
                 show(message.optString("message", "Call audio is on the sending phone.").take(250))
             }
@@ -397,6 +462,10 @@ internal class ReceiverService : Service() {
 
     private fun receiveCall(call: ReceivedCall) {
         val previous = state.inCall
+        if (call.simulated && call.state != "ended" && state.audioTest?.id != call.id) {
+            state.audioTest = ReceiverAudioTest(call.id, this)
+            testLog(call.id)?.let { link?.describeTestLink(it) }
+        }
         recovery?.let {
             if (it.id == call.id) it.confirmedActive = call.state == "active"
             else if (call.state != "ended") finishRecovery()
@@ -405,11 +474,13 @@ internal class ReceiverService : Service() {
             "ringing", "active" -> state.inCall = call
             "ended" -> if (previous?.id == call.id) state.inCall = null
         }
-        val completedAction = pendingCallID == call.id && call.state != "ringing"
-        if (completedAction) {
-            pendingCallID = null
+        val completedAction = pendingCall?.takeIf { it.accepts(call.id, call.state) }
+        if (completedAction != null) {
+            testLog(call.id)?.add("Receiver ${completedAction.command} confirmed: state=${call.state} after ${SystemClock.elapsedRealtime() - completedAction.startedAt}ms")
+            pendingCall = null
             state.pendingCall = false
         }
+        updateCallPriority()
         val ringingID = state.inCall?.takeIf { it.state == "ringing" }?.id
         if (lastCallAlert != ringingID) {
             alerts.cancel(CALL_ALERT)
@@ -425,9 +496,18 @@ internal class ReceiverService : Service() {
             if (recovery?.id == call.id) finishRecovery()
             if (audioID == call.id || previous?.id == call.id) stopAudio()
         }
-        updateData(state.data.copy(calls = (listOf(call) + state.data.calls.filterNot { it.id == call.id })
+        if (call.simulated) {
+            val step = when (call.state) {
+                "ringing" -> ReceiverTestStep.RINGING
+                "active" -> ReceiverTestStep.ACTIVE
+                else -> ReceiverTestStep.ENDED
+            }
+            testStep(step, call.id)
+            state.changed()
+        }
+        else updateData(state.data.copy(calls = (listOf(call) + state.data.calls.filterNot { it.id == call.id })
             .sortedByDescending { it.date }.take(100)))
-        if (completedAction) show(if (call.state == "ended") "Call ended." else "Call connected.")
+        if (completedAction != null) show(if (call.state == "ended") "Call ended." else "Call connected.")
     }
 
     private fun receiveSms(sms: ReceivedSms) {
@@ -475,30 +555,51 @@ internal class ReceiverService : Service() {
         return saved
     }
 
-    private fun waitForCall(id: String, detail: String) {
-        pendingCallID = id
+    private fun waitForCall(id: String, command: String, detail: String) {
+        val action = CallAction(id, command, SystemClock.elapsedRealtime())
+        pendingCall = action
         state.pendingCall = true
+        updateCallPriority()
         show(detail)
         handler.postDelayed({
-            if (pendingCallID == id) {
-                pendingCallID = null
+            if (pendingCall === action) {
+                pendingCall = null
                 state.pendingCall = false
+                updateCallPriority()
                 if (audio == null) releaseMicrophone()
+                testLog(id)?.add("Receiver $command timed out after ${SystemClock.elapsedRealtime() - action.startedAt}ms")
+                testStep(if (command == "call_end") ReceiverTestStep.END_TIMEOUT else ReceiverTestStep.ANSWER_TIMEOUT, id)
                 show("Call status was not confirmed. Check the sending phone.")
             }
         }, 16_000)
     }
 
+    private fun updateCallPriority() {
+        link?.setCallPriority(state.inCall != null || pendingCallID != null)
+    }
+
     private fun prepareMicrophone(requested: Boolean) {
-        if (!requested || checkSelfPermission(permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        if (checkSelfPermission(permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            testStep(ReceiverTestStep.MIC_PERMISSION_MISSING)
+            return
+        }
+        if (!requested) {
+            testStep(ReceiverTestStep.MIC_NOT_REQUESTED)
+            return
+        }
+        microphoneDeferred = false
         microphone = true
-        if (runCatching { updateForeground() }.isFailure) microphone = false
+        runCatching { updateForeground() }.onFailure {
+            microphone = false
+            microphoneDeferred = true
+            testStep(ReceiverTestStep.MIC_FOREGROUND_FAILED)
+            Log.w("EzcallReceiver", "Could not enable microphone foreground service: ${it.javaClass.simpleName}")
+        }
     }
 
     private fun releaseMicrophone() {
         val wasEnabled = microphone
         microphone = false
-        muted = false
         state.microphoneAvailable = false
         state.microphoneLive = false
         if (wasEnabled && !closing) runCatching { updateForeground() }
@@ -506,72 +607,204 @@ internal class ReceiverService : Service() {
 
     private fun startAudio(id: String, message: JSONObject) {
         if (state.inCall?.id != id && pendingCallID != id) return
+        testStep(ReceiverTestStep.AUDIO_START, id)
         val keyBytes = runCatching { java.util.Base64.getDecoder().decode(message.getString("key")) }.getOrNull()
-        if (keyBytes?.size != 32) return
+        if (keyBytes?.size != 32) {
+            keyBytes?.fill(0)
+            testStep(ReceiverTestStep.INVALID_AUDIO_KEY, id)
+            return
+        }
         stopPlayback()
         val cipher = Wire.AudioSeal(keyBytes, Wire.AudioSeal.IPHONE_TO_ANDROID, Wire.AudioSeal.ANDROID_TO_IPHONE)
         keyBytes.fill(0)
         seal = cipher
         audioID = id
+        pairedAudio = message.optBoolean("audio_pairs")
         armSyncTimeout()
-        val uplink = microphone && message.optBoolean("uplink")
-        if (!uplink) releaseMicrophone()
-        val manager = getSystemService(AudioManager::class.java)
-        if (systemCall?.id != id) runCatching {
-            previousAudioMode = manager.mode
-            manager.mode = AudioManager.MODE_IN_COMMUNICATION
+        state.microphoneOffered = message.optBoolean("uplink")
+        if (!state.microphoneOffered) {
+            releaseMicrophone()
+            testStep(ReceiverTestStep.MIC_NOT_OFFERED, id)
         }
-        state.microphoneAvailable = uplink
-        state.microphoneLive = uplink && !muted
-        audio = ReceiverAudio(uplink, { bytes ->
-            handler.post {
-                if (seal === cipher && !muted && state.connected) runCatching { link?.sendAudio(cipher.seal(bytes)) }
-            }
-        }, {
+        val manager = getSystemService(AudioManager::class.java)
+        val log = testLog(id)
+        val echoSequence = message.optLong("test_echo_sequence", -1L)
+            .takeIf { log != null && it == TEST_ECHO_SEQUENCE }
+        log?.add("Audio setup: uplink=${state.microphoneOffered} pairedPackets=$pairedAudio micEnabled=$microphone systemCall=${systemCall?.id == id}")
+        if (systemCall?.id != id) runCatching {
+            manager.mode = AudioManager.MODE_IN_COMMUNICATION
+            audioModeRequested = true
+        }.onFailure { log?.add("Audio communication mode failed: ${it.javaClass.simpleName}") }
+        log?.let {
+            val output = runCatching {
+                val stream = AudioManager.STREAM_VOICE_CALL
+                "communication device type=${manager.communicationDevice?.type ?: "unknown"} volume=${manager.getStreamVolume(stream)}/${manager.getStreamMaxVolume(stream)}"
+            }.getOrDefault("Android did not provide device and volume information")
+            it.add("Audio output: $output")
+        }
+        audio = ReceiverAudio({
             handler.post {
                 if (seal === cipher) {
-                    if (uplink && supportsAudioRoute) send("audio_ready", id)
-                    show(if (uplink) "Call audio is on this phone." else "Listening on this phone. Speak into the sending phone.")
+                    playbackReady = true
+                    testStep(ReceiverTestStep.PLAYBACK_READY, id)
+                    updateAudioReadiness()
                 }
             }
+        }, { error ->
+            handler.post {
+                if (seal === cipher) {
+                    log?.add("Audio playback exception: ${error.javaClass.simpleName}")
+                    testStep(ReceiverTestStep.PLAYBACK_FAILED, id)
+                    stopAudio()
+                    show("Audio stopped. Continue the call on the sending phone.")
+                }
+            }
+        }, onTestStep = if (state.audioTest?.id == id) { step ->
+            handler.post { if (seal === cipher) testStep(step, id) }
+        } else null, onTestDetail = log?.let { test -> { detail ->
+            val at = SystemClock.elapsedRealtime()
+            handler.post { test.add("$detail (worker to handler=${SystemClock.elapsedRealtime() - at}ms)") }
+            Unit
+        } },
+            onTestPlayedPacket = log?.let { test -> { sequence -> test.track(AudioTestMetric.PCM_WRITTEN, sequence) } },
+            testLog = log, echoSequence = echoSequence)
+        if (microphone) startMicrophone()
+    }
+
+    private fun startMicrophone() {
+        val cipher = seal ?: return
+        val log = testLog(audioID)
+        val payloadLimit = link?.audioPayloadLimit()?.takeIf { it > 0 } ?: run {
+            testStep(ReceiverTestStep.MIC_NO_BLUETOOTH_PAYLOAD, audioID)
+            return
+        }
+        log?.add("Microphone Opus payload limit: $payloadLimit bytes")
+        audio?.startMicrophone(payloadLimit, { bytes ->
+            val expires = SystemClock.elapsedRealtime() + 80
+            handler.post {
+                if (seal !== cipher) return@post
+                log?.count(AudioTestMetric.UPLINK_ENCODED)
+                if (!state.microphoneLive || !state.connected) return@post
+                if (SystemClock.elapsedRealtime() >= expires) {
+                    log?.count(AudioTestMetric.UPLINK_STALE)
+                    return@post
+                }
+                val queued = runCatching {
+                    val packet = cipher.seal(bytes)
+                    val sent = link?.sendAudio(packet) == true
+                    if (sent) log?.track(AudioTestMetric.UPLINK_QUEUED, Wire.AudioSeal.sequence(packet))
+                    sent
+                }.onFailure { error -> log?.add("Microphone packet could not be sealed or queued: ${error.javaClass.simpleName}") }.getOrDefault(false)
+                log?.count(if (queued) AudioTestMetric.UPLINK_QUEUED else AudioTestMetric.UPLINK_QUEUE_REJECTED)
+                testStep(if (queued) ReceiverTestStep.MIC_QUEUED else ReceiverTestStep.MIC_QUEUE_REJECTED, audioID)
+            }
         }, {
             handler.post {
                 if (seal === cipher) {
-                    stopAudio()
-                    show("Audio stopped. Continue the call on the sending phone.")
+                    state.microphoneAvailable = true
+                    state.microphoneLive = !muted
+                    testStep(ReceiverTestStep.MIC_CAPTURE_STARTED, audioID)
+                    Log.i("EzcallReceiver", "Microphone capture started")
+                    updateAudioReadiness()
+                }
+            }
+        }, { error ->
+            handler.post {
+                if (seal === cipher) {
+                    Log.w("EzcallReceiver", "Microphone capture failed", error)
+                    log?.add("Microphone capture exception: ${error.javaClass.simpleName}")
+                    testStep(ReceiverTestStep.MIC_CAPTURE_FAILED, audioID)
+                    link?.clearMicrophonePackets()
+                    releaseMicrophone()
+                    microphoneDeferred = true
+                    if (supportsAudioRoute) audioID?.let { send("audio_paused", it) }
+                    updateAudioReadiness()
                 }
             }
         })
     }
 
+    private fun updateAudioReadiness() {
+        val id = audioID ?: return
+        if (!playbackReady || !state.connected || recovery != null) return
+        if (state.inCall?.simulated == true) {
+            state.changed()
+            return
+        }
+        if (supportsAudioRoute && state.microphoneAvailable) send("audio_ready", id)
+        if (audioID == id && state.connected) {
+            show(when {
+                state.microphoneAvailable -> "Call audio is on this phone."
+                state.microphoneOffered -> "Call audio is on the sending phone."
+                else -> "Listening on this phone. Speak into the sending phone."
+            })
+        }
+    }
+
     private fun playPacket(packet: ByteArray) {
         if (recovery != null) return
-        seal?.open(packet)?.let { audio?.offer(it) }
+        val log = testLog(state.inCall?.id)
+        val cipher = seal ?: run {
+            if (log?.count(AudioTestMetric.DOWNLINK_BEFORE_SETUP) == 1) log.add("Audio arrived before Receiver had an active audio setup")
+            return
+        }
+        val frame = cipher.open(packet)
+        if (frame == null) {
+            log?.count(AudioTestMetric.DOWNLINK_REJECTED)
+            testStep(ReceiverTestStep.PACKET_REJECTED, audioID)
+        }
+        else {
+            log?.count(AudioTestMetric.DOWNLINK_AUTHENTICATED)
+            val sequence = log?.let { Wire.AudioSeal.sequence(packet) }
+            if (sequence != null) log.track(AudioTestMetric.DOWNLINK_AUTHENTICATED, sequence)
+            if (pairedAudio) {
+                val (first, second) = Wire.AudioSeal.splitPair(frame) ?: return
+                if (audio?.offer(first, sequence) == true) log?.count(AudioTestMetric.PLAYBACK_QUEUE_DROPPED)
+                if (audio?.offer(second, sequence) == true) log?.count(AudioTestMetric.PLAYBACK_QUEUE_DROPPED)
+            } else if (audio?.offer(frame, sequence) == true) log?.count(AudioTestMetric.PLAYBACK_QUEUE_DROPPED)
+            testStep(ReceiverTestStep.PACKET_AUTHENTICATED, audioID)
+        }
     }
 
     private fun stopPlayback() {
+        testLog(audioID)?.add("Receiver closing the audio path")
         link?.clearMicrophonePackets()
         if (supportsAudioRoute) audioID?.let { send("audio_paused", it) }
         audio?.close()
         audio = null
         seal = null
         audioID = null
+        pairedAudio = false
+        playbackReady = false
+        state.microphoneOffered = false
+        state.microphoneAvailable = false
+        state.microphoneLive = false
         armSyncTimeout()
-        previousAudioMode?.let { old -> runCatching { getSystemService(AudioManager::class.java).mode = old } }
-        previousAudioMode = null
+        if (audioModeRequested) {
+            runCatching { getSystemService(AudioManager::class.java).mode = AudioManager.MODE_NORMAL }
+            audioModeRequested = false
+        }
     }
 
     private fun stopAudio() {
         stopPlayback()
         releaseMicrophone()
+        microphoneDeferred = false
+        muted = false
     }
 
     private fun disconnected() {
+        testStep(ReceiverTestStep.LINK_LOST)
         val hadPendingSms = pendingSmsID != null
         if (recovery == null && state.connected && resumeSupported && !leaving && !closing && audioID != null && state.inCall?.state == "active") {
             val interrupted = Recovery(checkNotNull(audioID), SystemClock.elapsedRealtime() + 18_000)
             recovery = interrupted
-            handler.postDelayed({ if (recovery === interrupted) finishRecovery() }, 18_000)
+            handler.postDelayed({
+                if (recovery === interrupted) {
+                    testStep(ReceiverTestStep.RECOVERY_TIMEOUT, interrupted.id)
+                    finishRecovery()
+                }
+            }, 18_000)
         } else if (recovery == null || leaving || closing) {
             state.inCall = null
             stopAudio()
@@ -593,7 +826,7 @@ internal class ReceiverService : Service() {
         awaitingSystemCall = null
         ping = null
         pendingSmsID = null
-        pendingCallID = null
+        pendingCall = null
         if (hadPendingSms) smsUnconfirmed = true
         alerts.cancel(CALL_ALERT)
         if (!closing) updateForeground()
@@ -607,6 +840,7 @@ internal class ReceiverService : Service() {
         recovery = null
         stopAudio()
         if (state.inCall?.id == interrupted.id && !interrupted.confirmedActive) state.inCall = null
+        updateCallPriority()
         show("Call audio returned to the sending phone.")
     }
 
@@ -646,8 +880,8 @@ internal class ReceiverService : Service() {
     private fun updateForeground() {
         val notification = Notification.Builder(this, "link")
             .setSmallIcon(R.drawable.ic_ezcall_notification)
-            .setContentTitle(ContextCompat.getContextForLanguage(this).getString(R.string.r_receiver_name))
-            .setContentText(ContextCompat.getContextForLanguage(this).getString(if (state.connected) R.string.r_bt_connected else R.string.r_wait_sender))
+            .setContentTitle(ezcallContext().getString(R.string.r_receiver_name))
+            .setContentText(ezcallContext().getString(if (state.connected) R.string.r_bt_connected else R.string.r_wait_sender))
             .setContentIntent(open())
             .setOngoing(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
@@ -665,9 +899,9 @@ internal class ReceiverService : Service() {
         val screen = PendingIntent.getActivity(this, 0, Intent(this, IncomingCallActivity::class.java)
             .setIdentifier(callID).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
             PendingIntent.FLAG_IMMUTABLE)
-        val locale = ContextCompat.getContextForLanguage(this)
+        val locale = ezcallContext()
         val notification = Notification.Builder(this, callChannel)
-            .setSmallIcon(R.drawable.ic_call)
+            .setSmallIcon(R.drawable.ic_ezcall_notification)
             .setContentTitle(locale.getString(R.string.r_call_incoming))
             .setContentText(locale.getString(R.string.r_call_from_sender))
             .setCategory(Notification.CATEGORY_CALL)
@@ -682,23 +916,25 @@ internal class ReceiverService : Service() {
 
     private fun alertSms(sms: ReceivedSms) {
         if (!alerts.areNotificationsEnabled()) return
-        val locale = ContextCompat.getContextForLanguage(this)
+        val locale = ezcallContext()
         val body = sms.body.ifBlank { locale.getString(R.string.r_open_message_alert) }
         val redacted = Notification.Builder(this, "messages")
             .setSmallIcon(R.drawable.ic_ezcall_notification)
             .setContentTitle(locale.getString(R.string.r_new_relayed))
             .build()
-        alerts.notify(SMS_ALERT, Notification.Builder(this, "messages")
+        alerts.notify(SMS_ALERT, NotificationCompat.Builder(this, "messages")
             .setSmallIcon(R.drawable.ic_ezcall_notification)
             .setContentTitle(state.data.name(sms.address, locale.getString(R.string.r_unknown)))
             .setContentText(body)
-            .setStyle(Notification.BigTextStyle().bigText(body))
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setSilent(state.inCall?.state == "active")
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(redacted)
-            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setContentIntent(PendingIntent.getActivities(this, SMS_ALERT, arrayOf(
                 Intent(this, ReceiverActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                Intent(this, ConversationActivity::class.java).putExtra("address", sms.address)
+                Intent(this, ConversationActivity::class.java).setIdentifier(sms.id)
+                    .putExtra("address", sms.address).putExtra("messageID", sms.id)
             ), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             .setAutoCancel(true)
             .build())

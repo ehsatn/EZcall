@@ -5,6 +5,6 @@
     android:viewportHeight="144">
     <group android:translateX="-24" android:translateY="-24">
         <path android:fillColor="#FFFFFF"
-            android:pathData="M 38 100 C 48 77 61 57 86 57 H 159 L 140 77 C 136 81.5 131 84 125 84 H 70 C 55 84 46 90 38 100 Z M 32.5 134 L 55 103.5 C 61 95.5 68 92 77 92 H 114 L 66.5 123 C 95 117 126 108 158 95 L 145 117 C 138.5 128.5 130 134 115 134 Z" />
+            android:pathData="@string/ezcall_mark_path" />
     </group>
 </vector>

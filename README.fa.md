@@ -8,9 +8,9 @@
 
 | دستگاه | فایل | پیش‌نیاز |
 | --- | --- | --- |
-| اندروید دارای سیم‌کارت | [فرستنده ۰٫۱٫۱۱ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-24/ezcall-sender-0.1.11-release.apk) | اندروید ۱۲ یا بالاتر، قابلیت تماس و پشتیبانی از اعلان حضور به‌عنوان دستگاه جانبی بلوتوث کم‌مصرف (BLE) |
-| گوشی اندرویدی دوم | [گیرنده ۰٫۱٫۵ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-24/ezcall-receiver-0.1.5-release.apk) | اندروید ۱۲ یا بالاتر و BLE |
-| آیفون | [گیرنده ۰٫۱٫۲۵ · IPA امضانشده](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-24/ezcall-0.1.25-unsigned.ipa) | iOS ۱۷ یا بالاتر. برای نصب، فایل باید با گواهی اپل و پروفایل مناسب دستگاه امضا شود. ساخت از سورس به مک و Xcode ۲۶ یا بالاتر نیاز دارد. |
+| اندروید دارای سیم‌کارت | [فرستنده ۰٫۱٫۲۰ · APK](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/ezcall-sender-0.1.20-release.apk) | اندروید ۱۲ یا بالاتر، قابلیت تماس و پشتیبانی از اعلان حضور به‌عنوان دستگاه جانبی بلوتوث کم‌مصرف (BLE) |
+| گوشی اندرویدی دوم | [گیرنده ۰٫۱٫۱۳ · APK](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/ezcall-receiver-0.1.13-release.apk) | اندروید ۱۲ یا بالاتر و BLE |
+| آیفون | [گیرنده ۰٫۱٫۳۱ · IPA امضانشده](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/EasyCall-0.1.31-build34-unsigned.ipa) | iOS ۱۷ یا بالاتر. برای نصب، فایل باید با گواهی اپل و پروفایل مناسب دستگاه امضا شود. ساخت از سورس به مک و Xcode ۲۶ یا بالاتر نیاز دارد. |
 
 در اندروید، APK مربوط به نقش گوشی را روی همان دستگاه باز کنید و مراحل نصب را انجام دهید. در صفحهٔ هر انتشار فایل SHA-256 برای بررسی صحت دانلود موجود است. شمارهٔ نسخهٔ سه برنامه مستقل است. اگر از فرستندهٔ ۰٫۱٫۸ به نسخهٔ جدید می‌روید، اندروید آن را به‌عنوان برنامه‌ای جدا نصب می‌کند. جفت‌سازی گیرنده و در صورت استفاده، راه‌اندازی صدای تماس را تکرار کنید. [یادداشت انتشار و هش فایل‌ها](https://github.com/ehsatn/EZcall/releases/latest) · [آرشیو نسخه‌های قبلی](https://github.com/ehsatn/EZcall/releases/tag/binary-archive-1)
 

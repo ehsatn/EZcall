@@ -8,11 +8,11 @@ import java.security.SecureRandom
 // Loopback protocol between the relay and the call audio component that runs as the shell user.
 // Both sides prove the shared token before any audio flows. Messages are type, 16-bit length, payload.
 internal object AudioBridge {
-    const val VERSION = 4
+    const val VERSION = 8
     const val SAMPLE_RATE = Opus.SAMPLE_RATE
     const val FRAME_SAMPLES = Opus.FRAME_SAMPLES
     const val FRAME_BYTES = Opus.FRAME_BYTES
-    const val LIVE_QUEUE_FRAMES = 3
+    const val LIVE_QUEUE_FRAMES = 5
     const val LIVE_QUEUE_MS = LIVE_QUEUE_FRAMES * FRAME_SAMPLES * 1000L / SAMPLE_RATE
 
     const val HELLO = 0x01
@@ -21,7 +21,7 @@ internal object AudioBridge {
     const val START = 0x10
     const val STARTED = 0x11
     const val STOP = 0x12
-    const val ROUTE = 0x13
+    const val RECEIVER_READY = 0x13
     const val PCM = 0x20
     const val ERROR = 0x30
     const val SHUTDOWN = 0x40

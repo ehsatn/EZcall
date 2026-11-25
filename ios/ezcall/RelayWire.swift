@@ -43,12 +43,21 @@ enum RelayWire {
     }
 }
 
-// One sealed Opus packet per BLE audio write or notification. The audio key arrives in `audio_start`
+// One sealed payload per BLE audio write or notification. The audio key arrives in `audio_start`
 // over the authenticated link. Skipped packets are allowed, but a sequence number is never accepted twice.
 struct AudioSeal {
     static let androidToIPhone: UInt32 = 1
     static let iPhoneToAndroid: UInt32 = 2
     static let maxPayload = 1_024
+    static let overhead = 21
+
+    static func splitPair(_ payload: Data) -> (Data, Data)? {
+        guard (4...maxPayload).contains(payload.count) else { return nil }
+        let firstSize = payload.prefix(2).reduce(0) { ($0 << 8) | Int($1) }
+        let frames = payload.dropFirst(2)
+        guard firstSize > 0, firstSize < frames.count else { return nil }
+        return (Data(frames.prefix(firstSize)), Data(frames.dropFirst(firstSize)))
+    }
 
     private let key: SymmetricKey
     private let outgoing: UInt32
@@ -73,7 +82,7 @@ struct AudioSeal {
 
     mutating func open(_ packet: Data) -> Data? {
         let bytes = [UInt8](packet)
-        guard (22...(Self.maxPayload + 21)).contains(bytes.count), bytes[0] == 5 else { return nil }
+        guard ((Self.overhead + 1)...(Self.maxPayload + Self.overhead)).contains(bytes.count), bytes[0] == 5 else { return nil }
         let sequence = bytes[1...4].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
         guard Int64(sequence) > lastReceived,
               let nonce = try? Self.nonce(incoming, sequence),

@@ -5,6 +5,8 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.app.NotificationManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -14,63 +16,76 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.Process
 import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
-import android.widget.FrameLayout
-import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.appcompat.view.ContextThemeWrapper
-import androidx.appcompat.widget.Toolbar
+import androidx.core.text.BidiFormatter
+import androidx.core.text.TextDirectionHeuristicsCompat
 import androidx.core.view.WindowCompat
 import com.google.android.material.R as MaterialR
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.google.android.material.bottomsheet.BottomSheetBehavior
-import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.bottomsheet.BottomSheetDragHandleView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.divider.MaterialDivider
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.progressindicator.CircularProgressIndicator
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.textview.MaterialTextView
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 
 @SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity() {
-    private lateinit var connection: LinearLayout
-    private lateinit var sharing: LinearLayout
-    private lateinit var sharingCard: MaterialCardView
-    private lateinit var walkthroughSharing: LinearLayout
-    private lateinit var sharingHome: LinearLayout
-    private lateinit var status: LinearLayout
-    private lateinit var audioPanel: LinearLayout
-    private lateinit var setupPanel: LinearLayout
-    private lateinit var setupActions: LinearLayout
-    private var guideAudio: LinearLayout? = null
-    private lateinit var connectionScroll: ScrollView
-    private lateinit var sharingScroll: ScrollView
-    private lateinit var statusContent: ScrollView
+    private lateinit var toolbar: MaterialToolbar
+    private lateinit var scroll: ScrollView
+    private lateinit var content: LinearLayout
+    private lateinit var guideAction: LinearLayout
     private lateinit var navigation: BottomNavigationView
     private lateinit var back: OnBackPressedCallback
-    private lateinit var settingsNotifications: SettingsRow
-    private lateinit var settingsBattery: SettingsRow
-    private var settingsSheet: BottomSheetDialog? = null
     private var page = Page.CONNECTION
+    private var detail: Detail? = null
+    private var guideFromSettings = false
+    private var audioSetupFromGuide = false
+    private var connectionPanel: LinearLayout? = null
+    private var sharingPanel: LinearLayout? = null
+    private var audioPanel: LinearLayout? = null
+    private var testPanel: LinearLayout? = null
+    private var reportPanel: LinearLayout? = null
+    private var settingsNotifications: SettingsRow? = null
+    private var settingsBattery: SettingsRow? = null
+    private var shownAudio: AudioDisplay? = null
+    private var shownTest: TestDisplay? = null
+    private var shownReport: TestCallReport? = null
+    private var testRequestFailed = false
+    private var connectionIssue: Int? = null
+    private var relayStarting = false
+    private var relayBeforeStart: RelayState? = null
+    private val startTimeout = Runnable {
+        if (relayStarting) {
+            relayStarting = false
+            relayBeforeStart = null
+            connectionIssue = R.string.s_relay_open_app
+            renderLink(RelayState.current)
+        }
+    }
     private var audioBusy = false
     private var setupAudioReady: CallAudio.Status? = null
     private var setupAudioError: Int? = null
@@ -80,10 +95,17 @@ class MainActivity : AppCompatActivity() {
     private var pairingHint: String? = null
     private var qrImage: Bitmap? = null
     private var qrValue: String? = null
-    internal enum class Step(val title: Int, val detail: Int, val icon: Int) {
-        SHARING(R.string.s_choose_sharing, R.string.s_guide_sharing, R.drawable.ic_devices),
-        LINK(R.string.s_link_receiver, R.string.s_guide_link, R.drawable.ic_bluetooth),
-        AUDIO(R.string.s_guide_audio, R.string.s_guide_audio_detail, R.drawable.ic_headset);
+    internal enum class Step(
+        val title: Int, val detail: Int, val help: Int, val image: Int, val imageDescription: Int
+    ) {
+        SHARING(R.string.s_sharing, R.string.s_ui_guide_sharing, R.string.s_ui_guide_help_sharing,
+            R.drawable.sender_guide_sharing, R.string.s_ui_guide_image_sharing),
+        LINK(R.string.ez_pair_phones, R.string.s_ui_guide_pairing, R.string.s_ui_guide_help_pairing,
+            R.drawable.sender_guide_pairing, R.string.s_ui_guide_image_pairing),
+        AUDIO(R.string.s_call_audio, R.string.s_ui_guide_optional_audio, R.string.s_ui_guide_help_audio,
+            R.drawable.sender_guide_audio, R.string.s_ui_guide_image_audio);
+
+        fun previous() = entries.getOrNull(ordinal - 1)
 
         companion object {
             fun restore(saved: String?, legacy: String?, paired: Boolean): Step? {
@@ -93,7 +115,7 @@ class MainActivity : AppCompatActivity() {
                     "WIRELESS", "AUDIO" -> AUDIO
                     "SHARING" -> SHARING
                     "LINK" -> if (paired) AUDIO else LINK
-                    else -> if (paired) AUDIO else SHARING
+                    else -> if (paired) AUDIO else null
                 }
             }
         }
@@ -109,135 +131,178 @@ class MainActivity : AppCompatActivity() {
         requestingFeature = savedInstanceState?.getString("feature")?.let(Feature::valueOf)
         setupAudioReady = savedInstanceState?.getString("setupAudioReady")?.let(CallAudio.Status::valueOf)
         setupAudioError = savedInstanceState?.getInt("setupAudioError")?.takeIf { it != 0 }
+        connectionIssue = savedInstanceState?.getInt("connectionIssue")?.takeIf { it != 0 }
         pairingAgain = savedInstanceState?.getBoolean("pairingAgain") == true
         pairingHint = savedInstanceState?.getString("pairingHint")
         page = Page.entries.getOrElse(savedInstanceState?.getInt("page") ?: 0) { Page.CONNECTION }
+        detail = savedInstanceState?.getString("detail")?.let(Detail::valueOf)
+            ?: Detail.SETTINGS.takeIf { savedInstanceState?.getBoolean("settingsOpen") == true }
+        guideFromSettings = savedInstanceState?.getBoolean("guideFromSettings") == true
         with(getPreferences(MODE_PRIVATE)) {
             val saved = getString("senderGuideStep", null)
             step = Step.restore(saved, getString("setupStep", null), PairKey(this@MainActivity).exists())
-            if (saved == null) edit().putString("senderGuideStep", step?.name).apply()
+            if (saved == null) {
+                saveStep(step)
+                if (step != null && savedInstanceState == null) detail = Detail.GUIDE
+            }
         }
+        audioSetupFromGuide = detail == Detail.AUDIO_SETUP && step == Step.AUDIO &&
+            savedInstanceState?.getBoolean("audioSetupFromGuide") == true
+        if (detail == Detail.GUIDE && step == null) detail = null
 
-        val screen = stack().apply { setBackgroundColor(color(android.R.attr.colorBackground)) }
+        val screen = stack().apply { setBackgroundColor(color(MaterialR.attr.colorSurface)) }
+        val column = stack()
         screen.setOnApplyWindowInsetsListener { view, insets ->
             val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-            val gutter = dp(((resources.configuration.screenWidthDp - 600) / 2).coerceAtLeast(0))
-            view.setPadding(safe.left + gutter, safe.top, safe.right + gutter, safe.bottom)
+            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+            val width = resources.displayMetrics.widthPixels - safe.left - safe.right
+            val columnWidth = width.coerceAtMost(dp(600))
+            val params = column.layoutParams
+            if (params.width != columnWidth) {
+                params.width = columnWidth
+                column.layoutParams = params
+            }
             WindowInsets.CONSUMED
         }
-        screen.addView(buildToolbar(), space())
-        val pages = FrameLayout(this)
-        setupPanel = stack()
-        setupActions = stack()
-        walkthroughSharing = stack()
-        connection = stack()
-        val connectionContent = stack().apply {
-            addView(setupPanel, space())
-            addView(connection, space())
-            addView(setupActions, space())
+        toolbar = MaterialToolbar(this).apply {
+            minimumHeight = dp(64)
+            setContentInsetsRelative(dp(20), dp(12))
+            setNavigationOnClickListener { navigateBack() }
+            menu.add(getString(R.string.ez_settings)).apply {
+                icon = tinted(R.drawable.ic_settings)
+                setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+                setOnMenuItemClickListener { showDetail(Detail.SETTINGS); true }
+            }
         }
-        sharing = stack()
-        sharingCard = surfaceCard(sharing)
-        sharingHome = stack()
-        val sharingContent = stack().apply {
-            addView(sectionTitle(getString(R.string.s_sharing)))
-            addView(secondaryText(getString(R.string.s_sharing_intro)), space(top = 6))
-            addView(sharingHome, space(top = 20))
+        content = stack().apply { setPaddingRelative(dp(20), dp(16), dp(20), dp(24)) }
+        scroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(content, space())
         }
-        status = stack()
-        statusContent = pageScroll(status)
-
-        connectionScroll = pageScroll(connectionContent)
-        sharingScroll = pageScroll(sharingContent)
-        for (view in listOf(connectionScroll, sharingScroll, statusContent)) {
-            pages.addView(view, FrameLayout.LayoutParams(-1, -1))
-        }
-        screen.addView(pages, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        navigation = BottomNavigationView(this).apply {
+        guideAction = stack().apply {
+            setPaddingRelative(dp(20), dp(4), dp(20), dp(8))
             setBackgroundColor(color(MaterialR.attr.colorSurface))
-            elevation = dp(3).toFloat()
+        }
+        navigation = BottomNavigationView(this).apply {
             for (destination in Page.entries) {
                 menu.add(0, destination.ordinal + 1, 0, destination.title).setIcon(destination.icon)
             }
+            labelVisibilityMode = com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_LABELED
+            setLabelMaxLines(2)
+            setLabelFontScalingEnabled(true)
+            isItemHorizontalTranslationEnabled = false
             selectedItemId = page.ordinal + 1
             setOnItemSelectedListener {
                 page = Page.entries[it.itemId - 1]
                 renderPage()
                 true
             }
-            setOnItemReselectedListener { pageView().smoothScrollTo(0, 0) }
+            setOnItemReselectedListener { scroll.smoothScrollTo(0, 0) }
         }
-        screen.addView(navigation, space())
+        column.addView(toolbar, space())
+        column.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        column.addView(guideAction, space())
+        column.addView(navigation, space())
+        screen.addView(column, space().apply { height = -1; gravity = Gravity.CENTER_HORIZONTAL })
         back = object : OnBackPressedCallback(false) {
-            override fun handleOnBackPressed() {
-                if (page == Page.CONNECTION) previousStep()
-                else navigation.selectedItemId = Page.CONNECTION.ordinal + 1
-            }
+            override fun handleOnBackPressed() = navigateBack()
         }
         onBackPressedDispatcher.addCallback(this, back)
         setContentView(screen)
-        renderSetup()
         renderPage()
-        if (savedInstanceState?.getBoolean("settingsOpen") == true) window.decorView.post { openSettings() }
     }
 
-    private fun buildToolbar() = MaterialToolbar(this).apply {
-        minimumHeight = dp(64)
-        setContentInsetsRelative(dp(24), dp(16))
-        setPaddingRelative(0, 0, dp(10), 0)
-        addView(row().apply {
-            addView(ImageView(this@MainActivity).apply {
-                setImageResource(R.drawable.ic_brand)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
-            addView(stack().apply {
-                addView(text(getString(R.string.ez_brand), R.style.TextAppearance_ezcall_TitleLarge)
-                    .apply { isAccessibilityHeading = true })
-                addView(text(getString(R.string.s_sender), R.style.TextAppearance_ezcall_LabelMedium, color(MaterialR.attr.colorOnSurfaceVariant)))
-            })
-        }, Toolbar.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
-        menu.add(getString(R.string.ez_settings)).apply {
-            icon = AppCompatResources.getDrawable(this@MainActivity, R.drawable.ic_settings)?.mutate()
-                ?.apply { setTint(color(MaterialR.attr.colorOnSurface)) }
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener { openSettings(); true }
+    private fun navigateBack() {
+        val previous = step?.previous()
+        when {
+            detail == Detail.AUDIO_SETUP && audioSetupFromGuide -> {
+                audioSetupFromGuide = false
+                showDetail(Detail.GUIDE)
+            }
+            detail == Detail.GUIDE && previous != null -> moveTo(previous)
+            detail == Detail.GUIDE -> closeGuide()
+            detail != null -> showDetail(null)
+            else -> navigation.selectedItemId = Page.CONNECTION.ordinal + 1
         }
     }
 
-    private fun pageScroll(content: View) = ScrollView(this).apply {
-        isFillViewport = true
-        isVerticalScrollBarEnabled = false
-        addView(stack().apply {
-            setPaddingRelative(dp(24), dp(12), dp(24), dp(24))
-            addView(content, space())
-        })
+    private fun showDetail(next: Detail?) {
+        detail = next
+        renderPage()
     }
 
-    private fun pageView() = when (page) {
-        Page.CONNECTION -> connectionScroll
-        Page.SHARING -> sharingScroll
-        Page.STATUS -> statusContent
+    private fun openAudioSetup() {
+        audioSetupFromGuide = detail == Detail.GUIDE
+        showDetail(Detail.AUDIO_SETUP)
     }
 
     private fun renderPage() {
-        val selected = pageView()
-        for (view in listOf(connectionScroll, sharingScroll, statusContent)) {
-            view.visibility = if (view === selected) View.VISIBLE else View.GONE
+        connectionPanel = null
+        sharingPanel = null
+        audioPanel = null
+        testPanel = null
+        reportPanel = null
+        settingsNotifications = null
+        settingsBattery = null
+        shownAudio = null
+        shownTest = null
+        shownReport = null
+        content.removeAllViews()
+        guideAction.removeAllViews()
+        guideAction.visibility = View.GONE
+        navigation.visibility = if (detail == null) View.VISIBLE else View.GONE
+        toolbar.title = getString(detail?.title ?: R.string.ez_brand)
+        toolbar.subtitle = getString(R.string.s_sender).takeIf { detail == null }
+        toolbar.logo = if (detail == null) AppCompatResources.getDrawable(this, R.drawable.ic_brand) else null
+        toolbar.setTitleMarginStart(if (detail == null) dp(10) else 0)
+        toolbar.navigationIcon = detail?.let { tinted(R.drawable.ic_sender_back) }
+        toolbar.setNavigationContentDescription(when {
+            detail == Detail.GUIDE && step?.previous() != null -> R.string.s_guide_back
+            detail == Detail.GUIDE -> R.string.s_close_guide
+            else -> R.string.s_ui_back
+        })
+        toolbar.menu.getItem(0).isVisible = detail == null
+        content.accessibilityPaneTitle = getString(detail?.title ?: if (page == Page.SHARING) R.string.s_sharing else page.title)
+        back.isEnabled = detail != null || page != Page.CONNECTION
+
+        when (detail) {
+            Detail.GUIDE -> renderGuide()
+            Detail.SETTINGS -> renderSettings()
+            Detail.REPORT -> reportPanel = content
+            Detail.AUDIO_SETUP -> audioPanel = content
+            null -> when (page) {
+                Page.CONNECTION -> connectionPanel = content
+                Page.SHARING -> {
+                    content.addView(sectionTitle(getString(R.string.s_sharing), R.style.TextAppearance_ezcall_HeadlineLarge))
+                    content.addView(secondaryText(getString(R.string.s_sharing_intro)), space(top = 6))
+                    sharingPanel = stack().also { content.addView(it, space(top = 24)) }
+                }
+                Page.AUDIO -> {
+                    content.addView(sectionTitle(getString(R.string.s_call_audio), R.style.TextAppearance_ezcall_HeadlineLarge))
+                    content.addView(secondaryText(getString(R.string.s_ui_audio_intro)), space(top = 6))
+                    audioPanel = stack().also { content.addView(it, space(top = 20)) }
+                    testPanel = stack().also { content.addView(it, space(top = 24)) }
+                }
+            }
         }
-        placeSharingCard()
-        back.isEnabled = page != Page.CONNECTION || step != null
-        if (page == Page.STATUS) renderStatus()
+        scroll.scrollTo(0, 0)
+        renderSharing()
+        renderLink(RelayState.current)
+        renderAudio()
+        renderTest()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         requestingFeature?.let { outState.putString("feature", it.name) }
         setupAudioReady?.let { outState.putString("setupAudioReady", it.name) }
         setupAudioError?.let { outState.putInt("setupAudioError", it) }
+        connectionIssue?.let { outState.putInt("connectionIssue", it) }
         outState.putBoolean("pairingAgain", pairingAgain)
         pairingHint?.let { outState.putString("pairingHint", it) }
         outState.putInt("page", page.ordinal)
-        outState.putBoolean("settingsOpen", settingsSheet?.isShowing == true)
+        detail?.let { outState.putString("detail", it.name) }
+        outState.putBoolean("guideFromSettings", guideFromSettings)
+        outState.putBoolean("audioSetupFromGuide", audioSetupFromGuide)
         super.onSaveInstanceState(outState)
     }
 
@@ -256,7 +321,6 @@ class MainActivity : AppCompatActivity() {
         RelayState.refreshSharing?.invoke()
         lastState = null
         render(RelayState.current)
-        if (settingsSheet?.isShowing == true) renderSettingsStatus()
     }
 
     override fun onStop() {
@@ -264,108 +328,166 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    override fun onDestroy() {
+        toolbar.removeCallbacks(startTimeout)
+        super.onDestroy()
+    }
+
     private fun render(state: RelayState) {
+        if (relayStarting && state != relayBeforeStart) {
+            relayStarting = false
+            relayBeforeStart = null
+            toolbar.removeCallbacks(startTimeout)
+        }
+        val changed = lastState != state
+        val connectedNow = lastState?.connected == false && state.connected
+        lastState = state
         if (pairingAgain && !state.running) {
             pairingAgain = false
             pairingHint = state.detail
             if (!PairKey(this).exists()) ensureBluetooth()
         }
-        if (state.connected) pairingHint = null
-        if (state.connected && step == Step.LINK) moveTo(Step.AUDIO)
+        if (!state.connected) testRequestFailed = false
+        if (state.connected) {
+            pairingHint = null
+            connectionIssue = null
+        }
+        if (connectedNow && detail == Detail.GUIDE && step == Step.LINK) {
+            moveTo(Step.AUDIO)
+            return
+        }
         if (liveAudio() != null) setupAudioError = null
-        guideAudio?.let { renderAudioPanel(it, inGuide = true) }
         renderSettingsStatus()
-        if (page == Page.STATUS) renderStatus()
-        if (state == lastState) return
-        lastState = state
-        renderConnection(state)
+        renderAudio()
+        renderTest()
+        if (changed) renderLink(state)
     }
 
-    private fun renderConnection(state: RelayState) {
+    private fun renderLink(state: RelayState) {
+        val panel = connectionPanel ?: return
+        val inGuide = detail == Detail.GUIDE
         val paired = PairKey(this).exists()
-        connection.removeAllViews()
-        if (state.qr == null) {
+        val qr = state.qr
+        if (qr == null) {
             qrValue = null
             qrImage = null
         }
-        if (!paired && !state.running && step == null && state.qr == null) {
-            val hero = MaterialCardView(this).apply {
-                radius = dp(32).toFloat()
-                cardElevation = 0f
-                strokeWidth = 0
-                setCardBackgroundColor(getColor(R.color.ezcall_pairing_hero))
-                addView(PairingArtwork(this@MainActivity), FrameLayout.LayoutParams(-1, -1))
-            }
-            connection.addView(hero, LinearLayout.LayoutParams(-1, dp(232)))
-            connection.addView(sectionTitle(getString(R.string.ez_pair_phones)), space(top = 24))
-            connection.addView(secondaryText(getString(R.string.s_pair_instruction)),
-                space(top = 8))
-            state.detail?.let { connection.addView(secondaryText(senderNotice(it)), space(top = 12)) }
-            connection.addView(actionButton(getString(R.string.s_start_pair), R.drawable.ic_qr) { moveTo(Step.SHARING) }, space(top = 24))
-            return
-        }
+        panel.removeAllViews()
+        if (!inGuide) panel.addView(sectionTitle(getString(R.string.s_connection), R.style.TextAppearance_ezcall_HeadlineLarge))
 
-        val ink = color(MaterialR.attr.colorOnPrimaryContainer)
-        val qr = state.qr
-        val body = stack().apply { setPaddingRelative(dp(18), dp(16), dp(18), dp(14)) }
-        val title = if (qr == null) connectionTitle(state, paired) else getString(R.string.s_scan_to_pair)
-        val detail = if (qr == null) connectionDetail(state, paired) else
-            getString(R.string.s_scan_instruction)
-        body.addView(row().apply {
-            addView(iconTile(if (qr == null) R.drawable.ic_bluetooth else R.drawable.ic_qr, 44, 22,
-                color(MaterialR.attr.colorSurface), ink), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
-            addView(stack().apply {
-                addView(text(title, R.style.TextAppearance_ezcall_TitleLarge, ink).apply {
+        val welcome = !inGuide && !paired && !state.running && !relayStarting && state.detail == null && connectionIssue == null
+        val expired = state.detail == "Pairing code expired. Start pairing again."
+        val issue = connectionIssue?.let(::getString) ?: state.detail?.let(::senderNotice)
+        val guideQr = inGuide && qr != null
+        val title = when {
+            relayStarting || state.detail == "Starting Bluetooth" -> getString(R.string.s_relay_start_bt)
+            qr != null -> getString(R.string.s_scan_to_pair)
+            state.connected -> getString(R.string.s_receiver_connected)
+            expired -> getString(R.string.s_ui_qr_expired)
+            state.running -> getString(R.string.s_waiting_receiver)
+            paired -> getString(R.string.s_receiver_disconnected)
+            welcome -> getString(R.string.ez_pair_phones)
+            else -> getString(R.string.s_no_receiver)
+        }
+        val description = when {
+            guideQr -> getString(R.string.s_ui_guide_qr_expiry)
+            qr != null -> getString(R.string.s_scan_instruction)
+            state.connected -> getString(if (state.tested) R.string.ez_test_passed else R.string.s_relay_active)
+            relayStarting -> getString(R.string.s_nearby)
+            issue != null && issue != title -> issue
+            state.running -> getString(R.string.s_nearby)
+            paired -> getString(R.string.s_reconnect_detail)
+            welcome -> getString(R.string.s_pair_instruction)
+            else -> getString(R.string.s_start_link)
+        }
+        val foreground = if (state.connected) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurface
+        val card = stack().apply {
+            setPaddingRelative(dp(20), dp(20), dp(20), dp(20))
+            if (!guideQr) {
+                if (relayStarting || (state.running && !state.connected && qr == null)) {
+                    addView(spinner(), LinearLayout.LayoutParams(-2, -2))
+                } else {
+                    addView(iconTile(if (qr != null) R.drawable.ic_qr else R.drawable.ic_bluetooth),
+                        LinearLayout.LayoutParams(dp(44), dp(44)))
+                }
+                addView(text(title, R.style.TextAppearance_ezcall_HeadlineSmall, color(foreground)).apply {
                     isAccessibilityHeading = true
-                })
-                addView(text(detail, R.style.TextAppearance_ezcall_BodyMedium, ink).apply {
-                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-                }, space(top = 4))
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-        }, space())
-        if (qr != null) {
-            pairingHint?.let { body.addView(text(senderNotice(it), R.style.TextAppearance_ezcall_BodyMedium, ink), space(top = 12)) }
-            val image = ImageView(this).apply {
-                contentDescription = getString(R.string.s_qr_label)
-                setImageBitmap(qrBitmap(qr))
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                background = rounded(Color.WHITE, 16)
-                clipToOutline = true
-                setPadding(dp(8), dp(8), dp(8), dp(8))
+                }, space(top = 14))
             }
-            val size = dp(minOf(252, (resources.configuration.screenWidthDp - 96).coerceAtLeast(96)))
-            body.addView(image, LinearLayout.LayoutParams(size, size).apply {
-                topMargin = dp(16)
-                gravity = Gravity.CENTER_HORIZONTAL
-            })
-            body.addView(textButton(getString(R.string.ez_cancel_pairing)) { RelayState.cancelPairing?.invoke() }, space(top = 12))
-        } else if (!state.running) {
-            body.addView(actionButton(if (paired) getString(R.string.s_reconnect) else getString(R.string.s_show_qr),
-                if (paired) R.drawable.ic_link else R.drawable.ic_qr, ::ensureBluetooth), space(top = 16))
+            addView(text(description, R.style.TextAppearance_ezcall_BodyMedium,
+                color(if (state.connected) foreground else if (issue != null && !state.running && qr == null)
+                    androidx.appcompat.R.attr.colorError else MaterialR.attr.colorOnSurfaceVariant)),
+                space(top = if (guideQr) 0 else 6))
+            if (welcome) {
+                addView(PairingArtwork(this@MainActivity).apply {
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    background = rounded(getColor(R.color.ezcall_pairing_hero), 20)
+                    clipToOutline = true
+                }, space(top = 16).apply { height = dp(140) })
+            }
+            if (qr != null) {
+                pairingHint?.let { addView(secondaryText(senderNotice(it)), space(top = 12)) }
+                val image = ImageView(this@MainActivity).apply {
+                    contentDescription = getString(R.string.s_qr_label)
+                    setImageBitmap(qrBitmap(qr))
+                    adjustViewBounds = true
+                    maxWidth = dp(252)
+                    maxHeight = dp(252)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    background = rounded(Color.WHITE, 16)
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                }
+                addView(image, LinearLayout.LayoutParams(-2, -2).apply {
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    topMargin = dp(16)
+                })
+                addView(textButton(getString(R.string.ez_cancel_pairing)) { RelayState.cancelPairing?.invoke() }, space(top = 8))
+            }
+            if (!inGuide && qr == null && !state.running && !relayStarting) {
+                val action = when {
+                    welcome && step != null -> R.string.s_ui_resume_guide
+                    welcome -> R.string.s_start_pair
+                    else -> linkAction(paired, expired)
+                }
+                addView(actionButton(getString(action)) {
+                    if (welcome) openGuide() else ensureBluetooth()
+                }, space(top = 14))
+            }
         }
-        connection.addView(surfaceCard(body, accent = true), space())
-        if (step == null && paired) {
-            connection.addView(textButton(getString(R.string.s_guide)) { moveTo(Step.SHARING) }, space(top = 12))
-            connection.addView(textButton(getString(R.string.s_forget_receiver), ::forgetLink), space())
+        if (!inGuide || paired || state.running || relayStarting || issue != null) {
+            panel.addView(surfaceCard(card, accent = state.connected).apply {
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            }, space(top = if (inGuide) 0 else 16))
+        }
+        if (inGuide) {
+            if (!state.connected && !relayStarting) {
+                panel.addView(textButton(getString(R.string.s_guide_audio_next)) { moveTo(Step.AUDIO) }, space(top = 8))
+            }
+            if (state.running && !state.connected) {
+                guideAction.removeAllViews()
+                guideAction.visibility = View.GONE
+            } else {
+                val action = when {
+                    state.connected -> R.string.s_guide_audio_next
+                    relayStarting -> R.string.s_relay_start_bt
+                    else -> linkAction(paired, expired)
+                }
+                setGuideAction(action, canContinue = !relayStarting) {
+                    if (state.connected) moveTo(Step.AUDIO) else ensureBluetooth()
+                }
+            }
+        } else if (!welcome) {
+            val guideLabel = if (step != null) R.string.s_ui_resume_guide else R.string.s_guide
+            panel.addView(surfaceCard(settingsRow(R.drawable.ic_devices, getString(guideLabel),
+                getString(R.string.s_reopen_guide), action = ::openGuide).view), space(top = 16))
+            if (paired) panel.addView(textButton(getString(R.string.s_forget_receiver), ::forgetLink), space(top = 8))
         }
     }
 
-    private fun connectionTitle(state: RelayState, paired: Boolean) = when {
-        state.connected -> getString(R.string.s_receiver_connected)
-        state.qr != null -> getString(R.string.s_code_open)
-        state.running -> getString(R.string.s_waiting_receiver)
-        paired -> getString(R.string.s_receiver_disconnected)
-        else -> getString(R.string.s_no_receiver)
-    }
-
-    private fun connectionDetail(state: RelayState, paired: Boolean) = when {
-        state.qr != null -> getString(R.string.s_scan_connection)
-        state.tested -> getString(R.string.ez_test_passed)
-        state.connected -> getString(R.string.s_relay_active)
-        state.detail != null -> senderNotice(state.detail)
-        state.running -> getString(R.string.s_nearby)
-        paired -> getString(R.string.s_reconnect_detail)
-        else -> getString(R.string.s_start_link)
+    private fun linkAction(paired: Boolean, expired: Boolean) = when {
+        paired -> R.string.s_reconnect
+        expired -> R.string.s_ui_new_qr
+        else -> R.string.s_show_qr
     }
 
     private fun forgetLink() {
@@ -373,7 +495,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(getString(R.string.s_forget_receiver_detail))
             .setNegativeButton(getString(R.string.ez_cancel), null)
             .setPositiveButton(getString(R.string.ez_forget)) { _, _ ->
-                moveTo(null)
+                saveStep(null)
                 val forget = RelayState.forget
                 if (forget != null) {
                     pairingAgain = true
@@ -388,235 +510,297 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderSharing() {
-        sharing.removeAllViews()
-        for (feature in Feature.entries) {
-            if (feature in setOf(Feature.CALLER, Feature.CONTROL) && !Feature.CALLS.active(this)) continue
-            val (icon, description) = when (feature) {
-                Feature.CALLS -> R.drawable.ic_call to getString(R.string.s_incoming_call_alert)
-                Feature.CALLER -> R.drawable.ic_caller to getString(R.string.s_incoming_number)
-                Feature.CONTROL -> R.drawable.ic_answer to getString(R.string.s_control_description)
-                Feature.SMS -> R.drawable.ic_sms to getString(R.string.s_sms_description)
-                Feature.SEND_SMS -> R.drawable.ic_sms to getString(R.string.s_send_description)
-                Feature.CONTACTS -> R.drawable.ic_contacts to getString(R.string.s_contacts_description)
+        val panel = sharingPanel ?: return
+        panel.removeAllViews()
+        val callsEnabled = Feature.CALLS.active(this)
+        val sections = listOf(
+            R.string.s_ui_calls_group to listOf(Feature.CALLS, Feature.CALLER, Feature.CONTROL),
+            R.string.s_ui_messages_group to listOf(Feature.SMS, Feature.SEND_SMS),
+            null to listOf(Feature.CONTACTS)
+        )
+        for ((heading, features) in sections) {
+            if (heading != null) {
+                panel.addView(sectionTitle(getString(heading), R.style.TextAppearance_ezcall_TitleLarge),
+                    space(top = if (panel.childCount == 0) 0 else 20))
             }
-            if (sharing.childCount > 0) sharing.addView(MaterialDivider(this).apply {
-                dividerColor = color(MaterialR.attr.colorOutlineVariant)
-                dividerInsetStart = dp(68)
-                dividerInsetEnd = dp(16)
-            }, space())
+            val group = stack()
+            for (feature in features) {
+                if (group.childCount > 0) group.addView(divider(), space())
+                val enabled = callsEnabled || (feature != Feature.CALLER && feature != Feature.CONTROL)
+                group.addView(sharingRow(feature, enabled), space())
+            }
+            panel.addView(surfaceCard(group), space(top = if (heading == null) 20 else 8))
+            if (detail == Detail.GUIDE && heading == R.string.s_ui_calls_group && !callsEnabled) {
+                panel.addView(body(getString(R.string.s_ui_guide_call_dependency)), space(top = 6))
+            }
+        }
+    }
 
-            val active = feature.active(this)
-            val toggle = MaterialSwitch(this).apply {
-                contentDescription = getString(R.string.s_feature_summary, getString(feature.title), description)
-                isChecked = active
-                minimumWidth = dp(52)
-                minimumHeight = dp(48)
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) enable(feature)
-                    else {
-                        feature.allow(this@MainActivity, false)
-                        refreshSharing()
-                    }
+    private fun sharingRow(feature: Feature, enabled: Boolean): View {
+        val (icon, description) = when (feature) {
+            Feature.CALLS -> R.drawable.ic_call to R.string.s_incoming_call_alert
+            Feature.CALLER -> R.drawable.ic_caller to R.string.s_incoming_number
+            Feature.CONTROL -> R.drawable.ic_answer to R.string.s_control_description
+            Feature.SMS -> R.drawable.ic_sms to R.string.s_sms_description
+            Feature.SEND_SMS -> R.drawable.ic_sms to R.string.s_send_description
+            Feature.CONTACTS -> R.drawable.ic_contacts to R.string.s_contacts_description
+        }
+        val title = getString(feature.title)
+        val active = enabled && feature.active(this)
+        val summary = when {
+            !enabled -> getString(R.string.s_ui_enable_alerts)
+            feature.optedIn(this) && !active -> getString(R.string.s_ui_permission_needed)
+            else -> getString(description)
+        }
+        val toggle = MaterialSwitch(this).apply {
+            contentDescription = getString(R.string.s_feature_summary, title, summary)
+            isEnabled = enabled
+            isChecked = active
+            minimumWidth = dp(52)
+            minimumHeight = dp(48)
+            setOnClickListener {
+                if (isChecked) {
+                    isChecked = false
+                    enable(feature)
+                } else {
+                    feature.allow(this@MainActivity, false)
+                    refreshSharing()
                 }
             }
-            val row = LinearLayout(this).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = dp(74)
-                setPaddingRelative(dp(16), dp(10), dp(16), dp(10))
-                val highlight = android.util.TypedValue()
-                theme.resolveAttribute(android.R.attr.selectableItemBackground, highlight, true)
-                setBackgroundResource(highlight.resourceId)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        return row().apply {
+            minimumHeight = dp(72)
+            setPaddingRelative(dp(12), dp(8), dp(12), dp(8))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            if (enabled) {
+                setBackgroundResource(selectableBackground())
                 setOnClickListener { toggle.performClick() }
                 isFocusable = false
             }
-            row.addView(iconTile(icon, 40, 22,
-                color(if (active) MaterialR.attr.colorPrimaryContainer else MaterialR.attr.colorSurfaceContainer),
-                color(if (active) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurfaceVariant)),
-                LinearLayout.LayoutParams(dp(40), dp(40)))
-            row.addView(stack().apply {
+            if (!largeText) {
+                addView(iconTile(icon, active), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
+            }
+            addView(stack().apply {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                addView(text(getString(feature.title), R.style.TextAppearance_ezcall_TitleMedium))
-                addView(text(description, R.style.TextAppearance_ezcall_BodySmall,
-                    color(MaterialR.attr.colorOnSurfaceVariant)), space(top = 2))
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(12)
-                marginEnd = dp(8)
-            })
-            row.addView(toggle, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ))
-            sharing.addView(row, space())
+                addView(text(title, R.style.TextAppearance_ezcall_TitleMedium))
+                if (detail != Detail.GUIDE) addView(body(summary), space(top = 2))
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) })
+            addView(toggle, LinearLayout.LayoutParams(-2, -2))
         }
     }
 
+    private fun openGuide() {
+        guideFromSettings = detail == Detail.SETTINGS
+        saveStep(step ?: Step.SHARING)
+        showDetail(Detail.GUIDE)
+    }
 
-    private fun moveTo(next: Step?) {
-        step = if (next == Step.LINK && RelayState.current.connected) Step.AUDIO else next
+    private fun closeGuide() {
+        val backTo = Detail.SETTINGS.takeIf { guideFromSettings }
+        guideFromSettings = false
+        showDetail(backTo)
+    }
+
+    private fun saveStep(next: Step?) {
+        step = next
         getPreferences(MODE_PRIVATE).edit().putString("senderGuideStep", step?.name ?: "done").apply()
-        renderSetup()
-        renderConnection(RelayState.current)
-        connectionScroll.smoothScrollTo(0, 0)
     }
 
-    private fun previousStep() = moveTo(when (step) {
-        Step.AUDIO -> if (RelayState.current.connected) Step.SHARING else Step.LINK
-        Step.LINK -> Step.SHARING
-        else -> null
-    })
-
-    private fun placeSharingCard() {
-        val moving = if (step == Step.SHARING && page == Page.CONNECTION) walkthroughSharing else sharingHome
-        if (sharingCard.parent !== moving) {
-            (sharingCard.parent as? ViewGroup)?.removeView(sharingCard)
-            moving.addView(sharingCard, space())
-        }
+    private fun moveTo(next: Step) {
+        saveStep(next)
+        renderPage()
     }
 
-    private fun renderSetup() {
-        val current = step
-        placeSharingCard()
-        setupPanel.removeAllViews()
-        setupActions.removeAllViews()
-        guideAudio = null
-        setupPanel.visibility = if (current == null) View.GONE else View.VISIBLE
-        connection.visibility = if (current == null || current == Step.LINK) View.VISIBLE else View.GONE
-        back.isEnabled = page != Page.CONNECTION || current != null
-        if (current == null) return
-
-        val ink = color(MaterialR.attr.colorOnPrimaryContainer)
-        val header = stack().apply {
-            setPaddingRelative(dp(20), dp(18), dp(20), dp(20))
-            addView(row().apply {
-                addView(iconTile(current.icon, 40, 22, color(MaterialR.attr.colorSurface), ink),
-                    LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
-                addView(text(getString(R.string.s_step, current.ordinal + 1, Step.entries.size),
-                    R.style.TextAppearance_ezcall_LabelLarge, ink))
-            })
-            addView(text(getString(current.title), R.style.TextAppearance_ezcall_HeadlineMedium, ink)
-                .apply { isAccessibilityHeading = true }, space(top = 14))
-            addView(text(getString(current.detail), R.style.TextAppearance_ezcall_BodyLarge, ink), space(top = 6))
-            addView(row().apply {
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                for (stage in Step.entries) {
-                    addView(View(this@MainActivity).apply {
-                        background = rounded(color(if (stage <= current) androidx.appcompat.R.attr.colorPrimary else MaterialR.attr.colorSurface), 2)
-                    }, LinearLayout.LayoutParams(0, dp(4), 1f).apply { if (stage != Step.SHARING) marginStart = dp(4) })
-                }
-            }, space(top = 18))
-        }
-        setupPanel.addView(surfaceCard(header, accent = true), space())
+    private fun renderGuide() {
+        val current = checkNotNull(step)
+        content.addView(text(getString(R.string.s_step, current.ordinal + 1, Step.entries.size),
+            R.style.TextAppearance_ezcall_LabelLarge, color(androidx.appcompat.R.attr.colorPrimary)))
+        content.addView(LinearProgressIndicator(this).apply {
+            max = Step.entries.size
+            progress = current.ordinal + 1
+            trackThickness = dp(4)
+            trackCornerRadius = dp(2)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, space(top = 8))
+        val title = getString(current.title)
+        val helpLabel = getString(R.string.s_ui_guide_help_for, title)
+        content.addView(row().apply {
+            addView(sectionTitle(title, R.style.TextAppearance_ezcall_HeadlineLarge), LinearLayout.LayoutParams(0, -2, 1f))
+            addView(ImageButton(this@MainActivity).apply {
+                setImageDrawable(tinted(R.drawable.ic_sender_help))
+                setBackgroundResource(selectableBackground(android.R.attr.selectableItemBackgroundBorderless))
+                contentDescription = helpLabel
+                setOnClickListener { showGuideHelp(current, helpLabel) }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) })
+        }, space(top = 16))
+        content.addView(secondaryText(getString(current.detail)), space(top = 6))
         when (current) {
             Step.SHARING -> {
-                setupPanel.addView(walkthroughSharing, space(top = 12))
-                setupActions.addView(actionButton(getString(R.string.s_continue_bluetooth), R.drawable.ic_bluetooth) {
-                    moveTo(Step.LINK)
-                }, space(top = 12))
+                sharingPanel = stack().also { content.addView(it, space(top = 24)) }
+                setGuideAction(R.string.ez_continue) { moveTo(Step.LINK) }
             }
-            Step.LINK -> {
-                setupPanel.addView(View(this), LinearLayout.LayoutParams(-1, dp(12)))
-                setupActions.addView(textButton(getString(R.string.s_guide_audio_next)) { moveTo(Step.AUDIO) }, space(top = 8))
-            }
+            Step.LINK -> connectionPanel = stack().also { content.addView(it, space(top = 20)) }
             Step.AUDIO -> {
-                val panel = stack()
-                guideAudio = panel
-                setupPanel.addView(surfaceCard(panel), space(top = 12))
-                renderAudioPanel(panel, inGuide = true)
+                content.addView(outlineButton(getString(R.string.s_setup_audio), ::openAudioSetup), space(top = 16))
+                setGuideAction(R.string.s_ui_finish_guide) {
+                    saveStep(null)
+                    closeGuide()
+                }
             }
         }
-        if (current != Step.SHARING) setupActions.addView(textButton(getString(R.string.s_guide_back), ::previousStep), space())
-        setupActions.addView(textButton(getString(if (current == Step.AUDIO) R.string.s_guide_finish else R.string.s_close_guide)) {
-            moveTo(null)
-        }, space())
     }
 
-    private fun renderStatus() {
-        val state = RelayState.current
-        val paired = PairKey(this).exists()
-        status.removeAllViews()
-        status.addView(sectionTitle(getString(R.string.s_status)))
-        status.addView(secondaryText(getString(R.string.s_status_intro)), space(top = 6))
-        val overview = stack().apply {
-            addView(statusRow(R.drawable.ic_bluetooth, connectionTitle(state, paired), connectionDetail(state, paired), state.connected))
-            val shared = Feature.entries.count { it.active(this@MainActivity) }
-            addView(statusRow(R.drawable.ic_link, getString(R.string.s_sharing), resources.getQuantityString(R.plurals.sender_sharing_count, shared, shared),
-                shared > 0))
-            addView(statusRow(R.drawable.ic_headset, getString(R.string.s_call_audio), audioTitle(), liveAudio() != null))
-        }
-        status.addView(surfaceCard(overview), space(top = 18))
+    private fun setGuideAction(label: Int, canContinue: Boolean = true, action: () -> Unit) {
+        guideAction.removeAllViews()
+        guideAction.visibility = View.VISIBLE
+        guideAction.addView(actionButton(getString(label), action = action).apply { isEnabled = canContinue }, space())
+    }
 
-        val phone = stack().apply {
-            val alerts = notificationsEnabled()
-            val screenOff = batteryExempt()
-            addView(statusRow(R.drawable.ic_notifications, getString(R.string.s_relay_notifications),
-                if (alerts) getString(R.string.s_allowed) else getString(R.string.s_android_off), alerts))
-            addView(statusRow(R.drawable.ic_battery, getString(R.string.s_while_off),
-                if (screenOff) getString(R.string.s_battery_off) else getString(R.string.s_battery_may_pause), screenOff))
+    private fun showGuideHelp(step: Step, title: String) {
+        val help = ScrollView(this).apply {
+            addView(stack().apply {
+                setPaddingRelative(dp(24), dp(8), dp(24), dp(8))
+                addView(body(getString(step.help)), space())
+                addView(ImageView(this@MainActivity).apply {
+                    setImageResource(step.image)
+                    adjustViewBounds = true
+                    maxHeight = dp(220)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = getString(step.imageDescription)
+                }, space(top = 14))
+            })
         }
-        status.addView(surfaceCard(phone), space(top = 10))
-        if (state.connected && RelayState.simulateCall != null) {
-            status.addView(textButton(getString(R.string.s_simulate)) {
-                val message = if (RelayState.simulateCall?.invoke() == true) getString(R.string.s_simulate_wait)
-                else getString(R.string.s_simulate_retry)
-                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        MaterialAlertDialogBuilder(this).setTitle(title).setView(help).setPositiveButton(R.string.ez_close, null).show()
+    }
+
+    private data class TestDisplay(val report: TestCallReport?, val canTest: Boolean, val requestFailed: Boolean)
+
+    private fun renderTest() {
+        val test = RelayState.testCall
+        testPanel?.let { panel ->
+            val display = TestDisplay(test, RelayState.current.connected && RelayState.simulateCall != null, testRequestFailed)
+            if (shownTest != display) {
+                shownTest = display
+                panel.removeAllViews()
+                panel.addView(sectionTitle(getString(R.string.s_simulate), R.style.TextAppearance_ezcall_TitleLarge))
+                val state = when {
+                    display.requestFailed -> R.string.s_simulate_retry
+                    test?.inProgress == true -> test.stage.label
+                    display.canTest -> R.string.s_simulate_wait
+                    else -> R.string.s_ui_test_connect
+                }
+                panel.addView(body(getString(state)).apply {
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    if (display.requestFailed) setTextColor(color(androidx.appcompat.R.attr.colorError))
+                }, space(top = 6))
+                panel.addView(actionButton(getString(R.string.s_ui_start_test)) {
+                    if (RelayState.simulateCall?.invoke() == true) {
+                        testRequestFailed = false
+                        showDetail(Detail.REPORT)
+                    } else {
+                        testRequestFailed = true
+                        renderTest()
+                    }
+                }.apply { isEnabled = display.canTest && test?.inProgress != true }, space(top = 12))
+                panel.addView(outlineButton(getString(R.string.s_test_report)) { showDetail(Detail.REPORT) }, space(top = 4))
+            }
+        }
+        val panel = reportPanel ?: return
+        if (panel.childCount > 0 && shownReport == test) return
+        shownReport = test
+        panel.removeAllViews()
+        if (test == null) {
+            panel.addView(sectionTitle(getString(R.string.s_ui_no_test), R.style.TextAppearance_ezcall_HeadlineLarge))
+            if (!RelayState.current.connected) {
+                panel.addView(secondaryText(getString(R.string.s_ui_test_connect)), space(top = 6))
+            }
+            panel.addView(actionButton(getString(R.string.s_ui_back_to_audio)) { showDetail(null) }, space(top = 16))
+            return
+        }
+        val report = stack().apply {
+            setPaddingRelative(dp(16), dp(16), dp(16), dp(12))
+            if (test.inProgress) addView(spinner(), LinearLayout.LayoutParams(-2, -2))
+            val outcome = when {
+                test.verified -> R.string.ez_test_auto_passed
+                test.stage == TestCallReport.Stage.FINISHED -> R.string.ez_test_auto_incomplete
+                else -> test.stage.label
+            }
+            addView(sectionTitle(getString(outcome), R.style.TextAppearance_ezcall_TitleLarge).apply {
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                if (!test.inProgress && test.stage != TestCallReport.Stage.FINISHED && !test.verified) {
+                    setTextColor(color(androidx.appcompat.R.attr.colorError))
+                }
+            }, space(top = if (test.inProgress) 12 else 0))
+            if (test.stage in setOf(TestCallReport.Stage.STARTING, TestCallReport.Stage.RINGING, TestCallReport.Stage.AUDIO)) {
+                addView(body(getString(R.string.s_simulate_wait)), space(top = 6))
+            }
+            if (test.audioStarted) {
+                val live = test.stage == TestCallReport.Stage.AUDIO
+                RelayState.testLog?.let { log ->
+                    val ink = color(androidx.appcompat.R.attr.colorPrimary)
+                    addView(body(getString(R.string.ez_test_sent_tone_wave)), space(top = 16))
+                    addView(AudioWaveformView(this@MainActivity, log.localWaveform, ink, live).apply {
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, space().apply { height = dp(38) })
+                    addView(body(getString(R.string.ez_test_remote_mic_wave)), space(top = 8))
+                    addView(AudioWaveformView(this@MainActivity, log.remoteWaveform, ink, live).apply {
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, space().apply { height = dp(38) })
+                }
+                val checks = listOf(
+                    when {
+                        test.playbackConfirmed -> R.string.ez_test_tone_played
+                        test.cue == TestCallReport.Cue.FAILED -> test.cue.label
+                        else -> R.string.ez_test_wait_tone
+                    },
+                    if (test.microphoneSignal) R.string.ez_test_mic_detected else R.string.ez_test_wait_mic,
+                    if (test.echoConfirmed) R.string.ez_test_echo_played else R.string.ez_test_wait_echo
+                )
+                addView(divider(), space(top = 12))
+                for (check in checks) addView(body(getString(check)), space(top = 8))
+            }
+        }
+        panel.addView(surfaceCard(report, accent = test.verified), space())
+        RelayState.testLog?.let { log ->
+            panel.addView(outlineButton(getString(R.string.ez_test_log)) {
+                log.show(this, R.string.ez_test_log, R.string.ez_test_copy)
             }, space(top = 12))
         }
     }
 
-    private fun openSettings() {
-        if (settingsSheet?.isShowing == true) return
-        val dialog = BottomSheetDialog(this)
-        settingsSheet = dialog
-        val windowContent = stack()
-        windowContent.addView(BottomSheetDragHandleView(this), space())
-        windowContent.addView(ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            addView(stack().apply {
-                setPaddingRelative(dp(24), 0, dp(24), dp(20))
-                addView(sectionTitle(getString(R.string.ez_settings)))
-                addView(settingsRow(R.drawable.ic_devices, getString(R.string.s_guide), getString(R.string.s_reopen_guide)) {
-                    dialog.dismiss()
-                    navigation.selectedItemId = Page.CONNECTION.ordinal + 1
-                    moveTo(Step.SHARING)
-                }.view, space(top = 6))
-                addView(settingsRow(R.drawable.ic_language, getString(R.string.ez_language), languageName()) {
-                    dialog.dismiss()
-                    showEzcallLanguage(getString(R.string.ez_language))
-                }.view, space(top = 6))
-
-                addView(sectionTitle(getString(R.string.s_call_audio), R.style.TextAppearance_ezcall_TitleLarge), space(top = 16))
-                audioPanel = stack().apply { setPaddingRelative(0, 0, 0, dp(8)) }
-                addView(surfaceCard(audioPanel), space(top = 8))
-
-                addView(sectionTitle(getString(R.string.s_relay), R.style.TextAppearance_ezcall_TitleLarge), space(top = 20))
-                settingsNotifications = settingsRow(R.drawable.ic_notifications, getString(R.string.s_relay_notifications), "") {
-                    appSettings(getString(R.string.s_notifications_in_status))
-                }
-                settingsBattery = settingsRow(R.drawable.ic_battery, getString(R.string.s_battery_action), "", ::requestBatteryExemption)
-                addView(settingsNotifications.view, space())
-                addView(settingsBattery.view, space())
-                val supportUrl = getString(R.string.support_url)
-                if (supportUrl.startsWith("https://")) {
-                    addView(textButton(getString(R.string.s_donate)) {
-                        val browser = Intent(Intent.ACTION_VIEW, Uri.parse(supportUrl))
-                        if (runCatching { startActivity(browser) }.isFailure) alert(getString(R.string.s_no_browser))
-                    }, space(top = 10))
-                }
-            })
-        }, space())
-        dialog.setContentView(windowContent)
-        dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-        dialog.setOnDismissListener { if (settingsSheet === dialog) settingsSheet = null }
+    private fun renderSettings() {
+        val app = stack().apply {
+            addView(settingsRow(R.drawable.ic_language, getString(R.string.ez_language), languageName()) {
+                showEzcallLanguage(getString(R.string.ez_language))
+            }.view, space())
+            addView(divider(), space())
+            addView(settingsRow(R.drawable.ic_devices, getString(if (step == null) R.string.s_guide else R.string.s_ui_resume_guide),
+                getString(R.string.s_reopen_guide), action = ::openGuide).view, space())
+        }
+        content.addView(surfaceCard(app), space())
+        content.addView(sectionTitle(getString(R.string.s_relay), R.style.TextAppearance_ezcall_TitleLarge), space(top = 24))
+        val relay = stack().apply {
+            settingsNotifications = settingsRow(R.drawable.ic_notifications, getString(R.string.s_relay_notifications), "") {
+                appSettings(getString(R.string.s_notifications_in_status))
+            }.also { addView(it.view, space()) }
+            addView(divider(), space())
+            settingsBattery = settingsRow(R.drawable.ic_battery, getString(R.string.s_battery_action), "", action = ::requestBatteryExemption)
+                .also { addView(it.view, space()) }
+        }
+        content.addView(surfaceCard(relay), space(top = 8))
+        val supportUrl = getString(R.string.support_url)
+        if (supportUrl.startsWith("https://")) {
+            content.addView(textButton(getString(R.string.s_donate)) {
+                val browser = Intent(Intent.ACTION_VIEW, Uri.parse(supportUrl))
+                if (runCatching { startActivity(browser) }.isFailure) alert(getString(R.string.s_no_browser))
+            }, space(top = 12))
+        }
         renderSettingsStatus()
-        dialog.show()
     }
 
     private fun renderSettingsStatus() {
-        if (settingsSheet == null) return
-        renderAudioPanel(audioPanel, inGuide = false)
-        settingsNotifications.detail.text = if (notificationsEnabled()) getString(R.string.s_allowed) else getString(R.string.s_android_off)
-        settingsBattery.detail.text = if (batteryExempt()) getString(R.string.s_battery_off)
-            else getString(R.string.s_android_battery_setting)
+        settingsNotifications?.detail?.text = getString(if (notificationsEnabled()) R.string.s_allowed else R.string.s_android_off)
+        settingsBattery?.detail?.text = getString(if (batteryExempt()) R.string.s_battery_off else R.string.s_battery_may_pause)
     }
 
     private fun notificationsEnabled() = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
@@ -653,55 +837,112 @@ class MainActivity : AppCompatActivity() {
         else -> getString(R.string.s_audio_not_setup)
     }
 
+    private data class AudioDisplay(
+        val title: String,
+        val active: CallAudio.Status?,
+        val configured: Boolean,
+        val busy: Boolean,
+        val relayRunning: Boolean,
+        val paired: Boolean,
+        val canStart: Boolean,
+        val overlayEnabled: Boolean,
+        val callsReady: Boolean,
+        val error: Int?
+    )
+
     private fun renderAudio() {
-        guideAudio?.let { renderAudioPanel(it, inGuide = true) }
-        if (settingsSheet != null) renderAudioPanel(audioPanel, inGuide = false)
+        val panel = audioPanel ?: return
+        val paired = WirelessPairing.isPaired(this)
+        val configured = CallAudio.Setup.enabled(this)
+        val display = AudioDisplay(audioTitle(), liveAudio(), configured, audioBusy, RelayState.current.running, paired,
+            paired || (configured && LocalAdb.hasKey()), Settings.canDrawOverlays(this),
+            Feature.CALLS.active(this) && Feature.CONTROL.active(this) && hasPermission(permission.ANSWER_PHONE_CALLS),
+            setupAudioError)
+        if (shownAudio == display) return
+        shownAudio = display
+        val info = when {
+            display.busy -> R.string.s_audio_keep_wireless
+            display.active == CallAudio.Status.TWO_WAY -> R.string.s_audio_two_way_info
+            display.active == CallAudio.Status.LISTEN -> R.string.s_audio_listen_info
+            display.configured && display.relayRunning -> R.string.s_audio_restart_info
+            display.configured -> R.string.s_audio_resume_info
+            else -> R.string.s_audio_setup_info
+        }
+        panel.removeAllViews()
+        val state = stack().apply {
+            setPaddingRelative(dp(16), dp(16), dp(16), dp(16))
+            if (display.busy) addView(spinner(), LinearLayout.LayoutParams(-2, -2))
+            addView(sectionTitle(display.title, R.style.TextAppearance_ezcall_TitleLarge),
+                space(top = if (display.busy) 12 else 0))
+            addView(body(getString(display.error ?: info)).apply {
+                if (display.error != null) setTextColor(color(androidx.appcompat.R.attr.colorError))
+            }, space(top = 4))
+        }
+        panel.addView(surfaceCard(state, accent = display.active != null).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }, space())
+        if (detail == null) {
+            panel.addView(surfaceCard(settingsRow(R.drawable.ic_headset, getString(R.string.s_ui_audio_setup_methods),
+                getString(R.string.s_ui_audio_setup_choices), action = ::openAudioSetup).view), space(top = 12))
+            return
+        }
+
+        val methods = stack().apply {
+            val wirelessAction = if (!display.canStart) R.string.s_pair_wireless
+                else if (display.configured) R.string.s_restart_audio else R.string.s_setup_audio
+            addView(settingsRow(R.drawable.ic_link, getString(wirelessAction),
+                getString(if (display.paired) R.string.s_wireless_paired else R.string.s_guide_wireless),
+                enabled = !display.busy) {
+                if (display.canStart) setupAudio() else showWirelessInstructions()
+            }.view, space())
+            if (display.canStart) {
+                addView(textButton(getString(R.string.s_pair_wireless), ::showWirelessInstructions)
+                    .apply { isEnabled = !display.busy }, space())
+            }
+            if (display.error == R.string.s_audio_port_missing || display.error == R.string.s_audio_failure) {
+                addView(divider(), space())
+                addView(settingsRow(R.drawable.ic_bluetooth, getString(R.string.s_audio_enter_port),
+                    getString(R.string.s_audio_port_help), enabled = !display.busy, action = ::showAudioPort).view, space())
+            }
+            addView(divider(), space())
+            addView(settingsRow(R.drawable.ic_devices, getString(R.string.s_audio_usb),
+                getString(R.string.s_audio_usb_detail), enabled = !display.busy, action = ::setupUsbAudio).view, space())
+        }
+        panel.addView(surfaceCard(methods), space(top = 8))
+        if (!display.callsReady || !display.overlayEnabled || audioSetupFromGuide) {
+            val controls = stack()
+            if (!display.callsReady) {
+                controls.addView(settingsRow(R.drawable.ic_answer, getString(R.string.s_call_control),
+                    getString(R.string.s_guide_enable_control)) {
+                    if (audioSetupFromGuide) {
+                        audioSetupFromGuide = false
+                        detail = Detail.GUIDE
+                        moveTo(Step.SHARING)
+                    } else {
+                        detail = null
+                        navigation.selectedItemId = Page.SHARING.ordinal + 1
+                    }
+                }.view, space())
+            }
+            if (!display.overlayEnabled) {
+                if (controls.childCount > 0) controls.addView(divider(), space())
+                controls.addView(settingsRow(R.drawable.ic_call, getString(R.string.s_call_overlay),
+                    getString(R.string.s_call_overlay_info)) {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                }.view, space())
+            }
+            if (audioSetupFromGuide) {
+                if (controls.childCount > 0) controls.addView(divider(), space())
+                controls.addView(statusRow(R.drawable.ic_headset, getString(R.string.s_guide_receiver_mic),
+                    getString(R.string.s_guide_receiver_mic_detail)).view, space())
+            }
+            panel.addView(surfaceCard(controls), space(top = 12))
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && ::setupPanel.isInitialized) renderAudio()
-    }
-
-    private fun renderAudioPanel(panel: LinearLayout, inGuide: Boolean) {
-        val pairingSaved = WirelessPairing.isPaired(this)
-        val canStart = pairingSaved || (CallAudio.Setup.enabled(this) && LocalAdb.hasKey())
-        val title = audioTitle()
-        val detail = when {
-            audioBusy -> getString(R.string.s_audio_keep_wireless)
-            liveAudio() == CallAudio.Status.TWO_WAY -> getString(R.string.s_audio_two_way_info)
-            liveAudio() == CallAudio.Status.LISTEN -> getString(R.string.s_audio_listen_info)
-            CallAudio.Setup.enabled(this) && RelayState.current.running -> getString(R.string.s_audio_restart_info)
-            CallAudio.Setup.enabled(this) -> getString(R.string.s_audio_resume_info)
-            else -> getString(R.string.s_audio_setup_info)
-        }
-        panel.removeAllViews()
-        if (inGuide && (!Feature.CALLS.active(this) || !Feature.CONTROL.active(this) ||
-                !hasPermission(permission.ANSWER_PHONE_CALLS))) {
-            panel.addView(settingsRow(R.drawable.ic_answer, getString(R.string.s_call_control),
-                getString(R.string.s_guide_enable_control)) { moveTo(Step.SHARING) }.view, space())
-        }
-        panel.addView(settingsRow(R.drawable.ic_link, getString(R.string.s_pair_wireless),
-            getString(if (pairingSaved) R.string.s_pairing_saved else R.string.s_guide_wireless),
-            ::showWirelessInstructions).view, space())
-        panel.addView(MaterialDivider(this), space())
-        panel.addView(statusRow(R.drawable.ic_headset, title, setupAudioError?.let { getString(it) } ?: detail, liveAudio() != null)
-            .apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }, space())
-        val action = if (!canStart) R.string.s_pair_wireless else if (CallAudio.Setup.enabled(this)) R.string.s_restart_audio else R.string.s_setup_audio
-        val button = actionButton(getString(action), if (canStart) R.drawable.ic_headset else R.drawable.ic_link) {
-            if (canStart) setupAudio() else showWirelessInstructions()
-        }
-        panel.addView(button.apply { isEnabled = !audioBusy }, space(top = 4).apply {
-            marginStart = dp(14); marginEnd = dp(14); bottomMargin = dp(12)
-        })
-        if (setupAudioError == R.string.s_audio_port_missing || setupAudioError == R.string.s_audio_failure) {
-            panel.addView(settingsRow(R.drawable.ic_link, getString(R.string.s_audio_enter_port),
-                getString(R.string.s_audio_port_help), ::showAudioPort).view, space())
-        }
-        if (inGuide) {
-            panel.addView(statusRow(R.drawable.ic_devices, getString(R.string.s_guide_receiver_mic),
-                getString(R.string.s_guide_receiver_mic_detail), false), space())
-        }
+        if (hasFocus) renderAudio()
     }
 
     private fun enable(feature: Feature) {
@@ -729,20 +970,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAudioPort() {
-        val input = EditText(this).apply {
+        val input = TextInputEditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
+            minimumHeight = dp(48)
+        }
+        val field = TextInputLayout(this).apply {
             hint = getString(R.string.s_audio_port)
+            addView(input, space())
         }
         val dialog = MaterialAlertDialogBuilder(this).setTitle(R.string.s_audio_enter_port)
             .setMessage(R.string.s_audio_port_help)
-            .setView(stack().apply { setPadding(dp(24), 0, dp(24), 0); addView(input) })
+            .setView(stack().apply { setPaddingRelative(dp(24), dp(12), dp(24), 0); addView(field) })
             .setNegativeButton(R.string.ez_cancel, null)
             .setNeutralButton(R.string.s_open_dev) { _, _ -> openDeveloperOptions() }
             .setPositiveButton(R.string.ez_continue, null)
             .show()
         dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val port = LocalAdb.parseConnectPort(input.text)
-            if (port == null) input.error = getString(R.string.s_audio_port_invalid)
+            val port = LocalAdb.parseConnectPort(input.text ?: "")
+            if (port == null) field.error = getString(R.string.s_audio_port_invalid)
             else {
                 dialog.dismiss()
                 setupAudio(port)
@@ -759,7 +1004,6 @@ class MainActivity : AppCompatActivity() {
         audioBusy = true
         setupAudioError = null
         renderAudio()
-        renderStatus()
         val context = applicationContext
         Thread {
             val result = runCatching { CallAudio.Setup.start(context, connectPort) }
@@ -769,7 +1013,6 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed) return@runOnUiThread
                 result.onSuccess { status ->
                     setupAudioReady = status
-
                 }.onFailure {
                     setupAudioReady = null
                     setupAudioError = when (it) {
@@ -780,7 +1023,43 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 renderAudio()
-                if (page == Page.STATUS) renderStatus()
+            }
+        }.start()
+    }
+
+    private fun setupUsbAudio() {
+        if (audioBusy) return
+        val command = "adb -d shell \"set -o pipefail; content read --user ${Process.myUid() / 100_000} " +
+            "--uri content://$packageName${AdbIdentity.AUTHORITY_SUFFIX}/usb | sh\""
+        val request = CallAudio.Setup.requestUsb()
+        val commandForDisplay = BidiFormatter.getInstance(resources.configuration.locales[0])
+            .unicodeWrap(command, TextDirectionHeuristicsCompat.LTR)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.s_audio_usb)
+            .setMessage(getString(R.string.s_audio_usb_steps, commandForDisplay))
+            .setPositiveButton(R.string.s_audio_usb_copy, null)
+            .setNegativeButton(R.string.ez_cancel, null)
+            .setNeutralButton(R.string.s_open_dev) { _, _ -> openDeveloperOptions() }
+            .show()
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("ADB", command))
+        }
+        dialog.setOnDismissListener { CallAudio.Setup.cancelUsb(request) }
+        audioBusy = true
+        setupAudioError = null
+        renderAudio()
+        val context = applicationContext
+        Thread {
+            val result = runCatching { CallAudio.Setup.awaitUsb(context, request) }
+            runOnUiThread {
+                audioBusy = false
+                if (result.isSuccess) RelayState.refreshAudio?.invoke()
+                if (isDestroyed) return@runOnUiThread
+                if (dialog.isShowing) {
+                    dialog.dismiss()
+                    result.onSuccess { setupAudioReady = it }.onFailure { setupAudioError = R.string.s_audio_usb_failed }
+                }
+                renderAudio()
             }
         }.start()
     }
@@ -788,10 +1067,12 @@ class MainActivity : AppCompatActivity() {
     private fun refreshSharing() {
         RelayState.refreshSharing?.invoke()
         renderSharing()
-        if (page == Page.STATUS) renderStatus()
+        renderAudio()
     }
 
     private fun ensureBluetooth() {
+        if (relayStarting) return
+        connectionIssue = null
         val needed = arrayOf(permission.BLUETOOTH_ADVERTISE, permission.BLUETOOTH_CONNECT)
         if (needed.any { !hasPermission(it) }) {
             requestPermissions(needed, NEARBY)
@@ -803,8 +1084,7 @@ class MainActivity : AppCompatActivity() {
                 @Suppress("DEPRECATION")
                 startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), ENABLE_BLUETOOTH)
             }
-            adapter == null || !adapter.isMultipleAdvertisementSupported ->
-                alert(getString(R.string.s_no_advertising))
+            adapter == null || !adapter.isMultipleAdvertisementSupported -> showLinkIssue(R.string.s_no_advertising)
             else -> requestNotificationsThenStart()
         }
     }
@@ -834,15 +1114,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun serviceIntent() = Intent(this, RelayService::class.java).setAction(RelayService.ACTION_START)
     private fun startRelay() {
+        if (relayStarting) return
         if (runCatching { startForegroundService(serviceIntent()) }.isFailure) {
-            alert(getString(R.string.s_relay_open_app))
+            showLinkIssue(R.string.s_relay_open_app)
+        } else {
+            relayStarting = true
+            relayBeforeStart = RelayState.current
+            toolbar.postDelayed(startTimeout, 8_000)
+            renderLink(RelayState.current)
         }
+    }
+
+    private fun showLinkIssue(message: Int) {
+        connectionIssue = message
+        renderLink(RelayState.current)
     }
 
     @Deprecated("Deprecated in Android framework")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == ENABLE_BLUETOOTH && resultCode == RESULT_OK) ensureBluetooth()
+        if (requestCode == ENABLE_BLUETOOTH) {
+            if (resultCode == RESULT_OK) ensureBluetooth()
+            else showLinkIssue(R.string.s_ui_bluetooth_off)
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, results: IntArray) {
@@ -850,7 +1144,10 @@ class MainActivity : AppCompatActivity() {
         when (requestCode) {
             NEARBY -> {
                 if (permissions.isNotEmpty() && permissions.all { hasPermission(it) }) ensureBluetooth()
-                else appSettings(getString(R.string.s_nearby_pair))
+                else {
+                    showLinkIssue(R.string.s_nearby_pair)
+                    appSettings(getString(R.string.s_nearby_pair))
+                }
             }
             NOTICE -> startRelay()
             WIRELESS_NOTICE -> {
@@ -894,69 +1191,112 @@ class MainActivity : AppCompatActivity() {
 
     private enum class Page(val title: Int, val icon: Int) {
         CONNECTION(R.string.s_connection, R.drawable.ic_link),
-        SHARING(R.string.s_sharing, R.drawable.ic_devices),
-        STATUS(R.string.s_status, R.drawable.ic_status)
+        SHARING(R.string.s_ui_sharing_tab, R.drawable.ic_devices),
+        AUDIO(R.string.s_ui_audio_tab, R.drawable.ic_headset)
+    }
+
+    private enum class Detail(val title: Int) {
+        GUIDE(R.string.s_guide),
+        SETTINGS(R.string.ez_settings),
+        REPORT(R.string.s_test_report),
+        AUDIO_SETUP(R.string.s_ui_audio_setup_methods)
+    }
+
+    private val TestCallReport.inProgress get() = when (stage) {
+        TestCallReport.Stage.STARTING, TestCallReport.Stage.RINGING, TestCallReport.Stage.AUDIO,
+        TestCallReport.Stage.RECONNECTING -> true
+        else -> false
     }
 
     private fun row() = LinearLayout(this).apply { gravity = Gravity.START or Gravity.CENTER_VERTICAL }
 
-    private fun sectionTitle(value: String, appearance: Int = R.style.TextAppearance_ezcall_HeadlineMedium) =
+    private fun sectionTitle(value: String, appearance: Int) =
         text(value, appearance).apply { isAccessibilityHeading = true }
 
     private fun secondaryText(value: String) = text(value, R.style.TextAppearance_ezcall_BodyLarge,
         color(MaterialR.attr.colorOnSurfaceVariant))
 
+    private fun body(value: String) = text(value, R.style.TextAppearance_ezcall_BodyMedium,
+        color(MaterialR.attr.colorOnSurfaceVariant))
+
     private fun surfaceCard(content: View, accent: Boolean = false) = MaterialCardView(this).apply {
-        radius = dp(24).toFloat()
+        radius = dp(22).toFloat()
         cardElevation = 0f
-        setCardBackgroundColor(color(if (accent) MaterialR.attr.colorPrimaryContainer else MaterialR.attr.colorSurface))
-        setStrokeColor(ColorStateList.valueOf(color(MaterialR.attr.colorOutlineVariant)))
-        strokeWidth = if (accent) 0 else dp(1)
+        setCardBackgroundColor(color(if (accent) MaterialR.attr.colorPrimaryContainer else MaterialR.attr.colorSurfaceContainerLow))
+        strokeWidth = 0
         addView(content)
     }
 
-    private fun actionButton(label: String, icon: Int, action: () -> Unit) = MaterialButton(this).apply {
+    private fun divider() = MaterialDivider(this).apply {
+        dividerColor = color(MaterialR.attr.colorOutlineVariant)
+        dividerInsetStart = dp(12)
+        dividerInsetEnd = dp(12)
+    }
+
+    private fun spinner() = CircularProgressIndicator(this).apply {
+        indicatorSize = dp(28)
+        trackThickness = dp(3)
+        isIndeterminate = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    private fun actionButton(label: String, action: () -> Unit) = button(MaterialButton(this), label, action)
+
+    private fun outlineButton(label: String, action: () -> Unit) = button(
+        MaterialButton(ContextThemeWrapper(this, R.style.ThemeOverlay_ezcall_SenderOutlinedButton)), label, action
+    )
+
+    private fun textButton(label: String, action: () -> Unit) = button(
+        MaterialButton(ContextThemeWrapper(this, R.style.ThemeOverlay_ezcall_TextButton)), label, action
+    )
+
+    private fun button(view: MaterialButton, label: String, action: () -> Unit) = view.apply {
         text = label
-        minimumHeight = dp(54)
-        iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-        setIconResource(icon)
+        minimumHeight = dp(52)
+        maxLines = Int.MAX_VALUE
+        ellipsize = null
         setOnClickListener { action() }
     }
 
     private data class SettingsRow(val view: LinearLayout, val detail: MaterialTextView)
 
-    private fun settingsRow(icon: Int, title: String, detail: String, action: () -> Unit): SettingsRow {
-        val view = statusRow(icon, title, detail, false).apply {
-            val highlight = android.util.TypedValue()
-            theme.resolveAttribute(android.R.attr.selectableItemBackground, highlight, true)
-            setBackgroundResource(highlight.resourceId)
-            isFocusable = true
-            setOnClickListener { action() }
+    private fun settingsRow(icon: Int, title: String, detail: String, enabled: Boolean = true, action: () -> Unit): SettingsRow =
+        statusRow(icon, title, detail).apply {
+            view.isEnabled = enabled
+            view.isFocusable = true
+            view.setBackgroundResource(selectableBackground())
+            view.setOnClickListener { action() }
+            view.addView(ImageView(this@MainActivity).apply {
+                setImageDrawable(tinted(R.drawable.ic_sender_chevron))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(8) })
         }
-        val description = (view.getChildAt(1) as LinearLayout).getChildAt(1) as MaterialTextView
+
+    private fun statusRow(icon: Int, title: String, detail: String): SettingsRow {
+        val description = body(detail)
+        val view = row().apply {
+            minimumHeight = dp(68)
+            setPaddingRelative(dp(12), dp(10), dp(12), dp(10))
+            isScreenReaderFocusable = true
+            if (!largeText) {
+                addView(iconTile(icon), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
+            }
+            addView(stack().apply {
+                addView(text(title, R.style.TextAppearance_ezcall_TitleMedium))
+                addView(description, space(top = 2))
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
         return SettingsRow(view, description)
     }
 
-    private fun statusRow(icon: Int, title: String, detail: String, active: Boolean) = row().apply {
-        minimumHeight = dp(68)
-        setPaddingRelative(dp(14), dp(10), dp(14), dp(10))
-        isScreenReaderFocusable = true
-        val fill = color(if (active) MaterialR.attr.colorPrimaryContainer else MaterialR.attr.colorSurfaceContainer)
-        val ink = color(if (active) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurfaceVariant)
-        addView(iconTile(icon, 42, 22, fill, ink), LinearLayout.LayoutParams(dp(42), dp(42)).apply { marginEnd = dp(12) })
-        addView(stack().apply {
-            addView(text(title, R.style.TextAppearance_ezcall_TitleMedium))
-            addView(text(detail, R.style.TextAppearance_ezcall_BodyMedium,
-                color(MaterialR.attr.colorOnSurfaceVariant)), space(top = 2))
-        }, LinearLayout.LayoutParams(0, -2, 1f))
+    private fun selectableBackground(attribute: Int = android.R.attr.selectableItemBackground): Int {
+        val highlight = android.util.TypedValue()
+        theme.resolveAttribute(attribute, highlight, true)
+        return highlight.resourceId
     }
 
-    private fun textButton(label: String, action: () -> Unit) =
-        MaterialButton(ContextThemeWrapper(this, R.style.ThemeOverlay_ezcall_TextButton)).apply {
-            text = label
-            minimumHeight = dp(48)
-            setOnClickListener { action() }
-        }
+    private fun tinted(icon: Int) = AppCompatResources.getDrawable(this, icon)?.mutate()
+        ?.apply { setTint(color(MaterialR.attr.colorOnSurfaceVariant)) }
 
     private fun stack() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
@@ -978,14 +1318,17 @@ class MainActivity : AppCompatActivity() {
         cornerRadius = dp(radius).toFloat()
     }
 
-    private fun iconTile(icon: Int, size: Int, glyph: Int, fill: Int, ink: Int) = ImageView(this).apply {
-        val inset = dp((size - glyph) / 2)
+    private fun iconTile(icon: Int, active: Boolean = false) = ImageView(this).apply {
+        val inset = dp(11)
         setPadding(inset, inset, inset, inset)
         setImageResource(icon)
-        background = rounded(fill, if (size == 52) 16 else 12)
-        imageTintList = ColorStateList.valueOf(ink)
+        background = rounded(color(if (active) MaterialR.attr.colorPrimaryContainer else MaterialR.attr.colorSurfaceContainerHigh), 12)
+        imageTintList = ColorStateList.valueOf(
+            color(if (active) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurfaceVariant))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
+
+    private val largeText get() = resources.configuration.fontScale >= 1.5f
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
 

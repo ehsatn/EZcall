@@ -8,7 +8,7 @@
     <string name="s_guide_wireless">به وای‌فای وصل شوید و برنامه را در گزینه‌های توسعه‌دهنده جفت کنید. برای دیدن مراحل اینجا بزنید.</string>
     <string name="s_pairing_saved">جفت‌سازی روی این گوشی ذخیره شده است. اگر از فهرست اندروید حذف شده، برای جفت‌سازی دوباره اینجا بزنید.</string>
     <string name="s_guide_receiver_mic">میکروفون گوشی گیرنده</string>
-    <string name="s_guide_receiver_mic_detail">وقتی صدای دوطرفه آماده شد، تماس را روی گیرنده پاسخ دهید و به میکروفون آن اجازه بدهید. اگر این گوشی فقط از حالت شنیدن پشتیبانی می‌کند، برای صحبت از همین گوشی استفاده کنید.</string>
+    <string name="s_guide_receiver_mic_detail">وقتی صدای دوطرفه آماده شد، تماس را روی گیرنده پاسخ دهید و به میکروفون آن اجازه بدهید.</string>
     <string name="s_guide_back">مرحلهٔ قبل</string>
     <string name="s_guide_finish">پایان راهنما</string>
     <string name="s_reopen_guide">مرور اشتراک‌گذاری، اتصال بلوتوث و صدای تماس</string>
@@ -62,8 +62,8 @@
     <string name="s_while_off">وقتی صفحه خاموش است</string>
     <string name="s_battery_off">بهینه‌سازی باتری برای ایزی کال غیرفعال است</string>
     <string name="s_battery_may_pause">ممکن است اندروید برای صرفه‌جویی در باتری، انتقال را متوقف کند</string>
-    <string name="s_simulate">شبیه‌سازی تماس ورودی</string>
-    <string name="s_simulate_wait">تماس آزمایشی تا ۵ ثانیهٔ دیگر برقرار می‌شود.</string>
+    <string name="s_simulate">آزمایش صدای تماس</string>
+    <string name="s_simulate_wait">در گوشی گیرنده پاسخ دهید. بعد از بوق‌ها صحبت کنید تا صدای خودتان را بشنوید.</string>
     <string name="s_simulate_retry">صبر کنید تماس فعلی تمام شود یا دوباره متصل شوید و امتحان کنید.</string>
     <string name="s_relay">انتقال</string>
     <string name="s_notifications_in_status">برای نمایش نشان انتقال در نوار وضعیت، به ایزی کال اجازهٔ اعلان بدهید.</string>
@@ -78,13 +78,16 @@
     <string name="s_open_dev">باز کردن گزینه‌های توسعه‌دهنده</string>
     <string name="s_starting_audio">در حال راه‌اندازی صدای تماس</string>
     <string name="s_two_way">صدای دوطرفه آماده است</string>
-    <string name="s_listen_only">فقط شنیدن</string>
+    <string name="s_listen_only">صدا روی این گوشی می‌ماند</string>
     <string name="s_audio_stopped">صدای تماس متوقف شده است</string>
     <string name="s_audio_relay_start">با شروع انتقال فعال می‌شود</string>
     <string name="s_audio_not_setup">راه‌اندازی نشده</string>
     <string name="s_audio_keep_wireless">در حال اتصال روی همین گوشی. می‌توانید در ایزی‌کال بمانید.</string>
     <string name="s_audio_two_way_info">برای تماس‌های منتقل‌شده از بلندگو و میکروفون گوشی گیرنده استفاده کنید.</string>
-    <string name="s_audio_listen_info">صدا را از گوشی گیرنده بشنوید و با میکروفون این گوشی اندرویدی صحبت کنید.</string>
+    <string name="s_call_overlay">دکمهٔ شناور تماس</string>
+    <string name="s_call_overlay_info">اجازه دهید ایزی‌کال روی صفحهٔ تماس نشان داده شود تا بتوانید صدا را به این گوشی برگردانید.</string>
+    <string name="s_use_handset_audio">صدا روی این گوشی</string>
+    <string name="s_audio_listen_info">اگر انتقال هم‌زمان میکروفون و بلندگو ممکن نباشد، صدای تماس روی این گوشی می‌ماند.</string>
     <string name="s_audio_restart_info">به وای‌فای وصل شوید و در «گزینه‌های توسعه‌دهنده»، «اشکال‌زدایی بی‌سیم» را روشن کنید. سپس به ایزی‌کال برگردید و «راه‌اندازی دوبارهٔ صدای تماس» را بزنید. می‌توانید صفحهٔ تنظیمات را ببندید.</string>
     <string name="s_audio_resume_info">برای استفاده از صدای تماس، انتقال را ادامه دهید.</string>
     <string name="s_audio_setup_info">برای شنیدن تماس‌ها روی گوشی گیرنده، صدای تماس را راه‌اندازی کنید.</string>
@@ -105,6 +108,11 @@
     <string name="s_audio_port_help">در «گزینه‌های توسعه‌دهنده»، صفحهٔ اصلی «اشکال‌زدایی بی‌سیم» را باز کنید. در بخش «آدرس IP و پورت»، عدد بعد از دونقطه را بخوانید. به برنامه برگردید و همان عدد را وارد کنید. پنجرهٔ کد جفت‌سازی پورت دیگری دارد.</string>
     <string name="s_audio_port">پورت اتصال</string>
     <string name="s_audio_port_invalid">یک عدد بین ۱۰۲۴ تا ۶۵۵۳۵ وارد کنید.</string>
+    <string name="s_audio_usb">راه‌اندازی با USB</string>
+    <string name="s_audio_usb_detail">صدای تماس را با ابزارهای Android Platform-Tools از کامپیوتر راه‌اندازی کنید.</string>
+    <string name="s_audio_usb_steps">اشکال‌زدایی USB را در گزینه‌های توسعه‌دهنده روشن کنید. گوشی را به کامپیوتر وصل کنید و درخواست اشکال‌زدایی آن را تأیید کنید. این پنجره را باز نگه دارید و تا دو دقیقه فرمان زیر را اجرا کنید:\n\n%1$s</string>
+    <string name="s_audio_usb_copy">کپی فرمان</string>
+    <string name="s_audio_usb_failed">راه‌اندازی USB صدای تماس را فعال نکرد. درخواست اشکال‌زدایی گوشی را بررسی کنید، پنجرهٔ راه‌اندازی تازه‌ای باز کنید و فرمان را دوباره اجرا کنید.</string>
     <string name="s_audio_component_failed">اتصال به اشکال‌زدایی بی‌سیم برقرار شد، اما بخش صدای تماس پاسخ نداد. دوباره راه‌اندازی صدای تماس را بزنید.</string>
     <string name="s_audio_unverified">ایزی کال نتوانست تأیید کند که به اشکال‌زدایی بی‌سیم همین گوشی وصل شده است، پس صدای تماس را راه‌اندازی نکرد. ممکن است برنامهٔ دیگری خود را جای آن جا بزند. اشکال‌زدایی بی‌سیم را خاموش و روشن کنید و دوباره امتحان کنید.</string>
     <string name="s_no_advertising">این گوشی اندرویدی از فرستندگی بلوتوث کم‌مصرف پشتیبانی نمی‌کند.</string>
@@ -155,4 +163,23 @@
         <item quantity="one">%d گزینهٔ اشتراک‌گذاری فعال است</item>
         <item quantity="other">%d گزینهٔ اشتراک‌گذاری فعال است</item>
     </plurals>
+    <string name="s_simulate_heard">شنیدن بوق‌ها در گوشی گیرنده تأیید شد.</string>
+    <string name="s_test_report">گزارش تست تماس</string>
+    <string name="s_test_starting">تماس آزمایشی تا ۵ ثانیهٔ دیگر شروع می‌شود.</string>
+    <string name="s_test_ringing">در انتظار پاسخ گوشی گیرنده.</string>
+    <string name="s_test_audio_started">تماس پاسخ داده شد. در حال آزمایش صدا از طریق بلوتوث.</string>
+    <string name="s_test_reconnecting">بلوتوث قطع شد. در انتظار اتصال دوباره.</string>
+    <string name="s_test_finished">تست تمام شد.</string>
+    <string name="s_test_no_answer">گوشی گیرنده پاسخ نداد.</string>
+    <string name="s_test_phone_busy">تماس سیم‌کارت تست را متوقف کرد.</string>
+    <string name="s_test_signal_failed">بلوتوث نتوانست درخواست تماس آزمایشی یا راه‌اندازی صدای آن را در صف ارسال بگذارد.</string>
+    <string name="s_test_link_lost">اتصال بلوتوث حین تست قطع شد.</string>
+    <string name="s_test_cue_missing">بسته‌های بوق در صف ارسال قرار نگرفته‌اند.</string>
+    <string name="s_test_cue_queued">بسته‌های بوق برای گوشی گیرنده در صف ارسال قرار گرفتند.</string>
+    <string name="s_test_cue_failed">برنامه نتوانست بوق‌های آزمایشی را تولید کند.</string>
+    <string name="s_test_playback_unconfirmed">پخش صدا در گوشی گیرنده تأیید نشده است.</string>
+    <string name="s_test_mic_received">در مرحلهٔ بازگشت صدا، بسته‌های میکروفون دریافت شدند.</string>
+    <string name="s_test_mic_missing">در مرحلهٔ بازگشت صدا، بسته‌ای از میکروفون نرسید. وضعیت قطع صدا و مجوز میکروفون گوشی گیرنده را بررسی کنید.</string>
+    <string name="s_test_echo_queued">بسته‌های بازگشت صدا برای گوشی گیرنده در صف ارسال قرار گرفتند.</string>
+    <string name="s_test_echo_missing">بسته‌های بازگشت صدا در صف ارسال قرار نگرفته‌اند.</string>
 </resources>

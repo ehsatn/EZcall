@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">1. Gönderen telefonda QR kodunu açın</string>
+    <string name="r_setup_sender_detail">SIM kartınızın takılı olduğu Android telefonda EasyCall’ı açıp Eşleştirmeyi başlat’a dokunun.</string>
+    <string name="r_setup_receiver">2. QR kodunu burada okutun</string>
+    <string name="r_setup_receiver_detail">Kamerayı kullanın veya bir QR görseli seçin. Android istediğinde Yakındaki cihazlar iznini verin.</string>
+    <string name="r_setup_optional">İsteğe bağlı kurulum</string>
+    <string name="r_setup_optional_detail">Bildirimleri nasıl alacağınızı, aramaların nerede çalacağını ve bu telefonun mikrofonunu kullanıp kullanmayacağınızı seçin.</string>
+    <string name="r_setup_later">Daha sonra ayarla</string>
+    <string name="r_reconnect_now">Yeniden bağlan</string>
+    <string name="r_reconnect_detail">Bluetooth’u açık tutun ve iki telefonu birbirine yaklaştırın.</string>
+    <string name="r_enable_bluetooth">Bluetooth’u aç</string>
+    <string name="r_link_while_syncing">Eşitleme bitene kadar gönderen telefonun yakınında kalın.</string>
+    <string name="r_camera_unavailable">Kamera açılamadı. Eşleştirme QR kodunun görselini seçin.</string>
+    <string name="r_settings_connection">Bağlantı ve eşitleme</string>
+    <string name="r_settings_alerts">Bildirimler</string>
+    <string name="r_settings_preferences">Uygulama tercihleri</string>
+    <string name="r_manage_notifications">Bildirimleri yönet</string>
+    <string name="r_settings_audio_test">Arama sesi denemesi</string>
+    <string name="r_settings_audio_test_detail">Denemeyi gönderen telefonda başlatın ve burada yanıtlayın. Deneme SIM üzerinden arama yapmaz.</string>
+    <string name="r_audio_test_running">Ses denemesi sürüyor</string>
+    <string name="r_settings_unavailable">Android bu ayarları açamadı.</string>
+    <string name="r_contact_actions_unavailable">Bu numarayı aramak veya bu numaraya SMS göndermek şu anda mümkün değil. Gönderen telefonda arama ve SMS paylaşımını kontrol edin.</string>
+    <string name="r_dial_zero">0, artı işareti için basılı tutun</string>
+    <string name="r_compose_empty">Sohbet başlat</string>
+    <string name="r_compose_empty_detail">Bir telefon numarası girin veya eşitlenmiş bir kişi seçin.</string>
+    <string name="r_conversation_empty">Bu sohbette mesaj yok</string>
+    <string name="r_conversation_empty_detail">Bu numarayla olan mesajlar burada görünür.</string>
+    <string name="r_settings_microphone">Mikrofon</string>
+    <string name="r_permission_on">İzin verildi</string>
+    <string name="r_permission_off">Kapalı</string>
+</resources>

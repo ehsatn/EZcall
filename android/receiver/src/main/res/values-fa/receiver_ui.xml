@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">۱. کد QR را در گوشی فرستنده باز کنید</string>
+    <string name="r_setup_sender_detail">در EasyCall گوشی اندرویدی که سیم‌کارت در آن است، «شروع جفت‌سازی» را بزنید.</string>
+    <string name="r_setup_receiver">۲. کد QR را در این گوشی بخوانید</string>
+    <string name="r_setup_receiver_detail">با دوربین کد را بخوانید یا تصویر آن را انتخاب کنید. وقتی اندروید پرسید، دسترسی به دستگاه‌های نزدیک را مجاز کنید.</string>
+    <string name="r_setup_optional">راه‌اندازی اختیاری</string>
+    <string name="r_setup_optional_detail">روش دریافت اعلان، محل زنگ خوردن تماس‌ها و دسترسی به میکروفون این گوشی را انتخاب کنید.</string>
+    <string name="r_setup_later">بعداً راه‌اندازی می‌کنم</string>
+    <string name="r_reconnect_now">اتصال دوباره</string>
+    <string name="r_reconnect_detail">بلوتوث را روشن بگذارید و دو گوشی را نزدیک هم قرار دهید.</string>
+    <string name="r_enable_bluetooth">روشن کردن بلوتوث</string>
+    <string name="r_link_while_syncing">تا پایان همگام‌سازی نزدیک گوشی فرستنده بمانید.</string>
+    <string name="r_camera_unavailable">دوربین باز نشد. تصویر کد QR جفت‌سازی را انتخاب کنید.</string>
+    <string name="r_settings_connection">اتصال و همگام‌سازی</string>
+    <string name="r_settings_alerts">اعلان‌ها</string>
+    <string name="r_settings_preferences">ترجیحات برنامه</string>
+    <string name="r_manage_notifications">مدیریت اعلان‌ها</string>
+    <string name="r_settings_audio_test">آزمون صدای تماس</string>
+    <string name="r_settings_audio_test_detail">آزمون را در گوشی فرستنده شروع کنید و اینجا پاسخ دهید. آزمون از سیم‌کارت تماس نمی‌گیرد.</string>
+    <string name="r_audio_test_running">آزمون صدا در حال انجام است</string>
+    <string name="r_settings_unavailable">اندروید نتوانست این تنظیمات را باز کند.</string>
+    <string name="r_contact_actions_unavailable">فعلاً تماس یا ارسال پیامک به این شماره ممکن نیست. تنظیمات اشتراک تماس و پیامک را در گوشی فرستنده بررسی کنید.</string>
+    <string name="r_dial_zero">۰، برای علامت مثبت لمس کنید و نگه دارید</string>
+    <string name="r_compose_empty">شروع گفتگو</string>
+    <string name="r_compose_empty_detail">شماره وارد کنید یا یک مخاطب همگام‌شده را انتخاب کنید.</string>
+    <string name="r_conversation_empty">این گفتگو هنوز پیامی ندارد</string>
+    <string name="r_conversation_empty_detail">پیام‌های این شماره اینجا نمایش داده می‌شوند.</string>
+    <string name="r_settings_microphone">میکروفون</string>
+    <string name="r_permission_on">مجاز</string>
+    <string name="r_permission_off">خاموش</string>
+</resources>

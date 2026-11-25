@@ -8,9 +8,9 @@ ezcall displays Android calls and SMS on an iPhone or a second Android phone and
 
 | Device | Release file | Requirements |
 | --- | --- | --- |
-| Android with the SIM | [Sender 0.1.11 · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-24/ezcall-sender-0.1.11-release.apk) | Android 12+, telephony and BLE peripheral advertising |
-| Second Android phone | [Receiver 0.1.5 · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-24/ezcall-receiver-0.1.5-release.apk) | Android 12+ and BLE |
-| iPhone | [Receiver 0.1.25 · unsigned IPA](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-24/ezcall-0.1.25-unsigned.ipa) | iOS 17+. Sign and provision the IPA for your device or install from source using Xcode on a Mac. |
+| Android with the SIM | [Sender 0.1.20 · APK](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/ezcall-sender-0.1.20-release.apk) | Android 12+, telephony and BLE peripheral advertising |
+| Second Android phone | [Receiver 0.1.13 · APK](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/ezcall-receiver-0.1.13-release.apk) | Android 12+ and BLE |
+| iPhone | [Receiver 0.1.31 · unsigned IPA](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/EasyCall-0.1.31-build34-unsigned.ipa) | iOS 17+. Sign and provision the IPA for your device or install from source using Xcode on a Mac. |
 
 Open the APK on the phone that will perform that role and follow Android’s installer prompts. Each component has its own version. The release includes SHA-256 checksums. Sender 0.1.9 changed its Android application ID. If upgrading from 0.1.8, pair the new Sender and repeat optional call-audio setup. [Release notes and checksums](https://github.com/ehsatn/EZcall/releases/latest) · [Earlier binaries](https://github.com/ehsatn/EZcall/releases/tag/binary-archive-1)
 

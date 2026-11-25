@@ -1,0 +1,192 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Calls": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تماس‌ها"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المكالمات"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llamadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appels"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aramalar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiamate"
+          }
+        }
+      }
+    },
+    "Connected": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": { "stringUnit": { "state": "translated", "value": "وصل است" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "متصل" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Conectado" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Connecté" } },
+        "tr": { "stringUnit": { "state": "translated", "value": "Bağlı" } },
+        "it": { "stringUnit": { "state": "translated", "value": "Connesso" } }
+      }
+    },
+    "Disconnected": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": { "stringUnit": { "state": "translated", "value": "قطع است" } },
+        "ar": { "stringUnit": { "state": "translated", "value": "غير متصل" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Desconectado" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Déconnecté" } },
+        "tr": { "stringUnit": { "state": "translated", "value": "Bağlı değil" } },
+        "it": { "stringUnit": { "state": "translated", "value": "Disconnesso" } }
+      }
+    },
+    "Messages": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیام‌ها"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرسائل"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensajes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesajlar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggi"
+          }
+        }
+      }
+    },
+    "Calls & Messages": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تماس‌ها و پیام‌ها"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المكالمات والرسائل"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llamadas y mensajes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appels et messages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiamate e messaggi"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aramalar ve Mesajlar"
+          }
+        }
+      }
+    },
+    "Open ezcall’s call history or the iPhone’s Messages app.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تاریخچهٔ تماس‌ها در ezcall یا برنامهٔ پیام‌های آیفون را باز کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "افتح سجل المكالمات في ezcall أو تطبيق الرسائل على iPhone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el historial de llamadas de ezcall o la app Mensajes del iPhone."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez l’historique des appels d’ezcall ou l’app Messages de l’iPhone."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la cronologia delle chiamate di ezcall o l’app Messaggi di iPhone."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ezcall arama geçmişini veya iPhone’daki Mesajlar uygulamasını aç."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

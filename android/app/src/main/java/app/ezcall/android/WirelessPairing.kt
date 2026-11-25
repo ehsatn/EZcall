@@ -11,9 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import android.util.Log
-import androidx.core.content.ContextCompat
 import io.github.muntashirakon.adb.PairingConnectionCtx
-import io.github.muntashirakon.adb.android.AdbMdns
 
 @SuppressLint("MissingPermission")
 class WirelessPairing : BroadcastReceiver() {
@@ -24,11 +22,11 @@ class WirelessPairing : BroadcastReceiver() {
         val input = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(CODE)
         val entry = parse(input)
         if (entry == null) {
-            showPrompt(context, expiresAt, ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_six_digits))
+            showPrompt(context, expiresAt, context.ezcallContext().getString(R.string.s_wireless_six_digits))
             return
         }
 
-        notifications.notify(NOTICE_ID, notification(context, ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_pairing)).build())
+        notifications.notify(NOTICE_ID, notification(context, context.ezcallContext().getString(R.string.s_wireless_pairing)).build())
         val result = goAsync()
         Thread {
             try {
@@ -36,13 +34,13 @@ class WirelessPairing : BroadcastReceiver() {
                 val port = suppliedPort ?: runCatching { findPort(context) }.getOrNull()
                 when {
                     port == null -> showPrompt(context, expiresAt,
-                        ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_window))
+                        context.ezcallContext().getString(R.string.s_wireless_window))
                     !tryPair(code, port) -> showPrompt(context, expiresAt,
-                        ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_failed))
+                        context.ezcallContext().getString(R.string.s_wireless_failed))
                     else -> {
                         preferences(context).edit().putBoolean("paired", true).apply()
                         notifications.notify(NOTICE_ID, notification(context,
-                            ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_success)).setAutoCancel(true).build())
+                            context.ezcallContext().getString(R.string.s_wireless_success)).setAutoCancel(true).build())
                     }
                 }
             } finally {
@@ -52,7 +50,7 @@ class WirelessPairing : BroadcastReceiver() {
     }
 
     private fun findPort(context: Context): Int? =
-        LocalAdb.findPort(context, AdbMdns.SERVICE_TYPE_TLS_PAIRING, 2_000)
+        LocalAdb.findPort(context, LocalAdb.TLS_PAIRING, 3_000)
 
     private fun pair(code: String, port: Int) {
         val key = LocalAdb.key()
@@ -86,11 +84,11 @@ class WirelessPairing : BroadcastReceiver() {
 
         fun begin(context: Context): Boolean {
             val notifications = context.getSystemService(NotificationManager::class.java)
-            notifications.createNotificationChannel(NotificationChannel(CHANNEL, ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_channel), NotificationManager.IMPORTANCE_DEFAULT))
+            notifications.createNotificationChannel(NotificationChannel(CHANNEL, context.ezcallContext().getString(R.string.s_wireless_channel), NotificationManager.IMPORTANCE_DEFAULT))
             if (!notifications.areNotificationsEnabled() ||
                 notifications.getNotificationChannel(CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) return false
             showPrompt(context, SystemClock.elapsedRealtime() + WINDOW_MS,
-                ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_leave_open))
+                context.ezcallContext().getString(R.string.s_wireless_leave_open))
             return true
         }
 
@@ -104,15 +102,15 @@ class WirelessPairing : BroadcastReceiver() {
             val reply = PendingIntent.getBroadcast(context, NOTICE_ID,
                 Intent(context, WirelessPairing::class.java).putExtra(EXPIRY, expiresAt),
                 PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_ONE_SHOT)
-            val code = RemoteInput.Builder(CODE).setLabel(ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_code)).build()
-            val action = Notification.Action.Builder(null, ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_enter), reply)
+            val code = RemoteInput.Builder(CODE).setLabel(context.ezcallContext().getString(R.string.s_wireless_code)).build()
+            val action = Notification.Action.Builder(null, context.ezcallContext().getString(R.string.s_wireless_enter), reply)
                 .setAuthenticationRequired(true).setAllowGeneratedReplies(false).addRemoteInput(code).build()
             notifications.notify(NOTICE_ID, notification(context, message).addAction(action).setTimeoutAfter(remaining).build())
         }
 
         private fun notification(context: Context, message: String) = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_ezcall_notification)
-            .setContentTitle(ContextCompat.getContextForLanguage(context).getString(R.string.s_wireless_channel))
+            .setContentTitle(context.ezcallContext().getString(R.string.s_wireless_channel))
             .setContentText(message)
             .setStyle(Notification.BigTextStyle().bigText(message))
             .setVisibility(Notification.VISIBILITY_SECRET)

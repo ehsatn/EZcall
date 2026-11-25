@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>ezcall</string>
+    <string>EasyCall</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -13,9 +13,20 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>ezcall</string>
+    <string>EasyCall</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>app.xcall.relay.widget</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>app.xcall.relay.widget</string>
+            </array>
+        </dict>
+    </array>
     <key>CFBundleShortVersionString</key>
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
@@ -52,6 +63,8 @@
     </array>
     <key>EzcallTipProductID</key>
     <string>$(EZCALL_TIP_PRODUCT_ID)</string>
+    <key>EzcallWidgetGroup</key>
+    <string>group.$(EZCALL_BUNDLE_IDENTIFIER)</string>
 </dict>
 </plist>
 

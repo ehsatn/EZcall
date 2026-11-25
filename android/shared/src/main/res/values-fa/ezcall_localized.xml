@@ -10,4 +10,21 @@
     <string name="ez_continue">ادامه</string>
     <string name="ez_contacts">مخاطبان</string>
     <string name="ez_brand">ایزی کال</string>
+    <string name="ez_test_log">لاگ آزمایش صدا</string>
+    <string name="ez_test_copy">کپی لاگ</string>
+    <string name="ez_test_echo_heard">صدای خودم را شنیدم</string>
+    <string name="ez_test_echo_confirmed">شنیدن صدای برگشتی تأیید شد</string>
+    <string name="ez_test_speak_after_tones">بعد از بوق‌های آزمایشی حرف بزنید. ایزی‌کال صدا را خودکار بررسی می‌کند.</string>
+    <string name="ez_test_own_wave">میکروفون شما</string>
+    <string name="ez_test_incoming_wave">صدای دریافتی</string>
+    <string name="ez_test_sent_tone_wave">صدای آزمایشی ارسالی</string>
+    <string name="ez_test_remote_mic_wave">میکروفون گیرنده</string>
+    <string name="ez_test_wait_tone">در انتظار پخش بوق آزمایشی</string>
+    <string name="ez_test_tone_played">پخش بوق آزمایشی تشخیص داده شد</string>
+    <string name="ez_test_wait_mic">در انتظار سیگنال میکروفون</string>
+    <string name="ez_test_mic_detected">سیگنال میکروفون تشخیص داده شد</string>
+    <string name="ez_test_wait_echo">در انتظار پخش صدای برگشتی</string>
+    <string name="ez_test_echo_played">پخش صدای برگشتی تشخیص داده شد</string>
+    <string name="ez_test_auto_passed">تست صدای دوطرفه موفق بود</string>
+    <string name="ez_test_auto_incomplete">تست صدا کامل نشد</string>
 </resources>

@@ -56,6 +56,7 @@ final class RelayController: NSObject, ObservableObject {
         let audio: String
         let resume_call: Bool?
         let audio_route: Bool?
+        let active_call_id: String?
         let texts: Bool?
         let contacts: Bool?
         let send_sms: Bool?
@@ -65,6 +66,7 @@ final class RelayController: NSObject, ObservableObject {
         let id: String
         let key: String
         let uplink: Bool
+        let audio_pairs: Bool?
     }
 
     private struct CallResumed: Decodable {
@@ -128,6 +130,7 @@ final class RelayController: NSObject, ObservableObject {
     @Published private(set) var testing = false
     @Published private(set) var syncing = false
     @Published private(set) var alerts = UNAuthorizationStatus.notDetermined
+    @Published var openedSMSNotification: String?
     @Published private(set) var callControl = false
     @Published private(set) var canDial = false
     @Published private(set) var audioMode = AudioMode.off
@@ -178,6 +181,9 @@ final class RelayController: NSObject, ObservableObject {
     private lazy var calls = CallBridge()
     private var audioChannel: CBCharacteristic?
     private var pendingAudioWrites: [(packet: Data, expires: ContinuousClock.Instant)] = []
+    private var nextAudioWriteAt = ContinuousClock.now
+    private var audioWriteTimer: Task<Void, Never>?
+    private var audioStreamID = UUID()
     private var callAudio: CallAudio?
     private var audioCallID: UUID?
     @Published private(set) var muted = false
@@ -192,12 +198,15 @@ final class RelayController: NSObject, ObservableObject {
     private var dialDeadlines = [UUID: Timer]()
     private var smsRequest: String?
     private var smsDeadline: Timer?
+    private var smsCompletion: ((Bool, String) -> Void)?
+    private(set) var receivedCapabilities = false
     private var sharing: (texts: Bool, contacts: Bool)?
     private var acknowledgingUnpair = false
 
     func start() {
         guard !initialized else { return }
         initialized = true
+        WidgetConnection.isConnected = false
         calls.relay = self
         restoreVault()
         refreshAlerts()
@@ -251,9 +260,17 @@ final class RelayController: NSObject, ObservableObject {
         status = .unlinked
     }
 
-    func forgetPhone(acknowledging id: String? = nil) {
+    @Published private(set) var retainedData: RelayData?
+
+    func forgetPhone(keepingData: Bool = false, acknowledging id: String? = nil) {
         if id == nil { stopBluetooth() }
         do {
+            if keepingData {
+                retainedData = try LocalVault.retain(data)
+            } else if id == nil {
+                try LocalVault.removeArchive()
+                retainedData = nil
+            }
             try LocalVault.removePairing()
             pairing = nil
             isPaired = false
@@ -261,10 +278,12 @@ final class RelayController: NSObject, ObservableObject {
             namedContacts.removeAll()
             namedSuffixes.removeAll()
             outgoingSMS = nil
+            openedSMSNotification = nil
             let notifications = UNUserNotificationCenter.current()
             notifications.removeAllPendingNotificationRequests()
             notifications.removeAllDeliveredNotifications()
             status = .unlinked
+            WidgetConnection.isConnected = false
             feedback = nil
             testResult = nil
             syncResult = nil
@@ -341,11 +360,12 @@ final class RelayController: NSObject, ObservableObject {
         }
     }
 
-    func sendSMS(to address: String, body: String) -> String? {
+    func sendSMS(to address: String, body: String, completion: ((Bool, String) -> Void)? = nil) -> String? {
         guard status == .connected, canSendSMS, smsRequest == nil else { return nil }
         let id = UUID().uuidString.lowercased()
         smsStatus = nil
         smsRequest = id
+        smsCompletion = completion
         outgoingSMS = OutgoingSMS(id: id, address: address, body: body, date: Date())
         sendingSMS = true
         send(["type": "sms_send", "id": id, "address": address, "body": body])
@@ -362,12 +382,15 @@ final class RelayController: NSObject, ObservableObject {
         smsDeadline?.invalidate()
         smsDeadline = nil
         smsRequest = nil
+        let completion = smsCompletion
+        smsCompletion = nil
         sendingSMS = false
         smsStatus = (id, sent, message)
         if sent {
             needsSync = true
             syncNow()
         }
+        completion?(sent, message)
     }
 
     // MARK: CallKit actions
@@ -429,6 +452,7 @@ final class RelayController: NSObject, ObservableObject {
     func phoneCallEnded(_ id: UUID) {
         guard phoneCall?.id == id else { return }
         phoneCall = nil
+        if data.endCalls(matching: id.uuidString.lowercased()) { persist() }
     }
 
     func endPhoneCall(_ id: UUID) {
@@ -488,6 +512,14 @@ final class RelayController: NSObject, ObservableObject {
         }
     }
 
+    func confirmTestAudio(_ id: UUID) -> Bool {
+        guard handshake == .authenticated, !callReconnecting,
+              activeCall?.state == .active, activeCall?.test_audio_confirmation == true,
+              activeCall?.simulated == true, activeCall?.id == id.uuidString.lowercased() else { return false }
+        send(type: "test_audio_heard", id: id.uuidString.lowercased())
+        return handshake == .authenticated
+    }
+
     private func notifyPhoneAudio(ready: Bool) {
         guard supportsAudioRedirect, handshake == .authenticated, let id = audioCallID,
               activeCall?.simulated != true else { return }
@@ -495,6 +527,8 @@ final class RelayController: NSObject, ObservableObject {
     }
 
     func callsReset() {
+        callAudioSession(false)
+        if let id = phoneCall?.id { phoneCallEnded(id) }
         phoneCall = nil
         queuedAnswer = nil
         if callReconnecting { activeCall = nil }
@@ -520,7 +554,7 @@ final class RelayController: NSObject, ObservableObject {
     }
 
     func name(for address: String) -> String {
-        if address.isEmpty { return "Unknown" }
+        if address.isEmpty { return ezText("Unknown") }
         return contactName(for: address) ?? address
     }
 
@@ -552,11 +586,13 @@ final class RelayController: NSObject, ObservableObject {
     private func restoreVault() {
         do {
             pairing = try LocalVault.loadPairing()
+            retainedData = try? LocalVault.loadArchive()
             vaultRead = true
             isPaired = pairing != nil
             guard let pairing else { return }
             do {
                 data = try LocalVault.loadData(using: pairing.cacheKey)
+                if data.endCalls() { persist() }
                 indexContacts()
             } catch {
                 feedback = "Couldn’t read the saved inbox. Sync to refresh it."
@@ -661,6 +697,7 @@ final class RelayController: NSObject, ObservableObject {
         handshakeDeadline?.invalidate()
         handshakeDeadline = nil
         handshake = .idle
+        WidgetConnection.isConnected = false
         acknowledgingUnpair = false
         clientKey = nil
         writeChannel = nil
@@ -679,12 +716,14 @@ final class RelayController: NSObject, ObservableObject {
             activeCall = nil
             stopAudio()
             calls.endAll(reason: .failed)
+            if data.endCalls() { persist() }
         }
         dialDeadlines.values.forEach { $0.invalidate() }
         dialDeadlines.removeAll()
         callControl = false
         canDial = false
         canSendSMS = false
+        receivedCapabilities = false
         sharing = nil
         if let id = smsRequest {
             finishSMS(id, sent: false, message: "The link dropped. Check Android before sending again.")
@@ -731,6 +770,7 @@ final class RelayController: NSObject, ObservableObject {
         stopAudio()
         if let id = activeCall.flatMap({ UUID(uuidString: $0.id) }) {
             calls.ended(id, reason: .failed)
+            if data.endCalls(matching: id.uuidString.lowercased()) { persist() }
         }
         activeCall = nil
     }
@@ -876,7 +916,7 @@ final class RelayController: NSObject, ObservableObject {
                 cancelPairing()
                 feedback = "Couldn’t save the link securely. Unlock this iPhone and try again."
             } else {
-                send(["type": "ready", "unpair": "1"])
+                send(["type": "ready", "unpair": "1", "audio_pairs": "1"])
             }
             return
         }
@@ -893,7 +933,7 @@ final class RelayController: NSObject, ObservableObject {
             namedSuffixes.removeAll()
             outgoingSMS = nil
         }
-        send(["type": "ready", "unpair": "1", "rekey": "1"])
+        send(["type": "ready", "unpair": "1", "rekey": "1", "audio_pairs": "1"])
     }
 
     private func completeHandshake() {
@@ -901,6 +941,7 @@ final class RelayController: NSObject, ObservableObject {
         handshakeDeadline = nil
         handshake = .authenticated
         status = .connected
+        WidgetConnection.isConnected = true
         logger.info("Relay authenticated")
         feedback = nil
         needsSync = true
@@ -922,7 +963,7 @@ final class RelayController: NSObject, ObservableObject {
         case "pong":
             guard let ping, ping.id == header.id else { return }
             let elapsed = (ProcessInfo.processInfo.systemUptime - ping.started) * 1_000
-            finishTest("Round-trip verified · \(max(1, Int(elapsed.rounded()))) ms")
+            finishTest(ezText("Round-trip verified · %lld ms", Int64(max(1, Int(elapsed.rounded())))))
         case "sms":
             let message = try decoder.decode(RelaySMS.self, from: payload)
             guard valid(message) else { throw WireError.malformed }
@@ -930,18 +971,20 @@ final class RelayController: NSObject, ObservableObject {
             data.merge([message])
             if let count = sync?.liveMessages.count, count < 500 { sync?.liveMessages.append(message) }
             persist()
-            if isNew && message.direction == "in" && UIApplication.shared.applicationState != .active {
+            if isNew && message.direction == "in" {
                 let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? String(localized: "New message on Android") : message.body
-                alert(body, title: name(for: message.address), id: notificationID("message", message.id))
+                    ? ezText("New message on Android") : message.body
+                alert(body, title: name(for: message.address), id: notificationID("message", message.id),
+                      messageID: message.id)
             }
         case "call":
             let call = try decoder.decode(RelayCall.self, from: payload)
             guard validID(call.id), call.address.utf8.count <= 256, validDate(call.date) else {
                 throw WireError.malformed
             }
-            let isNew = !data.calls.contains { $0.id == call.id }
-            data.update(call)
+            let simulated = call.simulated == true
+            let isNew = simulated ? activeCall?.id != call.id : !data.calls.contains { $0.id == call.id }
+            if !simulated { data.update(call) }
             let wasRingingDuringRecovery = callReconnecting && activeCall?.id == call.id && activeCall?.state == .ringing
             if callReconnecting, activeCall?.id != call.id, call.state != .ended { expireCallRecovery() }
             if call.state == .ended {
@@ -949,7 +992,7 @@ final class RelayController: NSObject, ObservableObject {
             } else {
                 activeCall = call
             }
-            persist()
+            if !simulated { persist() }
             if wasRingingDuringRecovery, let id = UUID(uuidString: call.id) {
                 if call.state == .ringing {
                     calls.setReconnecting(id, name: name(for: call.address), reconnecting: false)
@@ -971,9 +1014,23 @@ final class RelayController: NSObject, ObservableObject {
             canDial = capabilities.dial
             canResumeCall = capabilities.resume_call == true
             supportsAudioRedirect = capabilities.audio_route == true
+            if let currentID = capabilities.active_call_id {
+                if let activeCall, activeCall.id != currentID {
+                    if callReconnecting { expireCallRecovery() }
+                    else {
+                        self.activeCall = nil
+                        if let id = UUID(uuidString: activeCall.id) {
+                            if audioCallID == id { stopAudio() }
+                            calls.ended(id, reason: .remoteEnded)
+                        }
+                    }
+                }
+                if data.endCalls(except: currentID) { persist() }
+            }
             if callReconnecting { requestCallRecovery() }
             audioMode = AudioMode(rawValue: capabilities.audio) ?? .off
             canSendSMS = capabilities.send_sms ?? false
+            receivedCapabilities = true
             if let texts = capabilities.texts, let contacts = capabilities.contacts {
                 if let previous = sharing, previous.texts != texts || previous.contacts != contacts {
                     needsSync = true
@@ -989,7 +1046,7 @@ final class RelayController: NSObject, ObservableObject {
             startAudio(try decoder.decode(AudioStart.self, from: payload))
         case "audio_stop":
             let notice = try decoder.decode(Notice.self, from: payload)
-            guard let id = UUID(uuidString: notice.id), id == audioCallID else { return }
+            guard let id = UUID(uuidString: notice.id), id == audioCallID || (audioCallID == nil && calls.has(id)) else { return }
             stopAudio()
             if let message = notice.message { feedback = String(message.prefix(200)) }
         case "call_resumed":
@@ -1005,6 +1062,7 @@ final class RelayController: NSObject, ObservableObject {
                 dialDeadlines.removeValue(forKey: id)?.invalidate()
                 if audioCallID == id { stopAudio() }
                 calls.ended(id, reason: .failed)
+                if data.endCalls(matching: notice.id) { persist() }
             }
             report(String((notice.message ?? "Android couldn’t complete the call action.").prefix(200)))
         case "sync_begin", "sms_batch", "contacts_batch", "sync_end", "error":
@@ -1026,10 +1084,10 @@ final class RelayController: NSObject, ObservableObject {
                 let alertID = notificationID("call", call.id)
                 calls.reportIncoming(id, address: call.address, name: name(for: call.address),
                                      simulated: call.simulated == true) { [weak self] in
-                    self?.alert("Incoming call on Android", id: alertID)
+                    self?.alert(ezText("Incoming call on Android"), id: alertID)
                 }
             } else if isNew {
-                alert("Incoming call on Android", id: notificationID("call", call.id))
+                alert(ezText("Incoming call on Android"), id: notificationID("call", call.id))
             }
         case .active:
             guard let id else { return }
@@ -1050,20 +1108,25 @@ final class RelayController: NSObject, ObservableObject {
               let key = Data(base64Encoded: start.key), key.count == 32 else { return }
         stopAudio()
         audioCallID = id
+        let streamID = audioStreamID
         armSyncDeadline()
-        let uplink = start.uplink && AVAudioApplication.shared.recordPermission == .granted
+        let maxWrite = peripheral?.maximumWriteValueLength(for: .withoutResponse) ?? 0
+        let payloadLimit = min(AudioSeal.maxPayload, maxWrite - AudioSeal.overhead)
+        let uplink = start.uplink && audioChannel != nil && payloadLimit > 0 &&
+            AVAudioApplication.shared.recordPermission == .granted
         do {
-            let audio = try CallAudio(key: key, uplink: uplink, routeChanged: { [weak self] in
+            let audio = try CallAudio(key: key, uplink: uplink, payloadLimit: payloadLimit,
+                                      pairFrames: start.audio_pairs == true, routeChanged: { [weak self] in
                 DispatchQueue.main.async {
-                    guard let self, self.audioCallID == id, self.calls.audioActive else { return }
+                    guard let self, self.audioStreamID == streamID, self.calls.audioActive else { return }
                     self.callAudioSession(false)
                     self.callAudioSession(true)
                 }
             }) { [weak self] packet in
-                let deadline = ContinuousClock.now.advanced(by: .milliseconds(80))
+                let deadline = ContinuousClock.now.advanced(by: .milliseconds(160))
                 DispatchQueue.main.async {
-                    guard let self, self.audioCallID == id, ContinuousClock.now < deadline else { return }
-                    if self.pendingAudioWrites.count == 3 { self.pendingAudioWrites.removeFirst() }
+                    guard let self, self.audioStreamID == streamID, ContinuousClock.now < deadline else { return }
+                    if self.pendingAudioWrites.count == 6 { self.pendingAudioWrites.removeFirst() }
                     self.pendingAudioWrites.append((packet, deadline))
                     self.flushAudioWrite()
                 }
@@ -1087,8 +1150,12 @@ final class RelayController: NSObject, ObservableObject {
         callAudio?.stop()
         callAudio = nil
         audioCallID = nil
+        audioStreamID = UUID()
         callAudioActive = false
         pendingAudioWrites.removeAll(keepingCapacity: true)
+        audioWriteTimer?.cancel()
+        audioWriteTimer = nil
+        nextAudioWriteAt = .now
         if wasStreaming { armSyncDeadline() }
     }
 
@@ -1099,11 +1166,22 @@ final class RelayController: NSObject, ObservableObject {
             pendingAudioWrites.removeAll(keepingCapacity: true)
             return
         }
+        let now = ContinuousClock.now
         let maxBytes = peripheral.maximumWriteValueLength(for: .withoutResponse)
-        while peripheral.canSendWriteWithoutResponse, !pendingAudioWrites.isEmpty {
-            let pending = pendingAudioWrites.removeFirst()
-            if ContinuousClock.now < pending.expires, pending.packet.count <= maxBytes {
-                peripheral.writeValue(pending.packet, for: audioChannel, type: .withoutResponse)
+        pendingAudioWrites.removeAll { $0.expires <= now || $0.packet.count > maxBytes }
+        guard !pendingAudioWrites.isEmpty, peripheral.canSendWriteWithoutResponse else { return }
+        // A microphone tap may deliver several 20 ms frames at once. Space them out before the sender's audio queue.
+        if now >= nextAudioWriteAt {
+            peripheral.writeValue(pendingAudioWrites.removeFirst().packet, for: audioChannel, type: .withoutResponse)
+            nextAudioWriteAt = max(nextAudioWriteAt + .milliseconds(20), now + .milliseconds(10))
+        }
+        if !pendingAudioWrites.isEmpty, audioWriteTimer == nil {
+            let deadline = nextAudioWriteAt
+            audioWriteTimer = Task { [weak self] in
+                do { try await Task.sleep(until: deadline, clock: .continuous) }
+                catch { return }
+                self?.audioWriteTimer = nil
+                self?.flushAudioWrite()
             }
         }
     }
@@ -1205,12 +1283,19 @@ final class RelayController: NSObject, ObservableObject {
         return value.lowercased()
     }
 
-    private func alert(_ body: String, title: String = "", id: String) {
+    private func alert(_ body: String, title: String = "", id: String, messageID: String? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        content.sound = .default
+        if messageID == nil || activeCall?.state != .active {
+            content.sound = .default
+        }
         content.threadIdentifier = "android-relay"
+        if let messageID {
+            content.categoryIdentifier = "relay-sms"
+            content.userInfo["messageID"] = messageID
+            content.threadIdentifier = "android-sms"
+        }
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         let logger = self.logger
         UNUserNotificationCenter.current().add(request) { error in
@@ -1224,6 +1309,12 @@ final class RelayController: NSObject, ObservableObject {
 
     private func notificationID(_ type: String, _ id: String) -> String {
         type + "-" + Data(SHA256.hash(data: Data(id.utf8))).base64EncodedString()
+    }
+
+    func messageForSMSNotification(_ identifier: String) -> RelaySMS? {
+        data.messages.first {
+            $0.id == identifier || notificationID("message", $0.id) == identifier
+        }
     }
 
     private func after(_ delay: TimeInterval, _ run: @escaping @MainActor (RelayController) -> Void) -> Timer {

@@ -21,33 +21,33 @@ struct AudioJitterCheck {
             precondition(samples.suffix(frame * 4).allSatisfy { $0 == 0 })
         }
         var buffer = Jitter()
-        push(&buffer, frames: 1)
+        push(&buffer, frames: 2)
         precondition(pull(&buffer).allSatisfy { $0 == 0 })
         push(&buffer, frames: 1)
-        let first = pull(&buffer, frames: 2)
+        let first = pull(&buffer, frames: 3)
         precondition(first[0] < 0.01 && first.last == 0.5 && buffer.underruns == 0)
 
         let gap = pull(&buffer)
         precondition(gap[0] > 0.49 && gap[239] == 0 && gap.last == 0)
-        push(&buffer, frames: 2)
+        push(&buffer, frames: 3)
         precondition(pull(&buffer).allSatisfy { $0 == 0 })
         push(&buffer, frames: 1)
-        precondition(pull(&buffer, frames: 3).last == 0.5 && buffer.underruns == 1)
+        precondition(pull(&buffer, frames: 4).last == 0.5 && buffer.underruns == 1)
 
         _ = pull(&buffer)
-        for _ in 0..<2 {
-            push(&buffer, frames: 3)
+        for target in [5, 6, 6] {
+            push(&buffer, frames: target - 1)
             precondition(pull(&buffer).allSatisfy { $0 == 0 })
             push(&buffer, frames: 1)
-            precondition(pull(&buffer, frames: 4).last == 0.5)
+            precondition(pull(&buffer, frames: target).last == 0.5)
             _ = pull(&buffer)
         }
-        precondition(buffer.underruns == 4)
+        precondition(buffer.underruns == 5)
 
         var burst = Jitter()
-        push(&burst, frames: 2)
+        push(&burst, frames: 3)
         _ = pull(&burst)
-        push(&burst, frames: 6, level: -0.5)
+        push(&burst, frames: 8, level: -0.5)
         let trimmed = pull(&burst, frames: 3)
         precondition(burst.trims == 1 && trimmed[0] > 0.49 && trimmed.last == -0.5)
         _ = pull(&burst)

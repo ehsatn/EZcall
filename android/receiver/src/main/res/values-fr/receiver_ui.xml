@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">1. Ouvrez le code QR sur le téléphone émetteur</string>
+    <string name="r_setup_sender_detail">Dans EasyCall, sur le téléphone Android qui contient votre SIM, choisissez Démarrer l’association.</string>
+    <string name="r_setup_receiver">2. Lisez le code QR ici</string>
+    <string name="r_setup_receiver_detail">Utilisez l’appareil photo ou choisissez une image du code. Autorisez l’accès aux appareils à proximité quand Android le demande.</string>
+    <string name="r_setup_optional">Configuration facultative</string>
+    <string name="r_setup_optional_detail">Choisissez comment recevoir les alertes, où les appels sonnent et si vous souhaitez utiliser le micro de ce téléphone.</string>
+    <string name="r_setup_later">Configurer plus tard</string>
+    <string name="r_reconnect_now">Reconnecter</string>
+    <string name="r_reconnect_detail">Laissez le Bluetooth activé et rapprochez les deux téléphones.</string>
+    <string name="r_enable_bluetooth">Activer le Bluetooth</string>
+    <string name="r_link_while_syncing">Restez près du téléphone émetteur jusqu’à la fin de la synchronisation.</string>
+    <string name="r_camera_unavailable">Impossible d’ouvrir l’appareil photo. Choisissez une image du code QR d’association.</string>
+    <string name="r_settings_connection">Connexion et synchronisation</string>
+    <string name="r_settings_alerts">Alertes</string>
+    <string name="r_settings_preferences">Préférences de l’application</string>
+    <string name="r_manage_notifications">Gérer les notifications</string>
+    <string name="r_settings_audio_test">Test audio des appels</string>
+    <string name="r_settings_audio_test_detail">Lancez le test sur le téléphone émetteur, puis répondez ici. Le test ne passe aucun appel via la SIM.</string>
+    <string name="r_audio_test_running">Test audio en cours</string>
+    <string name="r_settings_unavailable">Android n’a pas pu ouvrir ces paramètres.</string>
+    <string name="r_contact_actions_unavailable">Les appels et les SMS vers ce numéro sont indisponibles. Vérifiez le partage des appels et des SMS sur le téléphone émetteur.</string>
+    <string name="r_dial_zero">0, appuyez longuement pour saisir le signe plus</string>
+    <string name="r_compose_empty">Commencez une conversation</string>
+    <string name="r_compose_empty_detail">Saisissez un numéro ou sélectionnez un contact synchronisé.</string>
+    <string name="r_conversation_empty">Aucun message dans cette conversation</string>
+    <string name="r_conversation_empty_detail">Les messages échangés avec ce numéro apparaîtront ici.</string>
+    <string name="r_settings_microphone">Microphone</string>
+    <string name="r_permission_on">Autorisé</string>
+    <string name="r_permission_off">Désactivé</string>
+</resources>

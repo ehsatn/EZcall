@@ -9,6 +9,7 @@ struct InCallView: View {
     @State private var more = false
     @State private var keypad = false
     @State private var outputError: String?
+    @State private var heardTestAudio = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -37,11 +38,22 @@ struct InCallView: View {
                         if call.endFailed {
                             Text("Couldn’t end the call. Try again.")
                         } else if let outputError {
-                            Text(outputError)
+                            Text(ezText(outputError))
                         } else if let feedback = relay.feedback {
-                            Text(feedback)
+                            Text(ezText(feedback))
                         } else if call.connectedAt != nil && !relay.callAudioActive && !relay.callReconnecting {
                             Text("Audio on Android").foregroundStyle(.secondary)
+                        }
+                        if relay.activeCall?.test_audio_confirmation == true, call.connectedAt != nil {
+                            Text("Listen for the beeps, then speak to hear your voice back.")
+                                .multilineTextAlignment(.center)
+                            Button {
+                                heardTestAudio = relay.confirmTestAudio(call.id)
+                            } label: {
+                                Text(LocalizedStringKey(heardTestAudio ? "Playback confirmed" : "I heard the beeps"))
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(heardTestAudio || !relay.callAudioActive || relay.callReconnecting)
                         }
                         let size = min(78, max(44, (geometry.size.width - 80) / 3))
                         Grid(horizontalSpacing: 12, verticalSpacing: 20) {

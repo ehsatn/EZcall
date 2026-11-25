@@ -12,7 +12,7 @@ internal object Opus {
     const val SAMPLE_RATE = 48_000
     const val FRAME_SAMPLES = 960
     const val FRAME_BYTES = FRAME_SAMPLES * 2
-    const val BIT_RATE = 20_000
+    private const val MAX_BIT_RATE = 56_000
     const val PRE_SKIP = 312
     private const val WAIT_US = 10_000L
     private const val OUTPUT_WAIT_US = 2_000L
@@ -23,7 +23,10 @@ internal object Opus {
 
     fun nanos(value: Long): ByteArray = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array()
 
-    class Encoder {
+    // Leave room for variable-size Opus frames and keep each encrypted frame in one BLE operation.
+    fun bitRate(payloadLimit: Int) = minOf(MAX_BIT_RATE, payloadLimit * 400 * 2 / 3)
+
+    class Encoder(private val payloadLimit: Int) {
         private val codec = MediaCodec.createEncoderByType(MIME)
         private val info = MediaCodec.BufferInfo()
         private var timeUs = 0L
@@ -31,7 +34,7 @@ internal object Opus {
         init {
             try {
                 val format = MediaFormat.createAudioFormat(MIME, SAMPLE_RATE, 1).apply {
-                    setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE)
+                    setInteger(MediaFormat.KEY_BIT_RATE, bitRate(payloadLimit))
                     setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, FRAME_BYTES)
                 }
                 val modes = codec.codecInfo.getCapabilitiesForType(MIME).encoderCapabilities
@@ -56,7 +59,7 @@ internal object Opus {
                 codec.queueInputBuffer(index, 0, size, timeUs, 0)
                 timeUs += size / 2 * 1_000_000L / SAMPLE_RATE
             }
-            return drain(codec, info, if (index >= 0) OUTPUT_WAIT_US else 0)
+            return drain(codec, info, if (index >= 0) OUTPUT_WAIT_US else 0).filter { it.size <= payloadLimit }
         }
 
         fun release() {

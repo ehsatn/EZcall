@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">1. Apri il codice QR sul telefono mittente</string>
+    <string name="r_setup_sender_detail">In EasyCall, sul telefono Android con la tua SIM, scegli Avvia abbinamento.</string>
+    <string name="r_setup_receiver">2. Leggi qui il codice QR</string>
+    <string name="r_setup_receiver_detail">Usa la fotocamera o scegli un’immagine del codice. Consenti l’accesso ai dispositivi nelle vicinanze quando Android lo chiede.</string>
+    <string name="r_setup_optional">Configurazione facoltativa</string>
+    <string name="r_setup_optional_detail">Scegli come ricevere gli avvisi, dove squillano le chiamate e se usare il microfono di questo telefono.</string>
+    <string name="r_setup_later">Configura più tardi</string>
+    <string name="r_reconnect_now">Riconnetti</string>
+    <string name="r_reconnect_detail">Lascia il Bluetooth attivo e avvicina i due telefoni.</string>
+    <string name="r_enable_bluetooth">Attiva il Bluetooth</string>
+    <string name="r_link_while_syncing">Rimani vicino al telefono mittente fino al termine della sincronizzazione.</string>
+    <string name="r_camera_unavailable">Impossibile aprire la fotocamera. Scegli un’immagine del codice QR di abbinamento.</string>
+    <string name="r_settings_connection">Connessione e sincronizzazione</string>
+    <string name="r_settings_alerts">Avvisi</string>
+    <string name="r_settings_preferences">Preferenze dell’app</string>
+    <string name="r_manage_notifications">Gestisci notifiche</string>
+    <string name="r_settings_audio_test">Prova audio della chiamata</string>
+    <string name="r_settings_audio_test_detail">Avvia la prova sul telefono mittente e rispondi qui. La prova non effettua chiamate tramite SIM.</string>
+    <string name="r_audio_test_running">Prova audio in corso</string>
+    <string name="r_settings_unavailable">Android non ha potuto aprire queste impostazioni.</string>
+    <string name="r_contact_actions_unavailable">Al momento non puoi chiamare o inviare SMS a questo numero. Controlla la condivisione delle chiamate e degli SMS sul telefono mittente.</string>
+    <string name="r_dial_zero">0, tieni premuto per inserire il segno più</string>
+    <string name="r_compose_empty">Inizia una conversazione</string>
+    <string name="r_compose_empty_detail">Inserisci un numero o scegli un contatto sincronizzato.</string>
+    <string name="r_conversation_empty">Nessun messaggio in questa conversazione</string>
+    <string name="r_conversation_empty_detail">I messaggi scambiati con questo numero appariranno qui.</string>
+    <string name="r_settings_microphone">Microfono</string>
+    <string name="r_permission_on">Consentito</string>
+    <string name="r_permission_off">Disattivato</string>
+</resources>

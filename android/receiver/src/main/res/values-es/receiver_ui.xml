@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">1. Abre el código QR en el teléfono emisor</string>
+    <string name="r_setup_sender_detail">En EasyCall, en el teléfono Android con tu SIM, elige Iniciar vinculación.</string>
+    <string name="r_setup_receiver">2. Lee el código QR aquí</string>
+    <string name="r_setup_receiver_detail">Usa la cámara o elige una imagen del código. Permite el acceso a dispositivos cercanos cuando Android lo solicite.</string>
+    <string name="r_setup_optional">Configuración opcional</string>
+    <string name="r_setup_optional_detail">Elige cómo recibir avisos, dónde suenan las llamadas y si quieres usar el micrófono de este teléfono.</string>
+    <string name="r_setup_later">Configurar más tarde</string>
+    <string name="r_reconnect_now">Volver a conectar</string>
+    <string name="r_reconnect_detail">Deja Bluetooth activado y acerca los dos teléfonos.</string>
+    <string name="r_enable_bluetooth">Activar Bluetooth</string>
+    <string name="r_link_while_syncing">Mantente cerca del teléfono emisor hasta que termine la sincronización.</string>
+    <string name="r_camera_unavailable">No se pudo abrir la cámara. Elige una imagen del código QR de vinculación.</string>
+    <string name="r_settings_connection">Conexión y sincronización</string>
+    <string name="r_settings_alerts">Avisos</string>
+    <string name="r_settings_preferences">Preferencias de la aplicación</string>
+    <string name="r_manage_notifications">Gestionar notificaciones</string>
+    <string name="r_settings_audio_test">Prueba de audio de llamada</string>
+    <string name="r_settings_audio_test_detail">Inicia la prueba en el teléfono emisor y contesta aquí. La prueba no utiliza una llamada de la SIM.</string>
+    <string name="r_audio_test_running">Prueba de audio en curso</string>
+    <string name="r_settings_unavailable">Android no pudo abrir estos ajustes.</string>
+    <string name="r_contact_actions_unavailable">Ahora mismo no puedes llamar ni enviar un SMS a este número. Revisa la configuración de llamadas y SMS en el teléfono emisor.</string>
+    <string name="r_dial_zero">0, mantén pulsado para escribir el signo más</string>
+    <string name="r_compose_empty">Inicia una conversación</string>
+    <string name="r_compose_empty_detail">Escribe un número o selecciona un contacto sincronizado.</string>
+    <string name="r_conversation_empty">No hay mensajes en esta conversación</string>
+    <string name="r_conversation_empty_detail">Los mensajes con este número aparecerán aquí.</string>
+    <string name="r_settings_microphone">Micrófono</string>
+    <string name="r_permission_on">Permitido</string>
+    <string name="r_permission_off">Desactivado</string>
+</resources>

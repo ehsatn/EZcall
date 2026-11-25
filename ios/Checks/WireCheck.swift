@@ -75,6 +75,22 @@ struct WireCheck {
         var androidAudio = try AudioSeal(key: audioKey, outgoing: AudioSeal.androidToIPhone,
                                          incoming: AudioSeal.iPhoneToAndroid)
         try check(try androidAudio.seal(audioPayload) == hex(vector.a2cAudio0), "Audio directions use separate nonces")
+        let singleNotification = try androidAudio.seal(hex("0002aabbcc"))
+        var pairedAudio = try AudioSeal(key: audioKey)
+        let pair = pairedAudio.open(singleNotification).flatMap(AudioSeal.splitPair)
+        try check(pair?.0 == Data([0xaa, 0xbb]) && pair?.1 == Data([0xcc]), "iOS separates both 20 ms frames")
+        for malformed in ["0000aabb", "0002aabb", "0003aabb", "0001aa"] {
+            try check(try AudioSeal.splitPair(hex(malformed)) == nil, "iOS rejects an invalid audio pair")
+        }
+        let stale = RelayCall(id: "past", address: "1", date: 1, state: .active, simulated: nil, test_audio_confirmation: nil)
+        let current = RelayCall(id: "current", address: "2", date: 2, state: .active, simulated: nil, test_audio_confirmation: nil)
+        let message = RelaySMS(id: "sms", address: "1", body: "test", date: 1, direction: "in")
+        let contact = RelayContact(id: "contact", name: "Test", numbers: ["1"])
+        var data = RelayData(messages: [message], calls: [current, stale], contacts: [contact])
+        try check(data.endCalls(except: current.id) && data.calls.map(\.state) == [.active, .ended], "Only the current call remains active")
+        let saved = RelayData().retaining(data).retaining(data)
+        try check(saved.messages == [message] && saved.contacts == [contact] && saved.calls.map(\.state) == [.ended, .ended],
+                  "Saved data retains all categories and deduplicates exact records")
         print("iOS wire fixture passed")
     }
 

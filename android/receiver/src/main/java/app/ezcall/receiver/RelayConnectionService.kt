@@ -1,7 +1,9 @@
 package app.ezcall.receiver
 
+import app.ezcall.android.ezcallContext
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Bundle
 import android.telecom.Connection
@@ -11,6 +13,7 @@ import android.telecom.DisconnectCause
 import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
+import android.util.Log
 
 internal class RelayConnectionService : ConnectionService() {
     override fun onCreateIncomingConnection(manager: PhoneAccountHandle?, request: ConnectionRequest): Connection {
@@ -43,7 +46,8 @@ internal class RelayConnectionService : ConnectionService() {
         private fun failed() = Connection.createFailedConnection(DisconnectCause(DisconnectCause.ERROR))
 
         fun register(context: Context) = runCatching {
-            val account = PhoneAccount.builder(handle(context), context.getString(R.string.r_receiver_name))
+            val account = PhoneAccount.builder(handle(context), context.ezcallContext().getString(R.string.r_receiver_name))
+                .setIcon(Icon.createWithResource(context, R.mipmap.ic_launcher))
                 .setCapabilities(PhoneAccount.CAPABILITY_CALL_PROVIDER)
                 .setSupportedUriSchemes(listOf(PhoneAccount.SCHEME_TEL)).build()
             context.getSystemService(TelecomManager::class.java).registerPhoneAccount(account)
@@ -113,6 +117,7 @@ internal class RelayConnection(private val relay: ReceiverService, val id: Strin
     override fun onDisconnect() = end(DisconnectCause.LOCAL)
 
     private fun end(cause: Int) {
+        Log.i("EzcallReceiver", "Telecom requested call end, cause=$cause, state=$state")
         localEnd = cause
         relay.end(id)
         if (!ReceiverState.connected || !ReceiverState.canControlCurrentCall && !relay.isDialing(id)) close(cause)

@@ -33,7 +33,11 @@ During device testing, run **Test connection** on the receiving phone after each
 
 To check Doze on a test phone, leave both phones locked and use `adb shell dumpsys deviceidle force-idle`. Ring the Android SIM and check for the call on the receiving phone. Run `adb shell dumpsys deviceidle unforce` afterward. [Doze testing](https://developer.android.com/training/monitoring-device-state/doze-standby#testing_doze)
 
-In the debug build, open **Status** and tap **Simulate incoming call** once the receiving phone is connected. Allow the microphone in ezcall on the receiving phone before testing with the screen locked. Answer **ezcall test call**, then speak. Android sends the receiving phone’s microphone audio back across the same Bluetooth link, so you can hear your own voice. The test ends within 45 seconds after answering and uses no SIM call.
+Once the receiving phone is connected, open **Status** and tap **Test call audio**. Answer on the receiving phone, wait for the test tones, then speak. The tones test sender-to-receiver playback even with the receiver microphone off. The echo tests microphone capture and the return path. The test ends after 45 seconds and uses no SIM call.
+
+The sender’s **Test report** shows the outgoing test tone and the microphone audio it receives. Android Receiver shows its microphone and incoming audio. Speak after the tones. The apps report the test result automatically after Android plays the tone and returned microphone signal. **Audio test log → Copy log** is available on both phones during and after the test. Logcat uses the `EzcallTestCall` tag.
+
+For a failed test, copy both logs after the call ends and match their test IDs. Each phone measures elapsed time from its own start. Compare the queue, GATT submit and callback durations on each phone, then match the Sender’s `ECHO_QUEUED` packet sequences against the Receiver’s `DOWNLINK_AUTHENTICATED` ranges. `ECHO_PLAYED` means Android’s playback position advanced past non-silent PCM from the echo. It measures the Android playback path. Physical audibility depends on the output device and volume.
 
 ## Wireless debugging
 
@@ -44,18 +48,26 @@ In the debug build, open **Status** and tap **Simulate incoming call** once the 
 
 The app pairs with the Android debugger on the same phone using a key in Android Keystore. Call alerts, messages, and contacts use the existing Bluetooth connection with the receiving phone.
 
+If automatic discovery fails, enter the **connection port** from the main Wireless debugging screen in **Settings → Call audio → Enter connection port**. Sender verifies the endpoint before saving it and tries discovery again if the saved port stops working.
+
+## USB debugging
+
+On the Sender phone, enable **USB debugging** in Developer options and approve your computer when you connect the USB cable. Open **Settings → Call audio → Set up with USB** and keep the dialog open. Run the command it shows using Android Platform-Tools. If more than one USB device is attached, run `adb devices` and replace `-d` with `-s SERIAL` for the Sender. When the app reports the audio status, you can unplug the cable. Repeat USB setup if the audio component stops or the phone restarts.
+
 ## Call audio
 
 1. Enable **Call alerts**, then **Call control** to answer, decline, end and place calls from the receiving phone. Android asks for the phone and answer-calls permissions.
-2. Pair with Wireless debugging as above and keep Wireless debugging on. In **Settings → Call audio**, tap **Set up call audio**. ezcall starts a local audio component as the shell user and reports what this phone allows.
-3. **Two-way audio ready** means the caller hears the receiving phone’s microphone. **Listen only on this phone** means the receiving phone plays the caller, but Android doesn't let apps inject audio into calls. Talk on Android in that case.
+2. In **Settings → Call audio**, use **Set up with USB**, or pair with Wireless debugging and tap **Set up call audio**. ezcall starts a local audio component as the shell user and reports what this phone allows.
+3. **Two-way audio ready** means the receiver can take over both directions. **Audio stays on this phone** means the sender can still relay call controls while the conversation stays on the sender.
 4. Answer or place a call on the receiving phone. Calls answered on Android keep their audio on Android.
 
-On phones that support PSTN redirection, ezcall moves the call off the sender’s microphone and speaker once receiver audio is ready and the first microphone packet has reached Android. Android restores its local call route when receiver audio pauses, Bluetooth drops, or the call ends. Listen-only phones rely on Android’s microphone. Use current builds on both phones.
+On phones that support PSTN call audio access, ezcall streams audio when the receiver is ready. Android continues to manage the sender’s microphone and speaker throughout the call. The audio relay pauses or stops when the receiver pauses audio, Bluetooth drops, or the call ends. Use current builds on both phones.
+
+Enable **Floating call button** in the sender’s **Settings → Call audio** and allow ezcall to display over other apps. Tap **Use audio on this phone** while the call is ringing or using the receiver. The receiver closes its call screen and the SIM call continues on Android. The same action is available in the sender’s relay notification.
 
 After Android restarts, connect the sender to Wi-Fi, turn on **Developer options → Wireless debugging**, then return to ezcall and tap **Restart call audio**. You can close the settings screen. Only the initial pairing needs the code window. If discovery fails, tap **Enter connection port** and enter the port shown under **IP address and port** on the main Wireless debugging screen. ezcall also tries to restart the component when the relay starts and when a call needs audio, if Wireless debugging is on. Remove ezcall under **Paired devices** in Wireless debugging to stop future restarts.
 
-Audio capture depends on the phone. The component prefers Android 13's call audio interception devices, then the far-end voice source, then the mixed call source. With the mixed source the receiving phone also hears its own voice. Its log is `/data/local/tmp/ezcall_audio.log` and is readable with `adb shell cat`.
+Run the test call on Android 12, 12L, 13, 14, 15, 16 and 17 with each phone in the sender and receiver roles. Repeat with the receiver locked and with its microphone permission granted and denied. For real SIM audio, the sender requires Android 13 or later and device support for PSTN call audio access. On supported phones, place a call from the receiver and answer an incoming call there. Verify the caller and receiver can hear each other and that the sender's normal call audio stays available. Receive a multipart SMS on the sender during the call and check that it appears on the receiver without a gap in relayed speech. During a relayed call, stop Bluetooth and verify the SIM call continues on the sender. The component log is `/data/local/tmp/ezcall_audio.log` and is readable with `adb shell cat`.
 
 The installer and system control hard-restricted SMS and call-log permissions. For Play distribution, complete the sensitive-permission review for the cross-device synchronization use case. The app supports calls and contacts according to the individual grants available on the device. [Android permission reference](https://developer.android.com/reference/android/Manifest.permission) · [Google Play permission policy](https://support.google.com/googleplay/android-developer/answer/10208820)
 

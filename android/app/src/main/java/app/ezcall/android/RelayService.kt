@@ -14,9 +14,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.database.ContentObserver
+import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -26,6 +27,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.provider.Telephony
 import android.telecom.TelecomManager
 import android.telecom.VideoProfile
@@ -33,10 +35,19 @@ import android.telephony.SmsManager
 import android.telephony.TelephonyManager
 import android.util.Base64
 import android.util.Log
+import android.view.ContextThemeWrapper
+import android.view.Display
+import android.view.Gravity
+import android.view.WindowManager
 import androidx.core.content.ContextCompat
+import com.google.android.material.R as MaterialR
+import com.google.android.material.button.MaterialButton
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 internal data class RelayState(
     val running: Boolean = false,
@@ -56,6 +67,10 @@ internal data class RelayState(
         var refreshSharing: (() -> Unit)? = null
         var audio: CallAudio.Status? = null
             private set
+        var testCall: TestCallReport? = null
+            private set
+        var testLog: AudioTestLog? = null
+            private set
 
         fun set(state: RelayState) {
             current = state
@@ -65,6 +80,23 @@ internal data class RelayState(
         fun setAudio(status: CallAudio.Status?) {
             audio = status
             listener?.invoke(current)
+        }
+
+        fun reportTest(report: TestCallReport) {
+            if (testCall == report) return
+            testCall = report
+            testLog?.add(report.toString())
+            listener?.invoke(current)
+        }
+
+        fun startTest(id: String, context: Context) {
+            testCall = null
+            testLog = AudioTestLog("Sender", id, SystemClock::elapsedRealtime).apply { describeDevice(context) }
+            reportTest(TestCallReport())
+        }
+
+        fun testStage(stage: TestCallReport.Stage) {
+            testCall?.let { reportTest(it.copy(stage = stage)) }
         }
     }
 }
@@ -90,6 +122,9 @@ internal class RelayService : Service() {
     }
     private var simulatedCall: Call? = null
     @Volatile private var simulatedAudio: Wire.AudioSeal? = null
+    private var simulationCueUntil = 0L
+    private var simulationEchoStarted = false
+    private var simulationMicFrames: ArrayBlockingQueue<ByteArray>? = null
     private var forgetID: String? = null
     private var stopped = false
     private var retryDelay = INITIAL_RETRY_MS
@@ -97,8 +132,10 @@ internal class RelayService : Service() {
     private var callAudio: CallAudio? = null
     // The call that the receiving phone answered or placed. Only that call's audio moves to the receiving phone.
     private var relayedCall: String? = null
+    private var handsetAudioCall: String? = null
     private var audioCall: String? = null
     private var audioPublished = false
+    private var callAudioOverlay: Triple<WindowManager, MaterialButton, String>? = null
     private var recoveringCall: CallRecovery? = null
     private var answeringCall: String? = null
     private var pendingDial: Dial? = null
@@ -109,6 +146,12 @@ internal class RelayService : Service() {
 
         fun packet(simulated: Boolean = false) = PhoneData.packet("call", id).put("address", address)
             .put("date", date).put("state", state).put("simulated", simulated)
+            .apply {
+                if (simulated) {
+                    put("test_audio_confirmation", true)
+                    put("test_audio_diagnostics", true)
+                }
+            }
     }
 
     internal data class Dial(val id: String, val address: String, val deadline: Long) {
@@ -124,13 +167,15 @@ internal class RelayService : Service() {
             }
         }
 
-        override fun onAudioStarted(callId: String, key: ByteArray, uplink: Boolean) {
+        override fun onAudioStarted(callId: String, key: ByteArray, uplink: Boolean, pairFrames: Boolean) {
             handler.post {
                 try {
-                    if (stopped || audioCall != callId || recoveringCall != null) return@post
+                    if (stopped || audioCall != callId || relayedCall != callId ||
+                        handsetAudioCall == callId || recoveringCall != null) return@post
                     transport?.setAudioActive(true)
                     audioPublished = transport?.send(PhoneData.packet("audio_start", callId)
-                        .put("key", Base64.encodeToString(key, Base64.NO_WRAP)).put("uplink", uplink)) == true
+                        .put("key", Base64.encodeToString(key, Base64.NO_WRAP)).put("uplink", uplink)
+                        .apply { if (pairFrames) put("audio_pairs", true) }) == true
                 } finally {
                     key.fill(0)
                 }
@@ -146,13 +191,16 @@ internal class RelayService : Service() {
                 val stop = PhoneData.packet("audio_stop", callId)
                 if (reason != null) stop.put("message", reason)
                 transport?.send(stop)
+                if (!stopped) startVisible(RelayState.current.connected)
             }
         }
 
         override fun onAudioPacket(packet: ByteArray) {
             val expires = SystemClock.elapsedRealtime() + AudioBridge.LIVE_QUEUE_MS
             handler.post {
-                if (audioCall != null && SystemClock.elapsedRealtime() < expires) transport?.sendAudio(packet)
+                if (audioPublished && audioCall != handsetAudioCall && SystemClock.elapsedRealtime() < expires) {
+                    transport?.sendAudio(packet, expires)
+                }
             }
         }
     }
@@ -171,6 +219,14 @@ internal class RelayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (stopped) return START_NOT_STICKY
+        if (intent?.action == ACTION_HANDSET_AUDIO) {
+            if (secret == null) {
+                stopSelf(startId)
+                return START_NOT_STICKY
+            }
+            intent.data?.schemeSpecificPart?.let(::useHandsetAudio)
+            return START_STICKY
+        }
         if (secret != null) return START_STICKY
         try {
             require(hasBluetoothPermissions(this))
@@ -194,9 +250,7 @@ internal class RelayService : Service() {
             RelayState.refreshAudio = { callAudio?.connect(launch = false) }
             RelayState.refreshSharing = ::refreshSharing
             snapshotSharing = readableData()
-            if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-                RelayState.simulateCall = ::scheduleSimulatedCall
-            }
+            RelayState.simulateCall = ::scheduleSimulatedCall
             openTransport()
             if (enrolling) handler.postDelayed({
                 if (enrolling) stopWith("Pairing code expired. Start pairing again.")
@@ -244,7 +298,8 @@ internal class RelayService : Service() {
                     retryDelay = INITIAL_RETRY_MS
                     RelayState.set(RelayState(running = true, qr = if (enrolling) PairKey.qr(key) else null))
                 },
-                onError = ::recoverTransport
+                onError = ::recoverTransport,
+                testLog = { RelayState.testLog.takeIf { simulationPending || simulatedCall != null } }
             )
             transport = peripheral
             peripheral.start(this)
@@ -289,20 +344,93 @@ internal class RelayService : Service() {
 
     private fun startVisible(connected: Boolean = false) {
         val notifications = getSystemService(NotificationManager::class.java)
-        val channel = NotificationChannel("relay", ContextCompat.getContextForLanguage(this).getString(R.string.s_relay_channel), NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel("relay", ezcallContext().getString(R.string.s_relay_channel), NotificationManager.IMPORTANCE_LOW)
         channel.lockscreenVisibility = Notification.VISIBILITY_SECRET
         notifications.createNotificationChannel(channel)
         val main = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val control = callAudioControl(connected)
+        showCallAudioOverlay(control)
         val notification = Notification.Builder(this, channel.id).setSmallIcon(R.drawable.ic_ezcall_notification)
-            .setContentTitle(ContextCompat.getContextForLanguage(this).getString(R.string.ez_brand))
-            .setContentText(ContextCompat.getContextForLanguage(this).getString(if (connected) R.string.s_relay_notice_connected else R.string.s_relay_notice_wait))
+            .setContentTitle(ezcallContext().getString(R.string.ez_brand))
+            .setContentText(ezcallContext().getString(if (connected) R.string.s_relay_notice_connected else R.string.s_relay_notice_wait))
             .setContentIntent(main).setVisibility(Notification.VISIBILITY_SECRET)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+            .apply {
+                if (control != null) {
+                    val action = Intent(this@RelayService, RelayService::class.java).setAction(ACTION_HANDSET_AUDIO)
+                        .setData(Uri.fromParts("ezcall-audio", control.id, null))
+                    addAction(Notification.Action.Builder(null, callAudioText(R.string.s_use_handset_audio),
+                        PendingIntent.getService(this@RelayService, 0, action, PendingIntent.FLAG_IMMUTABLE)).build())
+                }
+            }
             .setOnlyAlertOnce(true).setOngoing(true).build()
         val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
             if (Build.VERSION.SDK_INT >= 34 && Feature.SMS.active(this))
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0
         startForeground(17, notification, types)
+    }
+
+    private fun callAudioControl(connected: Boolean) = call?.takeIf {
+        connected && handsetAudioCall != it.id && Feature.CONTROL.active(this) &&
+            (it.state == "active" && audioCall == it.id ||
+                it.state == "ringing" && CallAudio.Setup.enabled(this) && transport?.audioReady() == true)
+    }
+
+    private fun callAudioText(id: Int) = ezcallContext().getString(id)
+
+    private fun showCallAudioOverlay(control: Call?) {
+        val id = control?.id?.takeIf { Settings.canDrawOverlays(this) }
+        if (callAudioOverlay?.third == id) {
+            callAudioOverlay?.second?.let(::localizeCallAudioOverlay)
+            return
+        }
+        callAudioOverlay?.let { (window, button) -> runCatching { window.removeViewImmediate(button) } }
+        callAudioOverlay = null
+        if (id == null) return
+        runCatching {
+            val type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            val display = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+            val context = createDisplayContext(display).createWindowContext(type, null)
+            val window = context.getSystemService(WindowManager::class.java)
+            val density = context.resources.displayMetrics.density
+            val themed = ContextThemeWrapper(context, R.style.Theme_ezcall_CallAudioOverlay)
+            val button = MaterialButton(themed, null, MaterialR.attr.materialButtonStyle).apply {
+                localizeCallAudioOverlay(this)
+                setIconResource(R.drawable.ic_call)
+                iconSize = (18 * density).toInt()
+                iconPadding = (8 * density).toInt()
+                minimumHeight = (48 * density).toInt()
+                maxWidth = ((context.resources.configuration.screenWidthDp - 32) * density).toInt()
+                maxLines = 2
+                setOnClickListener { useHandsetAudio(id) }
+            }
+            val size = WindowManager.LayoutParams.WRAP_CONTENT
+            val params = WindowManager.LayoutParams(size, size, type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT).apply {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = (120 * density).toInt()
+            }
+            window.addView(button, params)
+            callAudioOverlay = Triple(window, button, id)
+        }.onFailure { Log.w("EzcallRelay", "Call audio overlay unavailable", it) }
+    }
+
+    private fun localizeCallAudioOverlay(button: MaterialButton) {
+        val localized = ezcallContext()
+        button.text = localized.getString(R.string.s_use_handset_audio)
+        button.layoutDirection = localized.resources.configuration.layoutDirection
+    }
+
+    private fun useHandsetAudio(id: String) {
+        val current = callAudioControl(RelayState.current.connected)?.takeIf { it.id == id } ?: return
+        handsetAudioCall = id
+        relayedCall = null
+        if (recoveringCall?.id == id) recoveringCall = null
+        audioPublished = false
+        transport?.setAudioActive(false)
+        if (audioCall == id) callAudio?.end(HANDSET_AUDIO_MESSAGE)
+        transport?.send(current.copy(state = "ended").packet())
+        startVisible(RelayState.current.connected)
     }
 
     private fun authenticated(next: ByteArray?): Boolean {
@@ -325,7 +453,8 @@ internal class RelayService : Service() {
         handler.post {
             if (activeGeneration != generation) return@post
             sendCapabilities()
-            if (Feature.CALLS.active(this)) call?.let { transport?.send(it.withCallerSharing(Feature.CALLER.active(this)).packet()) }
+            if (Feature.CALLS.active(this)) call?.takeUnless { it.id == handsetAudioCall }
+                ?.let { transport?.send(it.withCallerSharing(Feature.CALLER.active(this)).packet()) }
         }
         return true
     }
@@ -344,12 +473,16 @@ internal class RelayService : Service() {
         activeGeneration++
         busySync = false
         snapshotID = null
-        simulationPending = false
-        callAudio?.usePhoneAudioRedirect(false)
+        if (simulationPending) {
+            simulationPending = false
+            RelayState.testStage(TestCallReport.Stage.LINK_LOST)
+        }
+        callAudio?.setReceiverReady(false)
         val active = simulatedCall?.takeIf { it.state == "active" }
             ?: call?.takeIf { it.id == relayedCall && (it.state == "active" || it.id == answeringCall) }
         if (!stopped && forgetID == null && active != null) {
             if (recoveringCall?.id == active.id) return
+            if (active === simulatedCall) RelayState.testStage(TestCallReport.Stage.RECONNECTING)
             val recovery = CallRecovery(active.id, SystemClock.elapsedRealtime())
             recoveringCall = recovery
             handler.postDelayed({
@@ -362,7 +495,7 @@ internal class RelayService : Service() {
 
     private fun abandonRecovery() {
         recoveringCall = null
-        stopSimulation()
+        stopSimulation(TestCallReport.Stage.LINK_LOST)
         relayedCall = null
         stopAudio()
     }
@@ -375,6 +508,7 @@ internal class RelayService : Service() {
             .put("dial", calls && hasPermission(permission.CALL_PHONE))
             .put("resume_call", true)
             .put("audio_route", true)
+            .put("active_call_id", (simulatedCall ?: call?.takeUnless { it.id == handsetAudioCall || it.state == "ended" })?.id.orEmpty())
             .put("audio", (callAudio?.status ?: CallAudio.Status.NONE).wire)
             .put("texts", texts)
             .put("contacts", contacts)
@@ -457,7 +591,7 @@ internal class RelayService : Service() {
             cancelAnonymousRing()
             if (call != null) sendCall("ended", "")
             call = null
-        } else if (visible != null && visible !== current) {
+        } else if (visible != null && visible !== current && visible.id != handsetAudioCall) {
             transport?.send(visible.packet())
         }
         if (!Feature.CALLS.active(this) || !Feature.CONTROL.active(this)) {
@@ -490,9 +624,30 @@ internal class RelayService : Service() {
             "call_answer" -> answer(id.lowercase())
             "call_end" -> hangUp(id.lowercase())
             "call_resume" -> resumeCall(id.lowercase(), message.optString("audio") == "1")
+            "test_audio_heard" -> {
+                if (simulatedCall?.id == id && simulatedCall?.state == "active") {
+                    RelayState.testCall?.let { RelayState.reportTest(it.copy(playbackConfirmed = true)) }
+                }
+            }
+            "test_audio_status" -> {
+                if (simulatedCall?.id != id || simulatedCall?.state != "active") return
+                val name = message.optString("step")
+                val step = ReceiverTestStep.entries.firstOrNull { it.name == name } ?: return
+                val report = RelayState.testCall ?: return
+                if ((step == ReceiverTestStep.ECHO_HEARD || step == ReceiverTestStep.ECHO_PLAYED) && !report.echoQueued) return
+                val elapsed = message.optLong("elapsed_ms", -1L).takeIf { it in 0..120_000 }
+                val prefix = if (elapsed == null) "Receiver: " else "Receiver +$elapsed ms · "
+                RelayState.testLog?.record(step, prefix)
+                when (step) {
+                    ReceiverTestStep.CUE_PLAYED -> RelayState.reportTest(report.copy(playbackConfirmed = true))
+                    ReceiverTestStep.MIC_SIGNAL -> RelayState.reportTest(report.copy(microphoneSignal = true))
+                    ReceiverTestStep.ECHO_PLAYED, ReceiverTestStep.ECHO_HEARD -> RelayState.reportTest(report.copy(echoConfirmed = true))
+                    else -> Unit
+                }
+            }
             "audio_ready", "audio_paused" -> {
-                if (call?.id == id && relayedCall == id && audioCall == id && audioPublished) {
-                    callAudio?.usePhoneAudioRedirect(type == "audio_ready" && recoveringCall == null)
+                if (call?.id == id && relayedCall == id && audioCall == id && audioPublished && handsetAudioCall != id) {
+                    callAudio?.setReceiverReady(type == "audio_ready" && recoveringCall == null)
                 }
             }
             "call_dial" -> dial(id.lowercase(), message.opt("address") as? String ?: "")
@@ -508,6 +663,7 @@ internal class RelayService : Service() {
             return
         }
         val current = call
+        if (handsetAudioCall == id) return
         if (current?.id == id && answeringCall == id) {
             if (recoveringCall?.id == id) recoveringCall = null
             return
@@ -540,13 +696,17 @@ internal class RelayService : Service() {
 
     @Suppress("DEPRECATION")
     private fun hangUp(id: String) {
-        if (simulatedCall?.id == id) {
-            stopSimulation()
+        simulatedCall?.takeIf { it.id == id }?.let { test ->
+            RelayState.testLog?.add("Sender handling call_end: state=${test.state}")
+            if (test.state == "ringing") stopSimulation(TestCallReport.Stage.NO_ANSWER)
+            else stopSimulation()
             return
         }
         val dialing = pendingDial?.canCancel(id, call, SystemClock.elapsedRealtime()) == true
+        if (handsetAudioCall == id) return
         if (dialing) pendingDial = null
         if (call?.id != id && !dialing) return
+        Log.i("EzcallRelay", "Receiver requested cellular hangup")
         // The receiving phone has already ended its side. Audio returns to Android even if Telecom keeps the call.
         if (call?.id == id) {
             if (answeringCall == id) answeringCall = null
@@ -577,6 +737,7 @@ internal class RelayService : Service() {
         else if (simulation) simulatedAudio = null
         else if (audioCall == null) startAudio(id)
         else stopAudio()
+        if (simulation) RelayState.testStage(if (audio) TestCallReport.Stage.AUDIO else TestCallReport.Stage.NO_AUDIO)
     }
 
     private fun dial(id: String, address: String) {
@@ -631,9 +792,10 @@ internal class RelayService : Service() {
                     PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT)
                 })
                 outgoingSms = sending
-                if (runCatching {
+                val sent = runCatching {
                     manager.sendMultipartTextMessage(number, null, parts, callbacks, null)
-                }.isFailure) {
+                }.isSuccess
+                if (!sent) {
                     outgoingSms = null
                     callbacks.forEach(PendingIntent::cancel)
                     sendSmsResult(id, "Android could not send the SMS. Check the SIM and permissions.")
@@ -659,14 +821,22 @@ internal class RelayService : Service() {
 
     private fun startAudio(id: String) {
         val audio = callAudio ?: return
-        if (recoveringCall != null || audioCall == id || transport?.audioReady() != true) return
+        if (handsetAudioCall == id) {
+            transport?.send(PhoneData.packet("audio_stop", id).put("message", HANDSET_AUDIO_MESSAGE))
+            return
+        }
+        val channel = transport ?: return
+        val payloadLimit = channel.audioPayloadLimit()
+        if (recoveringCall != null || audioCall == id || !channel.audioReady() || payloadLimit == 0) return
         audioCall = id
         audioPublished = false
-        audio.begin(id)
+        audio.begin(id, payloadLimit, pairFrames = payloadLimit >= 96 && channel.supportsAudioPairs())
+        startVisible(RelayState.current.connected)
     }
 
     private fun stopAudio() {
         if (audioCall == null) return
+        transport?.setAudioActive(false)
         callAudio?.end()
     }
 
@@ -714,7 +884,7 @@ internal class RelayService : Service() {
         when (intent.getStringExtra(TelephonyManager.EXTRA_STATE)) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
                 pendingDial = null
-                stopSimulation()
+                stopSimulation(TestCallReport.Stage.PHONE_BUSY)
                 if (number.isNotBlank() || !Feature.CALLER.active(this)) {
                     cancelAnonymousRing()
                     sendCall("ringing", number)
@@ -728,7 +898,7 @@ internal class RelayService : Service() {
                 }
             }
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
-                stopSimulation()
+                stopSimulation(TestCallReport.Stage.PHONE_BUSY)
                 cancelAnonymousRing()
                 val dial = pendingDial?.takeIf { call == null && SystemClock.elapsedRealtime() < it.deadline }
                 pendingDial = null
@@ -745,11 +915,13 @@ internal class RelayService : Service() {
                 call?.takeIf { it.id == relayedCall }?.let { startAudio(it.id) }
             }
             TelephonyManager.EXTRA_STATE_IDLE -> {
+                if (call != null) Log.i("EzcallRelay", "Cellular call returned to idle")
                 cancelAnonymousRing()
                 answeringCall = null
                 stopAudio()
                 if (recoveringCall?.id == relayedCall) recoveringCall = null
                 relayedCall = null
+                handsetAudioCall = null
                 if (call != null) sendCall("ended", number)
                 call = null
             }
@@ -769,66 +941,221 @@ internal class RelayService : Service() {
             .withCallerSharing(Feature.CALLER.active(this))
         if (update == previous) return
         call = update
-        transport?.send(update.packet())
+        if (update.id != handsetAudioCall) transport?.send(update.packet())
+        startVisible(RelayState.current.connected)
     }
 
     private fun scheduleSimulatedCall(): Boolean {
         if (simulationPending || simulatedCall != null || call != null || !RelayState.current.connected) return false
         simulationPending = true
-        // The debug countdown must still run if the phone is locked immediately after tapping.
+        val id = UUID.randomUUID().toString()
+        RelayState.startTest(id, this)
+        val log = RelayState.testLog
+        log?.add("Test requested: 5000ms countdown before ringing")
+        if (log != null) transport?.describeTestLink(log)
+        // The countdown must still run if the phone is locked immediately after tapping.
         simulationWakeLock.acquire(8_000)
         val generation = activeGeneration
         handler.postDelayed({
             if (generation != activeGeneration) return@postDelayed
             simulationPending = false
-            val test = Call(UUID.randomUUID().toString(), "ezcall test call", System.currentTimeMillis(), "ringing")
-            if (stopped || call != null || transport?.send(test.packet(simulated = true)) != true) return@postDelayed
+            if (stopped) return@postDelayed
+            if (call != null) {
+                RelayState.testStage(TestCallReport.Stage.PHONE_BUSY)
+                return@postDelayed
+            }
+            val test = Call(id, "ezcall test call", System.currentTimeMillis(), "ringing")
+            if (transport?.send(test.packet(simulated = true), log) != true) {
+                RelayState.testStage(TestCallReport.Stage.SIGNAL_FAILED)
+                return@postDelayed
+            }
             simulatedCall = test
+            RelayState.testStage(TestCallReport.Stage.RINGING)
             handler.postDelayed({
-                if (simulatedCall === test) stopSimulation()
+                if (simulatedCall === test) {
+                    log?.add("Sender ringing timer expired (25000ms)")
+                    stopSimulation(TestCallReport.Stage.NO_ANSWER)
+                }
             }, 25_000)
         }, 5_000)
         return true
     }
 
     private fun answerSimulation(test: Call) {
-        val channel = transport ?: return
-        if (!channel.audioReady()) {
+        val log = RelayState.testLog
+        log?.add("Sender handling call_answer: state=${test.state}")
+        val channel = transport ?: run {
+            stopSimulation(TestCallReport.Stage.LINK_LOST)
+            return
+        }
+        val payloadLimit = channel.audioPayloadLimit()
+        if (log != null) channel.describeTestLink(log)
+        log?.add("Bluetooth audio payload limit: $payloadLimit bytes; ready=${channel.audioReady()}")
+        if (!channel.audioReady() || payloadLimit <= 0) {
             sendCallError(test.id, "Test audio needs the Bluetooth audio channel. Reconnect and try again.")
-            stopSimulation()
+            stopSimulation(TestCallReport.Stage.NO_AUDIO)
             return
         }
         val active = test.copy(state = "active")
         simulatedCall = active
         val key = PairKey.random()
-        simulatedAudio = Wire.AudioSeal(key, Wire.AudioSeal.ANDROID_TO_IPHONE, Wire.AudioSeal.IPHONE_TO_ANDROID)
+        val cipher = Wire.AudioSeal(key, Wire.AudioSeal.ANDROID_TO_IPHONE, Wire.AudioSeal.IPHONE_TO_ANDROID)
+        simulatedAudio = cipher
+        simulationEchoStarted = false
         val start = PhoneData.packet("audio_start", test.id)
             .put("key", Base64.encodeToString(key, Base64.NO_WRAP)).put("uplink", true)
+            .put("test_echo_sequence", TEST_ECHO_SEQUENCE)
         key.fill(0)
         channel.setAudioActive(true)
-        channel.send(active.packet(simulated = true))
-        channel.send(start)
-        handler.postDelayed({ if (simulatedCall === active) stopSimulation() }, 45_000)
+        if (!channel.send(active.packet(simulated = true)) || !channel.send(start)) {
+            stopSimulation(TestCallReport.Stage.SIGNAL_FAILED)
+            return
+        }
+        RelayState.testCall?.let {
+            RelayState.reportTest(it.copy(stage = TestCallReport.Stage.AUDIO, audioStarted = true))
+        }
+        if (log != null) watchTestMicrophone(cipher, log.remoteWaveform)
+        playSimulationCue(cipher, payloadLimit)
+        handler.postDelayed({
+            if (simulatedCall === active) {
+                log?.add("Sender active test timer expired (45000ms)")
+                stopSimulation()
+            }
+        }, 45_000)
+    }
+
+    private fun playSimulationCue(cipher: Wire.AudioSeal, payloadLimit: Int) {
+        val log = RelayState.testLog
+        val firstFrameAt = SystemClock.elapsedRealtime() + 500
+        simulationCueUntil = firstFrameAt + SimulationTone.INTRO_FRAMES * 20L
+        log?.add("Test cue scheduled: first frame in 500ms, microphone echo opens after ${500 + SimulationTone.INTRO_FRAMES * 20}ms")
+        thread(name = "ezcall-test-audio", isDaemon = true) {
+            runCatching {
+                val encoder = Opus.Encoder(payloadLimit)
+                try {
+                    repeat(SimulationTone.INTRO_FRAMES) { index ->
+                        val target = firstFrameAt + index * 20L
+                        SystemClock.sleep((target - SystemClock.elapsedRealtime()).coerceAtLeast(0))
+                        if (simulatedAudio !== cipher) return@thread
+                        val expires = target + AudioBridge.LIVE_QUEUE_MS
+                        val pcm = SimulationTone.frame(index)
+                        log?.localWaveform?.add(PcmLevel.read(pcm))
+                        val packets = encoder.encode(pcm)
+                        if (packets.isNotEmpty()) handler.post {
+                            if (simulatedAudio !== cipher || simulationEchoStarted) return@post
+                            log?.count(AudioTestMetric.CUE_ENCODED, packets.size)
+                            if (SystemClock.elapsedRealtime() >= expires) {
+                                log?.count(AudioTestMetric.CUE_STALE, packets.size)
+                                return@post
+                            }
+                            for (packet in packets) {
+                                val sealed = cipher.seal(packet)
+                                if (transport?.sendAudio(sealed, expires) == true) {
+                                    log?.count(AudioTestMetric.CUE_QUEUED)
+                                    log?.track(AudioTestMetric.CUE_QUEUED, Wire.AudioSeal.sequence(sealed))
+                                    val report = RelayState.testCall
+                                    if (report?.cue == TestCallReport.Cue.WAITING) {
+                                        log?.add("Sender first test cue packet queued")
+                                        RelayState.reportTest(report.copy(cue = TestCallReport.Cue.QUEUED))
+                                    }
+                                } else if (log?.count(AudioTestMetric.CUE_QUEUE_REJECTED) == 1) {
+                                    log.add("Sender could not queue a test cue packet")
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    encoder.release()
+                }
+            }.onFailure { error ->
+                Log.w("EzcallRelay", "Could not encode test audio", error)
+                handler.post {
+                    if (simulatedAudio === cipher) {
+                        simulationCueUntil = 0
+                        log?.add("Sender cue encoding exception: ${error.javaClass.simpleName}")
+                        RelayState.testCall?.let { RelayState.reportTest(it.copy(cue = TestCallReport.Cue.FAILED)) }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun watchTestMicrophone(cipher: Wire.AudioSeal, waveform: AudioWaveform) {
+        val frames = ArrayBlockingQueue<ByteArray>(5)
+        simulationMicFrames = frames
+        thread(name = "ezcall-test-mic-waveform", isDaemon = true) {
+            runCatching {
+                val decoder = Opus.Decoder()
+                try {
+                    while (simulatedAudio === cipher) {
+                        val frame = frames.poll(100, TimeUnit.MILLISECONDS) ?: continue
+                        decoder.decode(frame)?.let { waveform.add(PcmLevel.read(it)) }
+                    }
+                } finally {
+                    decoder.release()
+                }
+            }.onFailure { Log.w("EzcallTestCall", "Could not decode the microphone waveform", it) }
+        }
     }
 
     private fun receiveAudio(packet: ByteArray) {
         val loopback = simulatedAudio
         if (loopback == null) {
             callAudio?.receive(packet)
-        } else handler.post {
-            if (simulatedAudio === loopback) {
-                loopback.open(packet)?.let { transport?.sendAudio(loopback.seal(it)) }
+        } else {
+            val receivedAt = SystemClock.elapsedRealtime()
+            handler.post {
+                if (simulatedAudio !== loopback) return@post
+                val log = RelayState.testLog
+                val now = SystemClock.elapsedRealtime()
+                if (log?.count(AudioTestMetric.UPLINK_RECEIVED) == 1) {
+                    log.add("Sender first microphone packet reached GATT: bytes=${packet.size} handler=${now - receivedAt}ms")
+                }
+                val frame = loopback.open(packet) ?: run {
+                    log?.count(AudioTestMetric.UPLINK_REJECTED)
+                    log?.record(ReceiverTestStep.UPLINK_REJECTED)
+                    return@post
+                }
+                if (log?.count(AudioTestMetric.UPLINK_AUTHENTICATED) == 1) log.add("Sender first microphone packet authenticated")
+                log?.track(AudioTestMetric.UPLINK_AUTHENTICATED, Wire.AudioSeal.sequence(packet))
+                simulationMicFrames?.let { frames ->
+                    if (!frames.offer(frame)) {
+                        frames.poll()
+                        frames.offer(frame)
+                    }
+                }
+                if (now < simulationCueUntil) {
+                    if (log?.count(AudioTestMetric.UPLINK_BEFORE_ECHO_WINDOW) == 1) log.add("Sender is playing the test cue; microphone echo is held until the cue finishes")
+                    return@post
+                }
+                if (!simulationEchoStarted) {
+                    // The authenticated sequence distinguishes test tones from returned microphone audio.
+                    loopback.advanceOutgoingSequence(TEST_ECHO_SEQUENCE)
+                    simulationEchoStarted = true
+                }
+                val echo = loopback.seal(frame)
+                val queued = transport?.sendAudio(echo) == true
+                if (queued) log?.track(AudioTestMetric.ECHO_QUEUED, Wire.AudioSeal.sequence(echo))
+                val metric = if (queued) AudioTestMetric.ECHO_QUEUED else AudioTestMetric.ECHO_QUEUE_REJECTED
+                if (log?.count(metric) == 1) log.add(if (queued) "Sender first microphone echo queued" else "Sender could not queue a microphone echo")
+                RelayState.testCall?.let { RelayState.reportTest(it.receivedMicrophone(queued)) }
             }
         }
     }
 
-    private fun stopSimulation() {
+    private fun stopSimulation(stage: TestCallReport.Stage = TestCallReport.Stage.FINISHED) {
         val test = simulatedCall ?: return
-        simulatedCall = null
+        val log = RelayState.testLog
+        log?.add("Sender stopping simulated call: stage=$stage previousState=${test.state}")
         if (recoveringCall?.id == test.id) recoveringCall = null
         if (simulatedAudio != null) transport?.setAudioActive(false)
         simulatedAudio = null
-        transport?.send(test.copy(state = "ended").packet(simulated = true))
+        simulationMicFrames = null
+        simulatedCall = null
+        transport?.send(test.copy(state = "ended").packet(simulated = true), log)
+        if (stage != TestCallReport.Stage.FINISHED || RelayState.testCall?.stage != TestCallReport.Stage.NO_AUDIO) {
+            RelayState.testStage(stage)
+        }
     }
 
     private fun forgetPhone() {
@@ -863,6 +1190,7 @@ internal class RelayService : Service() {
 
     override fun onDestroy() {
         stopped = true
+        showCallAudioOverlay(null)
         RelayState.cancelPairing = null
         RelayState.forget = null
         RelayState.simulateCall = null
@@ -886,6 +1214,8 @@ internal class RelayService : Service() {
     companion object {
         const val ACTION_START = "app.ezcall.android.START_RELAY"
         private const val ACTION_SMS_SENT = "app.ezcall.android.SMS_SENT"
+        private const val ACTION_HANDSET_AUDIO = "app.ezcall.android.HANDSET_AUDIO"
+        private const val HANDSET_AUDIO_MESSAGE = "Call audio is on the sending phone."
         private const val INITIAL_RETRY_MS = 1_000L
         private val DIALABLE = Regex("[+]?[0-9*#][0-9*#,;]{0,63}")
         private val SMS_ADDRESS = Regex("[+]?[0-9]{7,15}")

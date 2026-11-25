@@ -1,4 +1,6 @@
 <resources>
+    <string name="r_audio_codec_failed">Android couldn’t start the Opus codec. Continue on the sending phone.</string>
+    <string name="r_audio_setup_needed">Set up call audio in ezcall on the sending phone.</string>
     <string name="r_phone_account">Calls in the Phone app</string>
     <string name="r_phone_account_detail">Enable the ezcall Receiver calling account</string>
     <string name="r_phone_account_help">Open the Phone app’s calling account settings and enable ezcall Receiver if listed.</string>
@@ -32,6 +34,7 @@
     <string name="r_answer">Answer</string>
     <string name="r_mute">Mute</string>
     <string name="r_unmute">Unmute</string>
+    <string name="r_enable_mic">Enable mic</string>
     <string name="r_decline">Decline</string>
     <string name="r_end_call">End call</string>
     <string name="r_reply">Reply</string>
@@ -137,5 +140,8 @@
     <string name="r_sms_sim_error">Android could not send the SMS. Check the SIM and permissions.</string>
     <string name="r_sms_check_sender">Android could not confirm the SMS. Check Android before retrying.</string>
     <string name="r_sync_peer_failed">Sync could not finish. Try again.</string>
-    <string name="r_receiver_name">ezcall Receiver</string>
+    <string name="r_receiver_name">EasyCall Receiver</string>
+    <string name="r_audio_test_instructions">Listen for the beeps, then speak to hear your voice back.</string>
+    <string name="r_audio_test_heard">I heard the beeps</string>
+    <string name="r_audio_test_confirmed">Playback confirmed</string>
 </resources>

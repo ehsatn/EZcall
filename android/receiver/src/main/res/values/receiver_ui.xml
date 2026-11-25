@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">1. Open the QR code on the sending phone</string>
+    <string name="r_setup_sender_detail">In EasyCall on the Android phone with your SIM, choose Start pairing.</string>
+    <string name="r_setup_receiver">2. Read the QR code here</string>
+    <string name="r_setup_receiver_detail">Use the camera or choose a QR image. Allow Nearby devices when Android asks.</string>
+    <string name="r_setup_optional">Optional setup</string>
+    <string name="r_setup_optional_detail">Choose how to get alerts, where calls ring, and whether to use this phone’s microphone.</string>
+    <string name="r_setup_later">Set up later</string>
+    <string name="r_reconnect_now">Reconnect</string>
+    <string name="r_reconnect_detail">Keep Bluetooth on and bring both phones close together.</string>
+    <string name="r_enable_bluetooth">Turn on Bluetooth</string>
+    <string name="r_link_while_syncing">Stay near the sending phone until sync finishes.</string>
+    <string name="r_camera_unavailable">The camera couldn’t open. Choose an image of the pairing QR code.</string>
+    <string name="r_settings_connection">Connection and sync</string>
+    <string name="r_settings_alerts">Alerts</string>
+    <string name="r_settings_preferences">App preferences</string>
+    <string name="r_manage_notifications">Manage notifications</string>
+    <string name="r_settings_audio_test">Call audio test</string>
+    <string name="r_settings_audio_test_detail">Start the test on the sending phone, then answer it here. The test uses no SIM call.</string>
+    <string name="r_audio_test_running">Audio test in progress</string>
+    <string name="r_settings_unavailable">Android couldn’t open these settings.</string>
+    <string name="r_contact_actions_unavailable">Calling or sending SMS to this number is currently unavailable. Check call and SMS sharing on the sending phone.</string>
+    <string name="r_dial_zero">0, touch and hold for plus</string>
+    <string name="r_compose_empty">Start a conversation</string>
+    <string name="r_compose_empty_detail">Enter a phone number or choose a synced contact.</string>
+    <string name="r_conversation_empty">No messages in this conversation</string>
+    <string name="r_conversation_empty_detail">Messages with this number will appear here.</string>
+    <string name="r_settings_microphone">Microphone</string>
+    <string name="r_permission_on">Allowed</string>
+    <string name="r_permission_off">Off</string>
+</resources>

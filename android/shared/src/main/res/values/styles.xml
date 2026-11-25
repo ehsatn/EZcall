@@ -27,9 +27,11 @@
         <item name="colorOnSurface">@color/ezcall_on_surface</item>
         <item name="colorSurfaceVariant">@color/ezcall_surface_container</item>
         <item name="colorOnSurfaceVariant">@color/ezcall_on_surface_variant</item>
+        <item name="colorSurfaceContainerLowest">@color/ezcall_surface</item>
+        <item name="colorSurfaceContainerLow">@color/ezcall_surface_container_low</item>
         <item name="colorSurfaceContainer">@color/ezcall_surface_container</item>
-        <item name="colorSurfaceContainerHigh">@color/ezcall_surface_container</item>
-        <item name="colorSurfaceContainerHighest">@color/ezcall_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/ezcall_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/ezcall_surface_container_highest</item>
         <item name="colorOutline">@color/ezcall_outline</item>
         <item name="colorOutlineVariant">@color/ezcall_outline_variant</item>
         <item name="android:colorBackground">@color/ezcall_background</item>
@@ -38,8 +40,13 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">@bool/ezcall_light_system_bars</item>
         <item name="android:windowLightNavigationBar">@bool/ezcall_light_system_bars</item>
+        <item name="bottomNavigationStyle">@style/Widget.ezcall.BottomNavigation</item>
     </style>
     <style name="ThemeOverlay.ezcall.TextButton" parent="">
         <item name="materialButtonStyle">@style/Widget.Material3.Button.TextButton</item>
+    </style>
+    <style name="Widget.ezcall.BottomNavigation" parent="Widget.Material3.BottomNavigationView">
+        <item name="backgroundTint">?attr/colorSurfaceContainer</item>
+        <item name="elevation">0dp</item>
     </style>
 </resources>

@@ -6,7 +6,9 @@ import android.util.AtomicFile
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal data class ReceivedCall(val id: String, val address: String, val date: Long, val state: String, val simulated: Boolean)
+internal data class ReceivedCall(val id: String, val address: String, val date: Long, val state: String,
+                                 val simulated: Boolean, val testAudioConfirmation: Boolean = false,
+                                 val testAudioDiagnostics: Boolean = false)
 internal data class ReceivedSms(val id: String, val address: String, val body: String, val date: Long, val direction: String)
 internal data class ReceivedContact(val id: String, val name: String, val numbers: List<String>)
 
@@ -70,7 +72,8 @@ internal data class ReceiverData(
 internal fun JSONObject.call(): ReceivedCall? {
     val id = optString("id").takeIf { it.length in 1..128 } ?: return null
     val state = optString("state").takeIf { it in setOf("ringing", "active", "ended") } ?: return null
-    return ReceivedCall(id, optString("address").take(128), optLong("date"), state, optBoolean("simulated"))
+    return ReceivedCall(id, optString("address").take(128), optLong("date"), state, optBoolean("simulated"),
+        optBoolean("test_audio_confirmation"), optBoolean("test_audio_diagnostics"))
 }
 
 internal fun JSONObject.sms(): ReceivedSms? {

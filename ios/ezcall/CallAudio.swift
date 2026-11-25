@@ -11,7 +11,6 @@ enum CallAudioError: Error {
 final class CallAudio: @unchecked Sendable {
     static let sampleRate = 48_000.0
     static let frameLength = 960
-    private static let bitRate = 20_000
     private static let logger = Logger(subsystem: "app.xcall.relay", category: "CallAudio")
 
     let uplink: Bool
@@ -21,6 +20,8 @@ final class CallAudio: @unchecked Sendable {
     private let decoder: AVAudioConverter
     private let encoder: AVAudioConverter?
     private let maxPacket: Int
+    private let payloadLimit: Int
+    private let pairFrames: Bool
     private let playback: OSAllocatedUnfairLock<Jitter>
     private let tones = OSAllocatedUnfairLock(initialState: ArraySlice<Float>())
     private let mute = OSAllocatedUnfairLock(initialState: false)
@@ -44,7 +45,7 @@ final class CallAudio: @unchecked Sendable {
         }
     }
 
-    init(key: Data, uplink: Bool, routeChanged: @escaping @Sendable () -> Void,
+    init(key: Data, uplink: Bool, payloadLimit: Int, pairFrames: Bool, routeChanged: @escaping @Sendable () -> Void,
          send: @escaping @Sendable (Data) -> Void) throws {
         guard let pcm = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Self.sampleRate,
                                       channels: 1, interleaved: false) else { throw CallAudioError.format }
@@ -57,10 +58,10 @@ final class CallAudio: @unchecked Sendable {
         var encoder: AVAudioConverter?
         if uplink {
             guard let made = AVAudioConverter(from: pcm, to: opus) else { throw CallAudioError.codec }
-            if let rates = made.applicableEncodeBitRates?.map(\.intValue),
-               let best = rates.min(by: { abs($0 - Self.bitRate) < abs($1 - Self.bitRate) }) {
-                made.bitRate = best
-            }
+            // Leave room for variable-size frames within one encrypted Bluetooth write.
+            let target = min(56_000, payloadLimit * 400 * 2 / 3)
+            let rates = made.applicableEncodeBitRates?.map(\.intValue) ?? []
+            made.bitRate = rates.filter { $0 <= target }.max() ?? target
             encoder = made
         }
         let playback = OSAllocatedUnfairLock(uncheckedState: Jitter())
@@ -69,6 +70,8 @@ final class CallAudio: @unchecked Sendable {
         self.decoder = decoder
         self.encoder = encoder
         self.maxPacket = max(encoder?.maximumOutputPacketSize ?? 0, 1_500)
+        self.payloadLimit = payloadLimit
+        self.pairFrames = pairFrames
         self.uplink = uplink
         self.playback = playback
         self.routeChanged = routeChanged
@@ -148,9 +151,19 @@ final class CallAudio: @unchecked Sendable {
         pending.removeAll(keepingCapacity: true)
     }
 
-    /// Opens one packet from Android and queues its audio. Called on the main thread.
+    /// Opens one notification from Android and queues its audio. Called on the main thread.
     func receive(_ packet: Data) {
         guard let payload = receiver.open(packet) else { return }
+        if pairFrames {
+            guard let (first, second) = AudioSeal.splitPair(payload) else { return }
+            decode(first)
+            decode(second)
+        } else {
+            decode(payload)
+        }
+    }
+
+    private func decode(_ payload: Data) {
         let input = AVAudioCompressedBuffer(format: opus, packetCapacity: 1, maximumPacketSize: payload.count)
         payload.withUnsafeBytes { bytes in
             guard let base = bytes.baseAddress else { return }
@@ -242,7 +255,7 @@ final class CallAudio: @unchecked Sendable {
         let description = output.packetDescriptions?.pointee
         let size = description.map { Int($0.mDataByteSize) } ?? Int(output.byteLength)
         let start = Int(description?.mStartOffset ?? 0)
-        guard (1...AudioSeal.maxPayload).contains(size), start >= 0, start <= Int(output.byteLength) - size else { return nil }
+        guard size > 0, size <= payloadLimit, start >= 0, start <= Int(output.byteLength) - size else { return nil }
         return Data(bytes: output.data.advanced(by: start), count: size)
     }
 
@@ -265,9 +278,9 @@ final class CallAudio: @unchecked Sendable {
 
 // Jitter buffer between Bluetooth arrivals and the audio render thread.
 struct Jitter {
-    private static let minimum = CallAudio.frameLength * 2
-    private static let maximum = CallAudio.frameLength * 4
-    private static let limit = CallAudio.frameLength * 6
+    private static let minimum = CallAudio.frameLength * 3
+    private static let maximum = CallAudio.frameLength * 6
+    private static let limit = CallAudio.frameLength * 9
     private static let fadeLength = 240
 
     private var samples = [Float]()
@@ -291,7 +304,7 @@ struct Jitter {
         samples.append(contentsOf: frames)
         // A burst after a Bluetooth stall or clock drift would otherwise grow the delay.
         if count > Self.limit {
-            head = samples.count - max(start, CallAudio.frameLength * 3)
+            head = samples.count - start
             needsFade = true
             trims += 1
         }

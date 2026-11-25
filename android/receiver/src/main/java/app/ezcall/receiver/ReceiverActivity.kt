@@ -2,7 +2,10 @@ package app.ezcall.receiver
 
 import android.Manifest.permission
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.content.pm.PackageManager
@@ -33,19 +36,25 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.ScrollView
-import android.widget.Space
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
+import androidx.core.text.BidiFormatter
+import androidx.core.text.TextDirectionHeuristicsCompat
 import androidx.core.text.buildSpannedString
 import androidx.core.widget.doAfterTextChanged
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.isVisible
 import app.ezcall.android.PairKey
 import app.ezcall.android.PairingArtwork
+import app.ezcall.android.ReceiverTestStep
+import app.ezcall.android.AudioTestLog
+import app.ezcall.android.AudioWaveformView
 import app.ezcall.android.languageName
 import app.ezcall.android.showEzcallLanguage
 import com.google.android.material.R as MaterialR
@@ -71,10 +80,35 @@ import kotlin.concurrent.thread
 
 internal class IncomingCallActivity : ReceiverActivity()
 
+internal fun Context.receiverNumberDisplay(number: String) =
+    BidiFormatter.getInstance(resources.configuration.locales[0]).unicodeWrap(number, TextDirectionHeuristicsCompat.LTR)
+
+internal fun receiverConnectionAction(nearbyGranted: Boolean, bluetoothEnabled: Boolean, connected: Boolean, running: Boolean) = when {
+    !nearbyGranted -> R.string.r_allow_nearby
+    !bluetoothEnabled -> R.string.r_enable_bluetooth
+    !connected && !running -> R.string.r_reconnect_now
+    else -> 0
+}
+
 open class ReceiverActivity : AppCompatActivity() {
     private val state get() = ReceiverState
     private lateinit var pairKey: PairKey
     private lateinit var dashboard: LinearLayout
+    private lateinit var toolbar: MaterialToolbar
+    private lateinit var toolbarBrand: View
+    private lateinit var settingsScreen: ScrollView
+    private lateinit var settingsBack: OnBackPressedCallback
+    private lateinit var settingsLinkTitle: TextView
+    private lateinit var settingsLinkDetail: TextView
+    private lateinit var settingsRecovery: SettingRow
+    private lateinit var pairedSettings: LinearLayout
+    private lateinit var forgetSettings: View
+    private lateinit var syncSetting: SettingRow
+    private lateinit var testSetting: SettingRow
+    private lateinit var notificationSetting: SettingRow
+    private var lockScreenSetting: SettingRow? = null
+    private lateinit var microphoneSetting: SettingRow
+    private lateinit var audioTestSetting: SettingRow
     private lateinit var pairingScreen: ScrollView
     private lateinit var pairingFeedback: MaterialCardView
     private lateinit var pairingStatus: TextView
@@ -82,12 +116,15 @@ open class ReceiverActivity : AppCompatActivity() {
     private lateinit var scanButton: MaterialButton
     private lateinit var photoButton: MaterialButton
     private lateinit var cancelButton: MaterialButton
+    private lateinit var pairingRecovery: MaterialButton
     private lateinit var connection: MaterialCardView
     private lateinit var linkBadge: FrameLayout
     private lateinit var linkTitle: TextView
     private lateinit var linkDetail: TextView
+    private lateinit var linkProgress: LinearProgressIndicator
+    private lateinit var linkAction: MaterialButton
     private lateinit var syncButton: ImageButton
-    private lateinit var fullScreenAccess: MaterialButton
+    private lateinit var setupNext: MaterialCardView
     private lateinit var callPanel: MaterialCardView
     private lateinit var sectionTitle: TextView
     private lateinit var createAction: ExtendedFloatingActionButton
@@ -96,20 +133,28 @@ open class ReceiverActivity : AppCompatActivity() {
     private lateinit var emptyIcon: ImageView
     private lateinit var emptyTitle: TextView
     private lateinit var emptyDetail: TextView
+    private lateinit var featureStatus: TextView
     private lateinit var adapter: Rows
     private var secret: ByteArray? = null
     private var cameraFile: File? = null
     private var micAction: ((Boolean) -> Unit)? = null
+    private var dialDialog: BottomSheetDialog? = null
     private var activeTab = Destination.CALLS
     private val scrollPositions = IntArray(Destination.entries.size)
     private val scrollOffsets = IntArray(Destination.entries.size)
     private var statusOverride: String? = null
+    private var nearbyDenied = false
+    private var notificationsDenied = false
+    private var microphoneDenied = false
+    private var awaitingPair = false
+    private var offerSetup = false
     private var openingQR = false
     private var listData: ReceiverData? = null
     private var listAttempts: List<SmsAttempt>? = null
     private var renderedTab: Destination? = null
     private var callPanelContents: List<Any?>? = null
     private var surfacedCall: String? = null
+    private val floatDashboardAction get() = resources.configuration.fontScale < 1.3f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,63 +167,87 @@ open class ReceiverActivity : AppCompatActivity() {
                     fullWidth(bottom = 16))
                 addView(callPanel, fullWidth())
             }
-            setContentView(ScrollView(this).apply { isFillViewport = true; addView(screen) })
+            setContentView(ScrollView(this).apply { isFillViewport = true; addView(screen); applyScreenInsets(this) })
             render()
             return
         }
         pairKey = PairKey(this)
         activeTab = Destination.entries.getOrElse(savedInstanceState?.getInt("tab") ?: 0) { Destination.CALLS }
         cameraFile = savedInstanceState?.getString("camera")?.let(::File)
+        awaitingPair = savedInstanceState?.getBoolean("awaitingPair") == true
+        offerSetup = savedInstanceState?.getBoolean("offerSetup") == true
+        nearbyDenied = savedInstanceState?.getBoolean("nearbyDenied") == true
+        notificationsDenied = savedInstanceState?.getBoolean("notificationsDenied") == true
+        microphoneDenied = savedInstanceState?.getBoolean("microphoneDenied") == true
         if (ReceiverService.current == null) {
             state.paired = pairKey.exists()
             state.data = if (state.paired) ReceiverVault(this).load() else ReceiverData()
         }
 
+        val root = column().apply { setBackgroundColor(color(android.R.attr.colorBackground)) }
+        applyScreenInsets(root)
+        toolbar = buildToolbar()
+        root.addView(toolbar)
+
+        val content = FrameLayout(this)
+        pairingScreen = buildPairingScreen()
+        dashboard = buildDashboard(savedInstanceState)
+        settingsScreen = buildSettings()
+        settingsBack = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = showSettings(false)
+        }
+        onBackPressedDispatcher.addCallback(this, settingsBack)
+        settingsBack.isEnabled = savedInstanceState?.getBoolean("settings") == true
+        content.addView(pairingScreen, FrameLayout.LayoutParams(-1, -1))
+        content.addView(dashboard, FrameLayout.LayoutParams(-1, -1))
+        content.addView(settingsScreen, FrameLayout.LayoutParams(-1, -1))
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(root)
+        render()
+    }
+
+    private fun applyScreenInsets(root: View) {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.isNavigationBarContrastEnforced = false
-        val root = column().apply { setBackgroundColor(color(android.R.attr.colorBackground)) }
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val side = dp(((resources.configuration.screenWidthDp - 600) / 2).coerceAtLeast(0))
             view.setPadding(bars.left + side, bars.top, bars.right + side, bars.bottom)
             WindowInsetsCompat.CONSUMED
         }
-        root.addView(buildToolbar())
-
-        val content = FrameLayout(this)
-        pairingScreen = buildPairingScreen()
-        dashboard = buildDashboard(savedInstanceState)
-        content.addView(pairingScreen, FrameLayout.LayoutParams(-1, -1))
-        content.addView(dashboard, FrameLayout.LayoutParams(-1, -1))
-        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
-        render()
-        if (savedInstanceState == null && checkSelfPermission(permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(permission.RECORD_AUDIO), MIC)
-        }
     }
 
     private fun buildToolbar() = MaterialToolbar(this).apply {
-        minimumHeight = dp(64)
+        minimumHeight = dp(60)
         setContentInsetsRelative(dp(24), dp(16))
         setPaddingRelative(0, 0, dp(10), 0)
-        addView(row().apply {
+        toolbarBrand = row().apply {
             addView(FrameLayout(this@ReceiverActivity).apply {
-                background = rounded(getColor(R.color.launcher_background), 13)
+                background = rounded(getColor(R.color.launcher_background), 12)
                 addView(smallIcon(R.drawable.ezcall_icon_mark, Color.WHITE),
                     FrameLayout.LayoutParams(-1, -1))
-            }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+            }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(12) })
             addView(column().apply {
                 addView(heading(getString(R.string.ez_brand), R.style.TextAppearance_ezcall_TitleLarge))
                 addView(label(getString(R.string.r_receiver), R.style.TextAppearance_ezcall_LabelMedium,
                     MaterialR.attr.colorOnSurfaceVariant))
             })
-        }, Toolbar.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
-        menu.add(getString(R.string.ez_settings)).apply {
-            icon = iconDrawable(R.drawable.ic_settings, MaterialR.attr.colorOnSurface)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener { options(); true }
         }
+        addView(toolbarBrand, Toolbar.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
+        menu.add(0, SETTINGS, 0, R.string.ez_settings).apply {
+            icon = iconDrawable(R.drawable.ic_settings, MaterialR.attr.colorOnSurface)
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            setOnMenuItemClickListener { showSettings(true); true }
+        }
+    }
+
+    private fun showSettings(show: Boolean) {
+        if (show) {
+            offerSetup = false
+            settingsScreen.scrollTo(0, 0)
+        }
+        settingsBack.isEnabled = show
+        render()
     }
 
     private fun buildPairingScreen() = ScrollView(this).apply {
@@ -187,17 +256,24 @@ open class ReceiverActivity : AppCompatActivity() {
         addView(column().apply {
             setPaddingRelative(dp(24), dp(12), dp(24), dp(20))
 
-            val hero = card(32).apply {
-                setCardBackgroundColor(getColor(R.color.ezcall_pairing_hero))
-                addView(PairingArtwork(this@ReceiverActivity), FrameLayout.LayoutParams(-1, -1))
-            }
-            addView(hero, LinearLayout.LayoutParams(-1, dp(232)))
-
             addView(heading(getString(R.string.ez_pair_phones), R.style.TextAppearance_ezcall_HeadlineLarge),
-                fullWidth(top = 24))
-            addView(label(getString(R.string.r_pair_instructions),
-                R.style.TextAppearance_ezcall_BodyLarge, MaterialR.attr.colorOnSurfaceVariant),
                 fullWidth(top = 8))
+            if (resources.configuration.fontScale < 1.5f) {
+                val hero = card(28).apply {
+                    setCardBackgroundColor(getColor(R.color.ezcall_pairing_hero))
+                    addView(PairingArtwork(this@ReceiverActivity).apply {
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, FrameLayout.LayoutParams(-1, -1))
+                }
+                addView(hero, LinearLayout.LayoutParams(-1, dp(136)).apply { topMargin = dp(16) })
+            }
+
+            addView(heading(getString(R.string.r_setup_sender), R.style.TextAppearance_ezcall_TitleMedium), fullWidth(top = 20))
+            addView(label(getString(R.string.r_setup_sender_detail),
+                R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 4))
+            addView(heading(getString(R.string.r_setup_receiver), R.style.TextAppearance_ezcall_TitleMedium), fullWidth(top = 16))
+            addView(label(getString(R.string.r_setup_receiver_detail),
+                R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 4))
 
             pairingFeedback = card(16)
             val notice = column().apply { setPadding(dp(16), dp(12), dp(16), dp(12)) }
@@ -213,12 +289,13 @@ open class ReceiverActivity : AppCompatActivity() {
             pairingFeedback.addView(notice)
             addView(pairingFeedback, fullWidth(top = 16))
 
-            addView(Space(this@ReceiverActivity), LinearLayout.LayoutParams(-1, dp(24), 1f))
             scanButton = button(getString(R.string.r_scan_qr), R.drawable.ic_qr, click = ::camera)
             photoButton = button(getString(R.string.r_choose_qr), R.drawable.receiver_photo, secondary = true, click = ::choosePhoto)
             cancelButton = button(getString(R.string.ez_cancel_pairing), R.drawable.ic_close, secondary = true) { ReceiverService.current?.forget() }
-            addView(scanButton, LinearLayout.LayoutParams(-1, -2))
+            pairingRecovery = button("", R.drawable.ic_bluetooth, secondary = true, click = ::recoverConnection)
+            addView(scanButton, fullWidth(top = 12))
             addView(photoButton, fullWidth(top = 8))
+            addView(pairingRecovery, fullWidth(top = 8))
             addView(cancelButton, fullWidth(top = 8))
 
             addView(row().apply {
@@ -226,23 +303,20 @@ open class ReceiverActivity : AppCompatActivity() {
                 addView(smallIcon(R.drawable.receiver_lock, color(MaterialR.attr.colorOnSurfaceVariant)),
                     LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(8) })
                 addView(label(getString(R.string.r_encrypted), R.style.TextAppearance_ezcall_LabelMedium,
-                    MaterialR.attr.colorOnSurfaceVariant))
+                    MaterialR.attr.colorOnSurfaceVariant), LinearLayout.LayoutParams(-2, -2))
             }, fullWidth(top = 16))
         })
     }
 
     private fun buildDashboard(saved: Bundle?) = column().apply {
         val content = FrameLayout(this@ReceiverActivity)
-        val header = column().apply { setPadding(dp(24), dp(8), dp(24), 0) }
+        val header = column().apply { setPaddingRelative(dp(24), dp(8), dp(24), 0) }
         callPanel = card(24)
         header.addView(callPanel, fullWidth(bottom = 12))
 
-        connection = card(22).apply {
-            setCardBackgroundColor(color(MaterialR.attr.colorSurface))
-            setStrokeColor(ColorStateList.valueOf(color(MaterialR.attr.colorOutlineVariant)))
-            strokeWidth = dp(1)
-        }
-        val linkRow = row().apply { setPaddingRelative(dp(12), dp(12), dp(8), dp(12)) }
+        connection = card(20)
+        val linkContent = column()
+        val linkRow = row().apply { setPaddingRelative(dp(16), dp(12), dp(12), dp(12)) }
         linkBadge = FrameLayout(this@ReceiverActivity).apply {
             addView(smallIcon(R.drawable.ic_bluetooth, color(MaterialR.attr.colorOnPrimaryContainer)),
                 FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
@@ -256,19 +330,45 @@ open class ReceiverActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(0, -2, 1f))
         syncButton = iconButton(R.drawable.receiver_sync, getString(R.string.r_sync)) { ReceiverService.current?.sync() }
         linkRow.addView(syncButton, LinearLayout.LayoutParams(dp(48), dp(48)))
-        connection.addView(linkRow)
-        header.addView(connection)
-        fullScreenAccess = button(getString(R.string.r_enable_call_screen), R.drawable.ic_call, secondary = true) {
-            if (Build.VERSION.SDK_INT >= 34) {
-                val uri = Uri.fromParts("package", packageName, null)
-                runCatching { startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, uri)) }
-                    .onFailure { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri)) }
-            }
+        linkContent.addView(linkRow, fullWidth())
+        linkProgress = LinearProgressIndicator(this@ReceiverActivity).apply {
+            isIndeterminate = true
+            trackCornerRadius = dp(2)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
-        header.addView(fullScreenAccess, fullWidth(top = 8))
+        linkContent.addView(linkProgress, fullWidth(bottom = 12).apply { marginStart = dp(16); marginEnd = dp(16) })
+        linkAction = button("", R.drawable.ic_bluetooth, secondary = true, click = ::recoverConnection)
+        linkContent.addView(linkAction, fullWidth(bottom = 12).apply { marginStart = dp(16); marginEnd = dp(16) })
+        connection.addView(linkContent)
+        header.addView(connection, fullWidth())
 
-        sectionTitle = heading("", R.style.TextAppearance_ezcall_HeadlineSmall)
+        setupNext = card(20).apply {
+            setCardBackgroundColor(color(MaterialR.attr.colorPrimaryContainer))
+            val ink = MaterialR.attr.colorOnPrimaryContainer
+            addView(column().apply {
+                setPaddingRelative(dp(16), dp(14), dp(16), dp(12))
+                addView(heading(getString(R.string.r_setup_optional), R.style.TextAppearance_ezcall_TitleMedium, ink))
+                addView(label(getString(R.string.r_setup_optional_detail), R.style.TextAppearance_ezcall_BodyMedium, ink),
+                    fullWidth(top = 4))
+                addView(button(getString(R.string.ez_settings), R.drawable.ic_settings) { showSettings(true) },
+                    fullWidth(top = 8))
+                addView(MaterialButton(androidx.appcompat.view.ContextThemeWrapper(
+                    this@ReceiverActivity, R.style.ThemeOverlay_ezcall_TextButton)).apply {
+                    setText(R.string.r_setup_later)
+                    minimumHeight = dp(48)
+                    setTextColor(color(ink))
+                    setOnClickListener { offerSetup = false; render() }
+                }, fullWidth())
+            })
+        }
+        header.addView(setupNext, fullWidth(top = 12))
+
+        sectionTitle = heading("", R.style.TextAppearance_ezcall_HeadlineLarge)
         header.addView(sectionTitle, fullWidth(top = 24, bottom = 8))
+        featureStatus = label("", R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        header.addView(featureStatus, fullWidth(bottom = 8))
         emptyPanel = buildEmptyPanel()
         adapter = Rows()
         list = ListView(this@ReceiverActivity).apply {
@@ -283,17 +383,31 @@ open class ReceiverActivity : AppCompatActivity() {
         content.addView(list, FrameLayout.LayoutParams(-1, -1))
 
         createAction = ExtendedFloatingActionButton(this@ReceiverActivity).apply {
+            maxLines = 2
+            minimumHeight = dp(56)
             setOnClickListener { newAction() }
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateListPadding() }
         }
-        content.addView(createAction, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
-            marginEnd = dp(20)
-            bottomMargin = dp(16)
-        })
+        if (floatDashboardAction) {
+            content.addView(createAction, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
+                marginEnd = dp(20)
+                bottomMargin = dp(16)
+            })
+        }
         addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (!floatDashboardAction) {
+            addView(createAction, LinearLayout.LayoutParams(-2, -2).apply {
+                gravity = Gravity.END
+                marginEnd = dp(20)
+                marginStart = dp(20)
+                topMargin = dp(4)
+                bottomMargin = dp(8)
+            })
+        }
 
         val nav = BottomNavigationView(this@ReceiverActivity).apply {
-            setBackgroundColor(color(MaterialR.attr.colorSurface))
-            elevation = dp(3).toFloat()
+            labelVisibilityMode = BottomNavigationView.LABEL_VISIBILITY_LABELED
+            setLabelMaxLines(2)
             Destination.entries.forEach { tab -> menu.add(0, tab.ordinal + 1, 0, tab.title).setIcon(tab.icon) }
             selectedItemId = activeTab.ordinal + 1
             setOnItemSelectedListener { target ->
@@ -315,8 +429,8 @@ open class ReceiverActivity : AppCompatActivity() {
     private fun buildEmptyPanel() = column().apply {
         gravity = Gravity.CENTER_HORIZONTAL
         setPadding(dp(28), dp(32), dp(28), dp(20))
-        emptyIcon = smallIcon(activeTab.icon, color(MaterialR.attr.colorOnPrimaryContainer)).apply {
-            background = rounded(color(MaterialR.attr.colorPrimaryContainer), 21)
+        emptyIcon = smallIcon(activeTab.icon, color(MaterialR.attr.colorOnSurfaceVariant)).apply {
+            background = rounded(color(MaterialR.attr.colorSurfaceContainerHigh), 20)
             setPadding(dp(14), dp(14), dp(14), dp(14))
         }
         addView(emptyIcon, LinearLayout.LayoutParams(dp(60), dp(60)))
@@ -336,8 +450,10 @@ open class ReceiverActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (this is IncomingCallActivity) return
-        if (pairKey.exists() && ReceiverService.current == null && ReceiverService.hasNearby(this)) {
-            runCatching { ReceiverService.start(this) }
+        if (secret != null && ReceiverService.hasNearby(this)) {
+            beginPairing()
+        } else if (pairKey.exists() && ReceiverService.current == null && ReceiverService.hasNearby(this)) {
+            startReceiver()
         }
         ReceiverService.current?.refreshLocale()
         render()
@@ -348,14 +464,25 @@ open class ReceiverActivity : AppCompatActivity() {
         super.onStop()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) ReceiverService.current?.retryDeferredMicrophone()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         if (this is IncomingCallActivity) return
-        if (dashboard.isShown) storeScrollPosition()
+        if (list.isLaidOut) storeScrollPosition()
         outState.putInt("tab", activeTab.ordinal)
         outState.putIntArray("scrollPositions", scrollPositions)
         outState.putIntArray("scrollOffsets", scrollOffsets)
         outState.putString("camera", cameraFile?.path)
+        outState.putBoolean("settings", settingsBack.isEnabled)
+        outState.putBoolean("awaitingPair", awaitingPair)
+        outState.putBoolean("offerSetup", offerSetup)
+        outState.putBoolean("nearbyDenied", nearbyDenied)
+        outState.putBoolean("notificationsDenied", notificationsDenied)
+        outState.putBoolean("microphoneDenied", microphoneDenied)
     }
 
     private fun storeScrollPosition() {
@@ -369,6 +496,11 @@ open class ReceiverActivity : AppCompatActivity() {
         if (position > 0 || offset < 0) list.setSelectionFromTop(position, offset)
     }
 
+    private fun updateListPadding() {
+        val bottom = if (floatDashboardAction && createAction.isVisible) maxOf(createAction.height, dp(56)) + dp(36) else dp(16)
+        if (list.paddingBottom != bottom) list.setPadding(0, 0, 0, bottom)
+    }
+
     private fun render() {
         if (this is IncomingCallActivity) {
             if (state.paired && state.inCall != null && state.inCall?.id == intent.identifier) renderCall()
@@ -376,35 +508,60 @@ open class ReceiverActivity : AppCompatActivity() {
             return
         }
         val paired = state.paired || pairKey.exists()
-        pairingScreen.visibility = visible(!paired)
-        dashboard.visibility = visible(paired)
+        val settingsOpen = settingsBack.isEnabled
+        settingsScreen.visibility = visible(settingsOpen)
+        pairingScreen.visibility = visible(!settingsOpen && !paired)
+        dashboard.visibility = visible(!settingsOpen && paired)
+        toolbarBrand.visibility = visible(!settingsOpen)
+        toolbar.menu.findItem(SETTINGS).isVisible = !settingsOpen
+        val title = if (settingsOpen) getString(R.string.ez_settings) else null
+        if (toolbar.title != title) toolbar.title = title
+        if (settingsOpen && toolbar.navigationIcon == null) {
+            toolbar.setNavigationIcon(R.drawable.receiver_back)
+            toolbar.setNavigationContentDescription(androidx.appcompat.R.string.abc_action_bar_up_description)
+            toolbar.setNavigationOnClickListener { showSettings(false) }
+        } else if (!settingsOpen) {
+            toolbar.navigationIcon = null
+        }
+        if (awaitingPair && paired && state.connected) {
+            awaitingPair = false
+            offerSetup = true
+        }
+        if (settingsOpen) renderSettings(paired)
         if (!paired) {
+            offerSetup = false
             renderPairing()
             return
         }
         renderConnection()
-        fullScreenAccess.visibility = visible(Build.VERSION.SDK_INT >= 34 &&
-            !getSystemService(NotificationManager::class.java).canUseFullScreenIntent())
+        setupNext.visibility = visible(offerSetup)
         renderCall()
 
-        val canDial = state.canDial && state.inCall == null && !state.pendingCall
-        val canText = state.canSendSms && !state.pendingSms
-        val action = when {
-            activeTab == Destination.MESSAGES && canText -> Destination.MESSAGES
-            activeTab == Destination.CALLS && canDial -> Destination.CALLS
-            canDial && !canText -> Destination.CALLS
-            canText && !canDial -> Destination.MESSAGES
-            else -> null
+        val action = when (activeTab) {
+            Destination.MESSAGES -> R.string.r_new_sms
+            Destination.CALLS -> R.string.r_new_call
+            Destination.CONTACTS -> 0
         }
-        val newVisible = state.connected && (if (activeTab == Destination.MESSAGES) canText else canDial || canText)
-        createAction.visibility = visible(newVisible)
-        createAction.text = when (action) {
-            Destination.CALLS -> getString(R.string.r_new_call)
-            Destination.MESSAGES -> getString(R.string.r_new_sms)
-            else -> getString(R.string.r_new)
+        val reason = when {
+            action == 0 || !state.connected -> 0
+            activeTab == Destination.CALLS && state.inCall != null -> R.string.r_finish_other_call
+            activeTab == Destination.CALLS && state.pendingCall -> R.string.r_dialing
+            activeTab == Destination.CALLS && !state.canDial -> R.string.r_call_control_needed
+            activeTab == Destination.MESSAGES && state.pendingSms -> R.string.r_sending
+            activeTab == Destination.MESSAGES && !state.canSendSms -> R.string.r_sms_needs_permission
+            else -> 0
         }
-        createAction.icon = iconDrawable(action?.icon ?: R.drawable.receiver_plus, MaterialR.attr.colorOnPrimaryContainer)
-        list.setPadding(0, 0, 0, dp(if (newVisible) 88 else 20))
+        createAction.visibility = visible(action != 0 && (activeTab != Destination.CALLS || state.inCall == null))
+        createAction.isEnabled = action != 0 && state.connected && reason == 0
+        if (action != 0 && createAction.text != getString(action)) {
+            createAction.setText(action)
+            createAction.setIconResource(if (activeTab == Destination.MESSAGES) R.drawable.receiver_plus else activeTab.icon)
+        }
+        updateListPadding()
+        featureStatus.isVisible = createAction.isVisible && reason != 0
+        if (featureStatus.isVisible) featureStatus.updateText(getString(reason))
+        emptyDetail.updateText(getString(if (state.syncing && activeTab != Destination.CALLS) R.string.r_sync_progress
+            else activeTab.emptyDetail))
 
         if (listData === state.data && listAttempts === state.attempts && renderedTab == activeTab) return
         listData = state.data
@@ -414,56 +571,81 @@ open class ReceiverActivity : AppCompatActivity() {
     }
 
     private fun renderPairing() {
-        val enrolling = ReceiverService.current != null
+        val enrolling = awaitingPair && (ReceiverService.current != null || state.detail.isBlank())
         val feedback = statusOverride ?: when {
             openingQR -> getString(R.string.r_reading_code)
             enrolling -> receiverNotice(state.detail).ifBlank { getString(R.string.r_pairing) }
-            else -> state.detail.takeIf { it.contains("timed out") || it.startsWith("Could not") }?.let(::receiverNotice)
+            else -> state.detail.takeIf { it.isNotBlank() }?.let(::receiverNotice)
         }
-        val busy = openingQR || enrolling
+        val busy = openingQR || enrolling && statusOverride == null
+        val neutral = busy || feedback == getString(R.string.r_pair_removed)
         pairingFeedback.visibility = visible(feedback != null)
-        pairingFeedback.setCardBackgroundColor(color(if (busy) MaterialR.attr.colorSurfaceContainer else MaterialR.attr.colorErrorContainer))
-        pairingStatus.setTextColor(color(if (busy) MaterialR.attr.colorOnSurface else MaterialR.attr.colorOnErrorContainer))
-        if (pairingStatus.text.toString() != feedback.orEmpty()) pairingStatus.text = feedback.orEmpty()
+        pairingFeedback.setCardBackgroundColor(color(if (neutral) MaterialR.attr.colorSurfaceContainer else MaterialR.attr.colorErrorContainer))
+        pairingStatus.setTextColor(color(if (neutral) MaterialR.attr.colorOnSurface else MaterialR.attr.colorOnErrorContainer))
+        pairingStatus.updateText(feedback.orEmpty())
         pairingProgress.visibility = visible(busy)
         scanButton.visibility = visible(!enrolling)
         photoButton.visibility = visible(!enrolling)
         scanButton.isEnabled = !openingQR
         photoButton.isEnabled = !openingQR
         cancelButton.visibility = visible(enrolling)
+        cancelButton.isEnabled = ReceiverService.current != null
+        val recovery = when {
+            nearbyDenied && !ReceiverService.hasNearby(this) -> R.string.r_allow_nearby
+            enrolling && connectionAction() == R.string.r_enable_bluetooth -> R.string.r_enable_bluetooth
+            else -> 0
+        }
+        pairingRecovery.visibility = visible(recovery != 0)
+        if (recovery != 0) pairingRecovery.updateText(getString(recovery))
     }
 
     private fun renderConnection() {
-        val permissionMissing = !ReceiverService.hasNearby(this)
-        val connected = state.connected
+        val recovery = connectionAction()
+        val connected = state.connected && recovery == 0
         val title = when {
-            permissionMissing -> getString(R.string.r_need_nearby)
-            state.syncing -> getString(R.string.r_sync_active)
+            recovery == R.string.r_allow_nearby -> getString(R.string.r_need_nearby)
+            state.syncing && connected -> getString(R.string.r_sync_active)
             connected -> getString(R.string.r_sender_connected)
             else -> getString(R.string.r_sender_disconnected)
         }
-        val detail = when {
-            permissionMissing -> getString(R.string.r_allow_nearby_in_settings)
-            state.syncing -> ""
-            connected && (state.detail.isBlank() || state.detail == "Connected over Bluetooth.") -> getString(R.string.r_active_bt)
-            state.detail.isNotBlank() -> receiverNotice(state.detail)
-            else -> getString(R.string.r_searching)
-        }
+        val detail = connectionDetail(recovery, connected)
+        connection.setCardBackgroundColor(color(if (connected) MaterialR.attr.colorSurfaceContainerLow
+            else MaterialR.attr.colorSurfaceContainer))
         linkBadge.background = rounded(color(if (connected) MaterialR.attr.colorPrimaryContainer
             else MaterialR.attr.colorSurfaceContainerHigh), 14)
         linkDetail.setTextColor(color(MaterialR.attr.colorOnSurfaceVariant))
-        if (linkTitle.text.toString() != title) linkTitle.text = title
-        if (linkDetail.text.toString() != detail) linkDetail.text = detail
+        linkTitle.updateText(title)
+        linkDetail.updateText(detail)
         linkDetail.visibility = visible(detail.isNotEmpty())
         syncButton.visibility = visible(connected)
         syncButton.isEnabled = !state.syncing && state.inCall?.state != "active"
         syncButton.alpha = if (syncButton.isEnabled) 1f else 0.38f
+        linkProgress.visibility = visible(state.syncing && connected)
+        linkAction.visibility = visible(recovery != 0)
+        if (recovery != 0) linkAction.updateText(getString(recovery))
+    }
+
+    private fun connectionDetail(recovery: Int, connected: Boolean) = when {
+        recovery == R.string.r_allow_nearby -> getString(if (nearbyDenied) R.string.r_nearby_denied else R.string.r_connect_sender)
+        recovery == R.string.r_enable_bluetooth -> getString(R.string.r_bt_off)
+        recovery == R.string.r_reconnect_now -> statusOverride ?: state.detail.takeIf { it.isNotBlank() }?.let(::receiverNotice)
+            ?: getString(R.string.r_reconnect_detail)
+        state.syncing && connected -> getString(R.string.r_link_while_syncing)
+        connected && (state.detail.isBlank() || state.detail == "Connected over Bluetooth.") -> getString(R.string.r_active_bt)
+        state.detail.isNotBlank() -> receiverNotice(state.detail)
+        else -> getString(R.string.r_searching)
     }
 
     private fun renderCall() {
         val call = state.inCall
         val name = call?.let { state.data.name(it.address, getString(R.string.r_unknown)) }
-        val callContents = listOf(call, name, state.pendingCall, state.canControlCurrentCall, state.microphoneLive, state.microphoneAvailable)
+        val test = state.audioTest?.takeIf { call?.id == it.id }?.log
+        val checklist = test?.let(::testChecklist)
+        val callDetail = if (call != null && (state.pendingCall || !state.connected || call.state != "ringing")) {
+            receiverNotice(state.detail)
+        } else ""
+        val callContents = listOf(call, name, state.pendingCall, state.canControlCurrentCall, callDetail,
+            state.microphoneOffered, state.microphoneAvailable, state.microphoneLive, checklist)
         if (callPanelContents == callContents) return
         callPanelContents = callContents
         callPanel.removeAllViews()
@@ -484,31 +666,73 @@ open class ReceiverActivity : AppCompatActivity() {
                 addView(column().apply {
                     addView(label(if (ringing) getString(R.string.r_call_incoming) else getString(R.string.r_call_active),
                         R.style.TextAppearance_ezcall_LabelMedium, ink))
-                    addView(heading(name.orEmpty(), R.style.TextAppearance_ezcall_TitleLarge, ink))
+                    addView(heading(if (name == call.address) receiverNumberDisplay(call.address) else name.orEmpty(),
+                        R.style.TextAppearance_ezcall_TitleLarge, ink))
                     if (call.address.isNotBlank() && name != call.address) {
-                        addView(label(call.address, R.style.TextAppearance_ezcall_BodyMedium, ink))
+                        addView(label(receiverNumberDisplay(call.address), R.style.TextAppearance_ezcall_BodyMedium, ink))
                     }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
             })
-            if (state.canControlCurrentCall) addView(row().apply {
+            if (callDetail.isNotBlank()) addView(label(callDetail, R.style.TextAppearance_ezcall_BodyMedium, ink).apply {
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            }, fullWidth(top = 8))
+            if (state.canControlCurrentCall) addView(column().apply {
                 if (ringing) addView(button(getString(R.string.r_answer), R.drawable.ic_call) {
                     microphone { ReceiverService.current?.answer(call.id, it) }
-                }.apply { isEnabled = !state.pendingCall }, actionWidth(spacing = true))
-                if (!ringing && state.microphoneAvailable) {
-                    addView(button(if (state.microphoneLive) getString(R.string.r_mute) else getString(R.string.r_unmute), R.drawable.receiver_mic, secondary = true) {
-                        ReceiverService.current?.mute()
-                    }, actionWidth(spacing = true))
+                }.apply { isEnabled = !state.pendingCall }, fullWidth())
+                if (!ringing && state.microphoneOffered) {
+                    val action = when {
+                        state.microphoneLive -> R.string.r_mute
+                        state.microphoneAvailable -> R.string.r_unmute
+                        else -> R.string.r_enable_mic
+                    }
+                    addView(button(getString(action), R.drawable.receiver_mic, secondary = true) {
+                        if (state.microphoneAvailable) ReceiverService.current?.mute()
+                        else microphone { ReceiverService.current?.enableMicrophone(call.id, it) }
+                    }.apply { isEnabled = !state.pendingCall }, fullWidth(bottom = 4))
                 }
                 addView(button(if (ringing) getString(R.string.r_decline) else getString(R.string.r_end_call), R.drawable.receiver_end, danger = true) {
                     ReceiverService.current?.end(call.id)
-                }.apply { isEnabled = !state.pendingCall }, actionWidth())
+                }.apply { isEnabled = !state.pendingCall }, fullWidth(top = if (ringing) 4 else 0))
             }, fullWidth(top = 12))
+            if (!ringing && call.simulated && test != null) {
+                addView(label(getString(R.string.ez_test_speak_after_tones), R.style.TextAppearance_ezcall_BodyMedium, ink),
+                    fullWidth(top = 12))
+                addView(label(getString(R.string.ez_test_own_wave), R.style.TextAppearance_ezcall_LabelMedium, ink), fullWidth(top = 8))
+                addView(AudioWaveformView(this@ReceiverActivity, test.localWaveform, ink, live = true), LinearLayout.LayoutParams(-1, dp(38)))
+                addView(label(getString(R.string.ez_test_incoming_wave), R.style.TextAppearance_ezcall_LabelMedium, ink), fullWidth(top = 4))
+                addView(AudioWaveformView(this@ReceiverActivity, test.remoteWaveform, ink, live = true), LinearLayout.LayoutParams(-1, dp(38)))
+                addView(label(if (testPassed(test)) getString(R.string.ez_test_auto_passed) else checklist.orEmpty(),
+                    R.style.TextAppearance_ezcall_BodyMedium, ink).apply {
+                        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    }, fullWidth(top = 4))
+            }
+            if (call.simulated && test != null) {
+                addView(button(getString(R.string.ez_test_log), R.drawable.receiver_check, secondary = true, click = ::showTestLog),
+                    fullWidth(top = 8))
+            }
         })
-        if (ringing && surfacedCall != call.id) {
+        if (ringing && surfacedCall != call.id && !state.pendingCall) {
             surfacedCall = call.id
-            if (this !is IncomingCallActivity) list.setSelection(0)
+            if (this !is IncomingCallActivity) {
+                if (settingsBack.isEnabled) showSettings(false)
+                list.setSelection(0)
+            }
         }
     }
+
+    private fun showTestLog() {
+        state.audioTest?.log?.show(this, R.string.ez_test_log, R.string.ez_test_copy)
+    }
+
+    private fun testPassed(test: AudioTestLog) = ReceiverTestStep.CUE_PLAYED in test &&
+        ReceiverTestStep.MIC_SIGNAL in test && ReceiverTestStep.ECHO_PLAYED in test
+
+    private fun testChecklist(test: AudioTestLog) = listOf(
+        if (ReceiverTestStep.CUE_PLAYED in test) R.string.ez_test_tone_played else R.string.ez_test_wait_tone,
+        if (ReceiverTestStep.MIC_SIGNAL in test) R.string.ez_test_mic_detected else R.string.ez_test_wait_mic,
+        if (ReceiverTestStep.ECHO_PLAYED in test) R.string.ez_test_echo_played else R.string.ez_test_wait_echo
+    ).joinToString("\n") { getString(it) }
 
     private fun renderRows() {
         sectionTitle.text = getString(activeTab.title)
@@ -516,82 +740,270 @@ open class ReceiverActivity : AppCompatActivity() {
             Destination.MESSAGES -> state.visibleMessages().distinctBy { conversationKey(it.address, state.data.country) }.map { sms ->
                 val title = state.data.name(sms.address, getString(R.string.r_unknown))
                 val preview = sms.body.trim().replace('\n', ' ')
-                Row(title, if (sms.direction == "out") getString(R.string.r_you_message, preview) else preview,
+                Row(if (title == sms.address) receiverNumberDisplay(title) else title,
+                    if (sms.direction == "out") getString(R.string.r_you_message, preview) else preview,
                     date(sms.date), R.drawable.ic_sms, if (title == sms.address) "" else initials(title)) { compose(sms.address) }
             }
             Destination.CONTACTS -> state.data.contacts.map { contact ->
-                val title = contact.name.ifBlank { contact.numbers.firstOrNull().orEmpty() }
-                Row(title, contact.numbers.joinToString(" · "), "", R.drawable.ic_contacts,
+                val title = contact.name.ifBlank { receiverNumberDisplay(contact.numbers.firstOrNull().orEmpty()) }
+                Row(title, contact.numbers.joinToString(" · ", transform = ::receiverNumberDisplay), "", R.drawable.ic_contacts,
                     if (contact.name.isNotBlank()) initials(contact.name) else "") { contactActions(contact) }
             }
             Destination.CALLS -> state.data.calls.map { call ->
                 val title = state.data.name(call.address, getString(R.string.r_unknown))
-                val detail = call.address.takeUnless { it == title }.orEmpty()
-                Row(title, detail, date(call.date), R.drawable.ic_call) {
+                val detail = call.address.takeUnless { it == title || it.isBlank() }?.let(::receiverNumberDisplay).orEmpty()
+                Row(if (title == call.address) receiverNumberDisplay(title) else title, detail, date(call.date), R.drawable.ic_call) {
                     if (call.address.isNotBlank()) numberActions(call.address)
                 }
             }
         }
         emptyTitle.text = getString(activeTab.emptyTitle)
-        emptyDetail.text = getString(activeTab.emptyDetail)
         emptyIcon.setImageResource(activeTab.icon)
         emptyPanel.visibility = visible(rows.isEmpty())
         adapter.update(rows)
     }
 
 
-    private fun options() {
-        val entries = mutableListOf(SheetAction(R.drawable.ic_language, getString(R.string.ez_language), languageName()) {
-            showEzcallLanguage(getString(R.string.ez_language))
-        })
-        if (!state.paired && !pairKey.exists()) {
-            sheet(getString(R.string.ez_settings), entries)
-            return
-        }
-        entries += SheetAction(R.drawable.ic_call, getString(R.string.r_phone_account), getString(R.string.r_phone_account_detail)) {
-            if (checkSelfPermission(permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) openPhoneAccounts()
-            else {
-                micAction = { openPhoneAccounts() }
-                requestPermissions(arrayOf(permission.RECORD_AUDIO), MIC)
-            }
-        }
-        if (state.connected) entries += SheetAction(R.drawable.receiver_check, getString(R.string.r_test),
-            getString(R.string.r_check_link)) { ReceiverService.current?.test() }
-        if (state.connected && !state.syncing && state.inCall?.state != "active") {
-            entries += SheetAction(R.drawable.receiver_sync, getString(R.string.r_sync),
-                getString(R.string.r_sync_detail)) { ReceiverService.current?.sync() }
-        }
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            entries += SheetAction(R.drawable.ic_notifications, getString(R.string.r_allow_notifications),
-                getString(R.string.r_notifications_detail)) {
-                requestPermissions(arrayOf(permission.POST_NOTIFICATIONS), NOTIFICATIONS)
-            }
-        }
-        if (!ReceiverService.hasNearby(this)) {
-            entries += SheetAction(R.drawable.ic_bluetooth, getString(R.string.r_allow_nearby), getString(R.string.r_connect_sender)) {
-                requestNearby()
-            }
-        }
-        entries += SheetAction(R.drawable.ic_link, getString(R.string.r_forget_sender), getString(R.string.r_remove_data), danger = true) {
-            MaterialAlertDialogBuilder(this).setTitle(getString(R.string.r_forget_sender_title))
-                .setMessage(getString(R.string.r_remove_details))
-                .setNegativeButton(getString(R.string.ez_cancel), null).setPositiveButton(getString(R.string.ez_forget)) { _, _ ->
-                    val running = ReceiverService.current
-                    if (running != null) {
-                        running.forget()
-                    } else {
-                        runCatching { pairKey.forget(); ReceiverVault(this).clear() }.onSuccess {
-                            RelayConnectionService.unregister(this)
-                            state.attempts = emptyList()
-                            state.paired = false
-                            state.data = ReceiverData()
-                            state.detail = getString(R.string.r_pair_removed)
-                        }.onFailure { statusOverride = getString(R.string.r_remove_failed) }
+    private fun buildSettings() = ScrollView(this).apply {
+        ViewCompat.setAccessibilityPaneTitle(this, getString(R.string.ez_settings))
+        addView(column().apply {
+            setPaddingRelative(dp(20), dp(12), dp(20), dp(24))
+            pairedSettings = column().apply {
+                addView(settingsHeading(R.string.r_settings_connection), fullWidth())
+                addView(settingsGroup {
+                    addView(row().apply {
+                        setPaddingRelative(dp(16), dp(12), dp(16), dp(12))
+                        if (!settingsLargeText) {
+                            addView(badge(R.drawable.ic_bluetooth, MaterialR.attr.colorPrimaryContainer,
+                                MaterialR.attr.colorOnPrimaryContainer),
+                                LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+                        }
+                        settingsLinkTitle = label("", R.style.TextAppearance_ezcall_TitleMedium)
+                        settingsLinkDetail = label("", R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant)
+                        addView(column().apply {
+                            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                            isScreenReaderFocusable = true
+                            addView(settingsLinkTitle)
+                            addView(settingsLinkDetail, fullWidth(top = 2))
+                        }, LinearLayout.LayoutParams(0, -2, 1f))
+                    })
+                    settingsRecovery = SettingRow(R.drawable.ic_bluetooth, "", click = ::recoverConnection)
+                    addView(settingsRecovery)
+                    testSetting = SettingRow(R.drawable.receiver_check, getString(R.string.r_test)) { ReceiverService.current?.test() }
+                    addView(testSetting)
+                    syncSetting = SettingRow(R.drawable.receiver_sync, getString(R.string.r_sync)) { ReceiverService.current?.sync() }
+                    addView(syncSetting)
+                }, fullWidth(top = 6))
+
+                addView(settingsHeading(R.string.r_settings_alerts), fullWidth(top = 20))
+                addView(settingsGroup {
+                    notificationSetting = SettingRow(R.drawable.ic_notifications, getString(R.string.r_manage_notifications),
+                        opensPage = true, click = ::openNotifications)
+                    addView(notificationSetting)
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        val setting = SettingRow(R.drawable.receiver_lock, getString(R.string.r_enable_call_screen), opensPage = true) {
+                            val uri = Uri.fromParts("package", packageName, null)
+                            openSystemSettings(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, uri))
+                        }
+                        lockScreenSetting = setting
+                        addView(setting)
                     }
-                    render()
-                }.show()
+                }, fullWidth(top = 6))
+
+                addView(settingsHeading(R.string.r_calls), fullWidth(top = 20))
+                addView(settingsGroup {
+                    addView(SettingRow(R.drawable.ic_call, getString(R.string.r_phone_account), opensPage = true, click = ::openPhoneAccounts))
+                    microphoneSetting = SettingRow(R.drawable.receiver_mic, getString(R.string.r_settings_microphone), opensPage = true) {
+                        if (microphoneAllowed() || microphoneDenied && !shouldShowRequestPermissionRationale(permission.RECORD_AUDIO)) {
+                            openAppSettings()
+                        } else requestPermissions(arrayOf(permission.RECORD_AUDIO), MIC)
+                    }
+                    addView(microphoneSetting)
+                    audioTestSetting = SettingRow(R.drawable.receiver_check, getString(R.string.r_settings_audio_test),
+                        opensPage = true, click = ::showAudioTestSettings)
+                    addView(audioTestSetting)
+                }, fullWidth(top = 6, bottom = 20))
+            }
+            addView(pairedSettings)
+            addView(settingsGroup {
+                addView(SettingRow(R.drawable.ic_language, getString(R.string.ez_language), opensPage = true) {
+                    showEzcallLanguage(getString(R.string.ez_language))
+                }.apply { updateDetail(languageName()) })
+            }, fullWidth())
+
+            forgetSettings = settingsGroup {
+                addView(SettingRow(R.drawable.ic_link, getString(R.string.r_forget_sender), danger = true, click = ::confirmForget))
+            }
+            addView(forgetSettings, fullWidth(top = 16))
+        })
+    }
+
+    private fun settingsHeading(title: Int) = heading(getString(title), R.style.TextAppearance_ezcall_TitleSmall,
+        MaterialR.attr.colorOnSurfaceVariant).apply { setPaddingRelative(dp(12), 0, dp(12), 0) }
+
+    private val settingsLargeText get() = resources.configuration.fontScale >= 1.5f
+
+    private fun settingsGroup(content: LinearLayout.() -> Unit) = card(20).apply {
+        setCardBackgroundColor(color(MaterialR.attr.colorSurfaceContainerLow))
+        clipToOutline = true
+        addView(column().apply(content))
+    }
+
+    private inner class SettingRow(icon: Int, text: String, opensPage: Boolean = false, danger: Boolean = false,
+                                  click: () -> Unit) : LinearLayout(this@ReceiverActivity) {
+        private val ink = if (danger) androidx.appcompat.R.attr.colorError else MaterialR.attr.colorOnSurface
+        private val title = label(text, R.style.TextAppearance_ezcall_BodyLarge, ink)
+        private val detail = label("", R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant)
+
+        init {
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(56)
+            setPaddingRelative(dp(16), dp(8), dp(16), dp(8))
+            background = ripple(12)
+            isFocusable = true
+            isScreenReaderFocusable = true
+            setOnClickListener { click() }
+            if (!settingsLargeText) {
+                addView(smallIcon(icon, color(if (danger) ink else MaterialR.attr.colorOnSurfaceVariant)),
+                    LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(16) })
+            }
+            addView(column().apply {
+                addView(title)
+                addView(detail, fullWidth(top = 2))
+                detail.visibility = View.GONE
+            }, LayoutParams(0, -2, 1f))
+            if (opensPage) addView(smallIcon(R.drawable.receiver_forward, color(MaterialR.attr.colorOnSurfaceVariant)),
+                LayoutParams(dp(20), dp(20)).apply { marginStart = dp(8) })
         }
-        sheet(getString(R.string.ez_settings), entries)
+
+        override fun getAccessibilityClassName(): CharSequence = android.widget.Button::class.java.name
+
+        override fun setEnabled(enabled: Boolean) {
+            super.setEnabled(enabled)
+            alpha = if (enabled) 1f else .55f
+        }
+
+        fun updateTitle(value: String) = title.updateText(value)
+
+        fun updateDetail(value: String) {
+            detail.updateText(value)
+            detail.isVisible = value.isNotBlank()
+        }
+    }
+
+    private fun renderSettings(paired: Boolean) {
+        pairedSettings.isVisible = paired
+        forgetSettings.isVisible = paired
+        if (!paired) return
+        val recovery = connectionAction()
+        val connected = state.connected && recovery == 0
+        val title = when {
+            recovery == R.string.r_allow_nearby -> R.string.r_need_nearby
+            state.syncing && connected -> R.string.r_sync_active
+            connected -> R.string.r_sender_connected
+            recovery != 0 -> R.string.r_sender_disconnected
+            else -> R.string.r_searching
+        }
+        val detail = when {
+            recovery == R.string.r_enable_bluetooth -> ""
+            state.syncing && connected -> receiverNotice(state.detail)
+            else -> connectionDetail(recovery, connected)
+        }.takeUnless {
+            it == getString(title) || it == getString(R.string.r_connect_sender) ||
+                it == getString(R.string.r_active_bt) || it == getString(R.string.r_sync_progress)
+        }.orEmpty()
+        settingsLinkTitle.updateText(getString(title))
+        settingsLinkDetail.updateText(detail)
+        settingsLinkDetail.isVisible = detail.isNotEmpty()
+        settingsRecovery.isVisible = recovery != 0
+        if (recovery != 0) settingsRecovery.updateTitle(getString(recovery))
+        val idle = connected && !state.syncing && state.detail != "Testing the connection…"
+        testSetting.isEnabled = idle
+        syncSetting.isEnabled = idle && state.inCall?.state != "active"
+        val alerts = getSystemService(NotificationManager::class.java)
+        notificationSetting.updateDetail(permissionStatus(alerts.areNotificationsEnabled()))
+        if (Build.VERSION.SDK_INT >= 34) lockScreenSetting?.isVisible = !alerts.canUseFullScreenIntent()
+        microphoneSetting.updateDetail(permissionStatus(microphoneAllowed()))
+        audioTestSetting.updateDetail(state.audioTest?.log?.let { getString(audioTestStatus(it)) }.orEmpty())
+    }
+
+    private fun permissionStatus(allowed: Boolean) = getString(if (allowed) R.string.r_permission_on else R.string.r_permission_off)
+
+    private fun audioTestStatus(test: AudioTestLog) = when {
+        testPassed(test) -> R.string.ez_test_auto_passed
+        state.inCall?.simulated == true -> R.string.r_audio_test_running
+        else -> R.string.ez_test_auto_incomplete
+    }
+
+    private fun showAudioTestSettings() {
+        val test = state.audioTest?.log
+        val message = test?.let { getString(audioTestStatus(it)) + "\n\n" + testChecklist(it) }
+            ?: getString(R.string.r_settings_audio_test_detail)
+        MaterialAlertDialogBuilder(this).setTitle(R.string.r_settings_audio_test).setMessage(message)
+            .setPositiveButton(R.string.ez_close, null)
+            .apply { if (test != null) setNeutralButton(R.string.ez_test_log) { _, _ -> showTestLog() } }
+            .show()
+    }
+
+    private fun openNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+            (!notificationsDenied || shouldShowRequestPermissionRationale(permission.POST_NOTIFICATIONS))) {
+            requestPermissions(arrayOf(permission.POST_NOTIFICATIONS), NOTIFICATIONS)
+        } else {
+            openSystemSettings(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+        }
+    }
+
+    private fun openSystemSettings(intent: Intent) {
+        runCatching { startActivity(intent) }.onFailure { openAppSettings() }
+    }
+
+    private fun openAppSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        runCatching { startActivity(intent) }.onFailure {
+            MaterialAlertDialogBuilder(this).setMessage(R.string.r_settings_unavailable)
+                .setPositiveButton(android.R.string.ok, null).show()
+        }
+    }
+
+    private fun connectionAction(): Int {
+        val nearby = ReceiverService.hasNearby(this)
+        val bluetooth = nearby && getSystemService(BluetoothManager::class.java).adapter?.isEnabled != false
+        return receiverConnectionAction(nearby, bluetooth, state.connected, ReceiverService.current != null)
+    }
+
+    private fun recoverConnection() {
+        when (connectionAction()) {
+            R.string.r_allow_nearby -> if (nearbyDenied && !shouldShowRequestPermissionRationale(permission.BLUETOOTH_CONNECT)) {
+                openAppSettings()
+            } else requestNearby()
+            R.string.r_enable_bluetooth -> openSystemSettings(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            R.string.r_reconnect_now -> startReceiver()
+        }
+        render()
+    }
+
+    private fun confirmForget() {
+        MaterialAlertDialogBuilder(this).setTitle(R.string.r_forget_sender_title)
+            .setMessage(R.string.r_remove_details)
+            .setNegativeButton(R.string.ez_cancel, null).setPositiveButton(R.string.ez_forget) { _, _ ->
+                val running = ReceiverService.current
+                if (running != null) running.forget()
+                else runCatching { pairKey.forget(); ReceiverVault(this).clear() }.onSuccess {
+                    RelayConnectionService.unregister(this)
+                    state.attempts = emptyList()
+                    state.paired = false
+                    state.data = ReceiverData()
+                    state.detail = getString(R.string.r_pair_removed)
+                }.onFailure {
+                    MaterialAlertDialogBuilder(this).setMessage(R.string.r_remove_failed)
+                        .setPositiveButton(android.R.string.ok, null).show()
+                }
+                if (!state.paired && !pairKey.exists()) {
+                    statusOverride = null
+                    showSettings(false)
+                } else render()
+            }.show()
     }
 
     private fun openPhoneAccounts() {
@@ -603,22 +1015,15 @@ open class ReceiverActivity : AppCompatActivity() {
     }
 
     private fun newAction() {
-        val canDial = state.canDial && state.inCall == null && !state.pendingCall
-        val canText = state.canSendSms && !state.pendingSms
-        when {
-            activeTab == Destination.CALLS && canDial -> dial()
-            activeTab == Destination.MESSAGES && canText -> compose()
-            canDial && canText -> sheet(getString(R.string.r_new), listOf(
-                SheetAction(R.drawable.ic_call, getString(R.string.r_new_call), getString(R.string.r_dial_info)) { dial() },
-                SheetAction(R.drawable.ic_sms, getString(R.string.r_new_sms), getString(R.string.r_send_info)) { compose() }
-            ))
-            canDial -> dial()
-            canText -> compose()
+        if (!state.connected) return
+        when (activeTab) {
+            Destination.CALLS -> if (state.canDial && state.inCall == null && !state.pendingCall) dial()
+            Destination.MESSAGES -> if (state.canSendSms && !state.pendingSms) compose()
+            Destination.CONTACTS -> Unit
         }
     }
 
-    private data class SheetAction(val icon: Int, val title: String, val detail: String,
-        val danger: Boolean = false, val open: () -> Unit)
+    private data class SheetAction(val icon: Int, val title: String, val detail: String, val open: () -> Unit)
 
     private fun sheet(title: String, entries: List<SheetAction>) {
         val dialog = BottomSheetDialog(this)
@@ -631,7 +1036,6 @@ open class ReceiverActivity : AppCompatActivity() {
                 addView(heading(title, R.style.TextAppearance_ezcall_HeadlineSmall)
                     .apply { setPadding(dp(12), 0, dp(12), dp(12)) })
                 for (entry in entries) {
-                    val semanticInk = if (entry.danger) androidx.appcompat.R.attr.colorError else MaterialR.attr.colorOnSurface
                     addView(row().apply {
                         minimumHeight = dp(64)
                         setPadding(dp(12), dp(8), dp(12), dp(8))
@@ -642,11 +1046,11 @@ open class ReceiverActivity : AppCompatActivity() {
                             dialog.dismiss()
                             entry.open()
                         }
-                        addView(smallIcon(entry.icon, color(semanticInk)), LinearLayout.LayoutParams(dp(24), dp(24)).apply {
+                        addView(smallIcon(entry.icon, color(MaterialR.attr.colorOnSurface)), LinearLayout.LayoutParams(dp(24), dp(24)).apply {
                             marginEnd = dp(16)
                         })
                         addView(column().apply {
-                            addView(label(entry.title, R.style.TextAppearance_ezcall_TitleSmall, semanticInk))
+                            addView(label(entry.title, R.style.TextAppearance_ezcall_TitleSmall))
                             addView(label(entry.detail, R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant))
                         }, LinearLayout.LayoutParams(0, -2, 1f))
                     })
@@ -662,25 +1066,35 @@ open class ReceiverActivity : AppCompatActivity() {
         if (contact.numbers.size == 1) numberActions(contact.numbers.first())
         else if (contact.numbers.isNotEmpty()) {
             MaterialAlertDialogBuilder(this).setTitle(contact.name)
-                .setItems(contact.numbers.toTypedArray()) { _, index -> numberActions(contact.numbers[index]) }.show()
+                .setItems(contact.numbers.map(::receiverNumberDisplay).toTypedArray()) { _, index -> numberActions(contact.numbers[index]) }.show()
         }
     }
 
     private fun numberActions(number: String) {
-        val entries = mutableListOf<Pair<String, () -> Unit>>()
-        if (state.canDial && state.inCall == null) entries += getString(R.string.r_call) to { dial(number) }
-        if (state.canSendSms) entries += getString(R.string.r_send_sms) to { compose(number) }
-        val dialog = MaterialAlertDialogBuilder(this).setTitle(number).setNegativeButton(getString(R.string.ez_close), null)
-        if (entries.isNotEmpty()) dialog.setItems(entries.map { it.first }.toTypedArray()) { _, index -> entries[index].second() }
-        dialog.show()
+        val entries = buildList {
+            if (state.connected && state.canDial && state.inCall == null && !state.pendingCall) {
+                add(SheetAction(R.drawable.ic_call, getString(R.string.r_call), getString(R.string.r_dial_info)) { dial(number) })
+            }
+            if (state.connected && state.canSendSms && !state.pendingSms) {
+                add(SheetAction(R.drawable.ic_sms, getString(R.string.r_send_sms), getString(R.string.r_send_info)) { compose(number) })
+            }
+        }
+        val displayNumber = receiverNumberDisplay(number)
+        if (entries.isNotEmpty()) sheet(displayNumber, entries)
+        else MaterialAlertDialogBuilder(this).setTitle(displayNumber)
+            .setMessage(if (state.connected) R.string.r_contact_actions_unavailable else R.string.r_sender_disconnected)
+            .setPositiveButton(android.R.string.ok, null).show()
     }
 
     private fun dial(initial: String = "") {
-        if (state.inCall != null || state.pendingCall) return
+        if (!state.connected || !state.canDial || state.inCall != null || state.pendingCall || dialDialog?.isShowing == true) return
         val dialog = BottomSheetDialog(this)
+        dialDialog = dialog
         val pad = column().apply { setPadding(dp(24), 0, dp(24), dp(16)) }
         pad.addView(BottomSheetDragHandleView(this), fullWidth())
         pad.addView(heading(getString(R.string.r_new_call), R.style.TextAppearance_ezcall_HeadlineSmall))
+        pad.addView(label(getString(R.string.r_dial_info), R.style.TextAppearance_ezcall_BodyMedium,
+            MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 4))
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_PHONE
             setSingleLine()
@@ -725,7 +1139,10 @@ open class ReceiverActivity : AppCompatActivity() {
                         }
                     }
                     setOnClickListener { edit(digit.toString()) }
-                    if (digit == '0') setOnLongClickListener { edit("+"); true }
+                    if (digit == '0') {
+                        contentDescription = getString(R.string.r_dial_zero)
+                        setOnLongClickListener { edit("+"); true }
+                    }
                 }
                 keyRow.addView(key, actionWidth(spacing = col < 2))
             }
@@ -733,20 +1150,38 @@ open class ReceiverActivity : AppCompatActivity() {
         }
         val call = button(getString(R.string.r_call), R.drawable.ic_call) {
             val number = normalizedNumber(input.text.toString())
-            if (number.any(Char::isDigit)) {
+            if (state.connected && state.canDial && state.inCall == null && !state.pendingCall && number.any(Char::isDigit)) {
                 dialog.dismiss()
                 microphone { ReceiverService.current?.dial(number, it) }
             }
         }
+        val dialStatus = label("", R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
         fun updateActions() {
             erase.isEnabled = input.length() > 0
-            call.isEnabled = input.text.any(Char::isDigit)
+            val reason = when {
+                !state.connected -> R.string.r_sender_disconnected
+                state.inCall != null || state.pendingCall -> R.string.r_finish_other_call
+                !state.canDial -> R.string.r_call_control_needed
+                else -> 0
+            }
+            dialStatus.visibility = visible(reason != 0)
+            if (reason != 0) dialStatus.updateText(getString(reason))
+            call.isEnabled = reason == 0 && input.text.any(Char::isDigit)
         }
+        val connectionListener = { updateActions() }
         input.doAfterTextChanged { updateActions() }
         updateActions()
+        pad.addView(dialStatus, fullWidth(top = 4))
         pad.addView(call, fullWidth(top = 8))
         dialog.setContentView(ScrollView(this).apply { addView(pad) })
         dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        dialog.setOnShowListener { state.listeners.add(connectionListener) }
+        dialog.setOnDismissListener {
+            state.listeners.remove(connectionListener)
+            if (dialDialog === dialog) dialDialog = null
+        }
         dialog.show()
     }
 
@@ -755,14 +1190,16 @@ open class ReceiverActivity : AppCompatActivity() {
     }
 
     private fun microphone(action: (Boolean) -> Unit) {
-        val granted = checkSelfPermission(permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        val needsMic = state.audioMode == "two_way" || state.inCall?.simulated == true
+        val granted = microphoneAllowed()
+        val needsMic = state.microphoneOffered || state.audioMode == "two_way" || state.inCall?.simulated == true
         if (!needsMic || granted) action(needsMic && granted)
         else {
             micAction = action
             requestPermissions(arrayOf(permission.RECORD_AUDIO), MIC)
         }
     }
+
+    private fun microphoneAllowed() = checkSelfPermission(permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private fun camera() {
         statusOverride = null
@@ -780,7 +1217,8 @@ open class ReceiverActivity : AppCompatActivity() {
         if (!captured) {
             cameraFile?.delete()
             cameraFile = null
-            choosePhoto()
+            statusOverride = getString(R.string.r_camera_unavailable)
+            render()
         }
     }
 
@@ -820,7 +1258,11 @@ open class ReceiverActivity : AppCompatActivity() {
                 } else {
                     secret?.fill(0)
                     secret = credential
-                    if (ReceiverService.hasNearby(this)) beginPairing() else requestNearby()
+                    when {
+                        ReceiverService.hasNearby(this) -> beginPairing()
+                        nearbyDenied && !shouldShowRequestPermissionRationale(permission.BLUETOOTH_CONNECT) -> openAppSettings()
+                        else -> requestNearby()
+                    }
                 }
                 render()
             }
@@ -851,33 +1293,57 @@ open class ReceiverActivity : AppCompatActivity() {
     }
 
     private fun beginPairing() {
-        val pending = secret
+        val pending = secret ?: return
         secret = null
         statusOverride = null
+        state.detail = ""
+        awaitingPair = true
         runCatching { ReceiverService.start(this, pending) }.onFailure {
             pending?.fill(0)
+            awaitingPair = false
             statusOverride = getString(R.string.r_start_failed)
         }
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(permission.POST_NOTIFICATIONS), NOTIFICATIONS)
+    }
+
+    private fun startReceiver() {
+        statusOverride = null
+        runCatching { ReceiverService.start(this) }.onFailure {
+            statusOverride = getString(R.string.r_start_failed)
         }
+    }
+
+    override fun onDestroy() {
+        dialDialog?.dismiss()
+        secret?.fill(0)
+        super.onDestroy()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, results: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
         when (requestCode) {
-            NEARBY -> if (ReceiverService.hasNearby(this)) beginPairing() else {
-                secret?.fill(0)
-                secret = null
-                statusOverride = getString(R.string.r_nearby_denied)
-                render()
+            NEARBY -> {
+                nearbyDenied = !ReceiverService.hasNearby(this)
+                if (nearbyDenied) {
+                    secret?.fill(0)
+                    secret = null
+                    statusOverride = getString(R.string.r_nearby_denied)
+                } else if (secret != null) {
+                    beginPairing()
+                } else if (pairKey.exists() && ReceiverService.current == null) {
+                    startReceiver()
+                } else {
+                    statusOverride = null
+                }
             }
+            NOTIFICATIONS -> notificationsDenied = results.firstOrNull() != PackageManager.PERMISSION_GRANTED
             MIC -> {
                 val action = micAction
                 micAction = null
-                action?.invoke(results.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+                microphoneDenied = results.firstOrNull() != PackageManager.PERMISSION_GRANTED
+                action?.invoke(!microphoneDenied)
             }
         }
+        render()
     }
 
 
@@ -944,7 +1410,9 @@ open class ReceiverActivity : AppCompatActivity() {
     private fun button(value: String, image: Int, secondary: Boolean = false, danger: Boolean = false, click: () -> Unit) =
         MaterialButton(this, null, if (secondary) MaterialR.attr.materialButtonOutlinedStyle else MaterialR.attr.materialButtonStyle).apply {
             text = value
+            isAllCaps = false
             minimumHeight = dp(54)
+            maxLines = 3
             insetTop = dp(2)
             insetBottom = dp(2)
             setIconResource(image)
@@ -967,6 +1435,7 @@ open class ReceiverActivity : AppCompatActivity() {
     private fun color(attribute: Int) = MaterialColors.getColor(this, attribute, 0)
     private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
     private fun visible(show: Boolean) = if (show) View.VISIBLE else View.GONE
+    private fun TextView.updateText(value: String) { if (text.toString() != value) text = value }
 
     private fun date(value: Long): String = when {
         value <= 0 -> ""
@@ -1010,7 +1479,7 @@ open class ReceiverActivity : AppCompatActivity() {
         }
         private val title = label("", R.style.TextAppearance_ezcall_TitleMedium).singleLine()
         private val detail = label("", R.style.TextAppearance_ezcall_BodyMedium,
-            MaterialR.attr.colorOnSurfaceVariant).singleLine()
+            MaterialR.attr.colorOnSurfaceVariant).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         private val time = label("", R.style.TextAppearance_ezcall_LabelMedium, MaterialR.attr.colorOnSurfaceVariant)
         private val separator = View(this@ReceiverActivity).apply {
             setBackgroundColor(color(MaterialR.attr.colorOutlineVariant))
@@ -1062,5 +1531,6 @@ open class ReceiverActivity : AppCompatActivity() {
         private const val NEARBY = 103
         private const val NOTIFICATIONS = 104
         private const val MIC = 105
+        private const val SETTINGS = 106
     }
 }

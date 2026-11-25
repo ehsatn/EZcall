@@ -6,6 +6,8 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
@@ -41,22 +43,39 @@ internal object AdbIdentity {
     /** Records [nonce] only when the shell or root sent it. */
     fun record(method: String, nonce: String?, callingUid: Int): Boolean {
         if (method != METHOD || nonce == null || !nonce.matches(NONCE)) return false
-        if (callingUid != SHELL_UID && callingUid != ROOT_UID) return false
+        if (!isAdbUid(callingUid)) return false
         seen.add(nonce)
         return true
     }
 
     /** True once, if the shell or root called back with [nonce]. */
     fun consume(nonce: String): Boolean = seen.remove(nonce)
+
+    fun isAdbUid(uid: Int) = uid == SHELL_UID || uid == ROOT_UID
 }
 
-/** Exported so adbd's shell can reach it. It checks the caller's uid itself and returns nothing. */
+/** Exported for adbd. USB setup also requires an active, one-use request from the Sender screen. */
 class AdbIdentityProvider : ContentProvider() {
     override fun onCreate() = true
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         AdbIdentity.record(method, arg, Binder.getCallingUid())
         return null
+    }
+
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+        val uid = Binder.getCallingUid()
+        if (uri.path != "/usb" || mode != "r" || !AdbIdentity.isAdbUid(uid)) throw FileNotFoundException()
+        val script = CallAudio.Setup.claimUsb(checkNotNull(context), uid)
+            ?: "echo 'Open Set up with USB on Sender and try again.' >&2\nexit 1\n"
+        val (read, write) = ParcelFileDescriptor.createPipe()
+        try {
+            ParcelFileDescriptor.AutoCloseOutputStream(write).use { it.write(script.toByteArray(Charsets.UTF_8)) }
+            return read
+        } catch (error: IOException) {
+            read.close()
+            throw error
+        }
     }
 
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?,

@@ -17,7 +17,7 @@ jobs:
 
       - name: Verify the Swift relay protocol
         run: |
-          xcrun --sdk macosx swiftc ios/ezcall/RelayWire.swift ios/Checks/WireCheck.swift -o "$RUNNER_TEMP/ezcall-wire-check"
+          xcrun --sdk macosx swiftc ios/ezcall/RelayWire.swift ios/ezcall/LocalData.swift ios/Checks/WireCheck.swift -o "$RUNNER_TEMP/ezcall-wire-check"
           "$RUNNER_TEMP/ezcall-wire-check" tests/protocol-v1.json
 
       - name: Verify call playback buffering
@@ -34,9 +34,19 @@ jobs:
       - name: Package and check the unsigned IPA
         run: |
           app="$RUNNER_TEMP/ezcallBuild/Build/Products/Release-iphoneos/ezcall.app"
-          test "$(plutil -extract CFBundleDisplayName raw "$app/Info.plist")" = ezcall
+          test "$(plutil -extract CFBundleDisplayName raw "$app/Info.plist")" = EasyCall
           test "$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw "$app/Info.plist")" = EzcallAppIcon
+          test "$(plutil -extract CFBundleURLTypes.0.CFBundleURLSchemes.0 raw "$app/Info.plist")" = app.xcall.relay.widget
           xcrun lipo "$app/ezcall" -verify_arch arm64
+          widget="$app/PlugIns/ezcallWidgets.appex"
+          test "$(plutil -extract CFBundleDisplayName raw "$widget/Info.plist")" = EasyCall
+          test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw "$widget/Info.plist")" = com.apple.widgetkit-extension
+          test "$(plutil -extract CFBundleIdentifier raw "$widget/Info.plist")" = "$(plutil -extract CFBundleIdentifier raw "$app/Info.plist").widgets"
+          test "$(plutil -extract EzcallWidgetGroup raw "$widget/Info.plist")" = "group.$(plutil -extract CFBundleIdentifier raw "$app/Info.plist")"
+          test "$(plutil -extract EzcallWidgetGroup raw "$app/Info.plist")" = "$(plutil -extract EzcallWidgetGroup raw "$widget/Info.plist")"
+          test "$(plutil -extract CFBundleShortVersionString raw "$widget/Info.plist")" = "$(plutil -extract CFBundleShortVersionString raw "$app/Info.plist")"
+          test "$(plutil -extract CFBundleVersion raw "$widget/Info.plist")" = "$(plutil -extract CFBundleVersion raw "$app/Info.plist")"
+          xcrun lipo "$widget/ezcallWidgets" -verify_arch arm64
           package="$(mktemp -d)"
           mkdir "$package/Payload"
           ditto "$app" "$package/Payload/ezcall.app"

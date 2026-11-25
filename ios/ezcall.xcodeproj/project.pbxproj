@@ -18,7 +18,40 @@
         AA000000000000000000000A /* MessagesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001B /* MessagesViews.swift */; };
         AA000000000000000000000B /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001C /* SharedViews.swift */; };
         AA000000000000000000000C /* InCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001D /* InCallView.swift */; };
+        AA000000000000000000000D /* EzcallLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001E /* EzcallLanguage.swift */; };
+        AA000000000000000000000E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001F /* Localizable.xcstrings */; };
+        AA000000000000000000000F /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000023 /* InfoPlist.xcstrings */; };
+        AA0000000000000000000090 /* SiriShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000091 /* SiriShortcuts.swift */; };
+        AA0000000000000000000070 /* ezcallWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000075 /* ezcallWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy,); }; };
+        AA0000000000000000000071 /* EzcallWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000076 /* EzcallWidgets.swift */; };
+        AA0000000000000000000072 /* WidgetDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000077 /* WidgetDestination.swift */; };
+        AA0000000000000000000073 /* WidgetDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000077 /* WidgetDestination.swift */; };
+        AA0000000000000000000074 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000079 /* Localizable.xcstrings */; };
+        AA000000000000000000007B /* WidgetConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000007D /* WidgetConnection.swift */; };
+        AA000000000000000000007C /* WidgetConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000007D /* WidgetConnection.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+        AA0000000000000000000083 = {
+            isa = PBXContainerItemProxy;
+            containerPortal = AA0000000000000000000041 /* Project object */;
+            proxyType = 1;
+            remoteGlobalIDString = AA0000000000000000000081;
+            remoteInfo = ezcallWidgets;
+        };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+        AA0000000000000000000080 /* Embed App Extensions */ = {
+            isa = PBXCopyFilesBuildPhase;
+            buildActionMask = 2147483647;
+            dstPath = "";
+            dstSubfolderSpec = 13;
+            files = (AA0000000000000000000070 /* ezcallWidgets.appex in Embed App Extensions */,);
+            name = "Embed App Extensions";
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
         AA0000000000000000000010 /* ezcall.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ezcall.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -35,6 +68,16 @@
         AA000000000000000000001B /* MessagesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesViews.swift; sourceTree = "<group>"; };
         AA000000000000000000001C /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
         AA000000000000000000001D /* InCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InCallView.swift; sourceTree = "<group>"; };
+        AA000000000000000000001E /* EzcallLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EzcallLanguage.swift; sourceTree = "<group>"; };
+        AA000000000000000000001F /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+        AA0000000000000000000023 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+        AA0000000000000000000091 /* SiriShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiriShortcuts.swift; sourceTree = "<group>"; };
+        AA0000000000000000000075 /* ezcallWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ezcallWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+        AA0000000000000000000076 /* EzcallWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EzcallWidgets.swift; sourceTree = "<group>"; };
+        AA0000000000000000000077 /* WidgetDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDestination.swift; sourceTree = "<group>"; };
+        AA0000000000000000000078 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        AA0000000000000000000079 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+        AA000000000000000000007D /* WidgetConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetConnection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +94,7 @@
             isa = PBXGroup;
             children = (
                 AA0000000000000000000031 /* ezcall */,
+                AA000000000000000000007A /* ezcallWidgets */,
                 AA0000000000000000000032 /* Products */,
             );
             sourceTree = "<group>";
@@ -68,6 +112,10 @@
                 AA000000000000000000001B /* MessagesViews.swift */,
                 AA000000000000000000001C /* SharedViews.swift */,
                 AA000000000000000000001D /* InCallView.swift */,
+                AA000000000000000000001E /* EzcallLanguage.swift */,
+                AA0000000000000000000091 /* SiriShortcuts.swift */,
+                AA000000000000000000001F /* Localizable.xcstrings */,
+                AA0000000000000000000023 /* InfoPlist.xcstrings */,
                 AA0000000000000000000016 /* Info.plist */,
                 AA0000000000000000000017 /* PrivacyInfo.xcprivacy */,
                 AA0000000000000000000018 /* Assets.xcassets */,
@@ -77,8 +125,20 @@
         };
         AA0000000000000000000032 /* Products */ = {
             isa = PBXGroup;
-            children = (AA0000000000000000000010 /* ezcall.app */,);
+            children = (AA0000000000000000000010 /* ezcall.app */, AA0000000000000000000075 /* ezcallWidgets.appex */,);
             name = Products;
+            sourceTree = "<group>";
+        };
+        AA000000000000000000007A /* ezcallWidgets */ = {
+            isa = PBXGroup;
+            children = (
+                AA0000000000000000000076 /* EzcallWidgets.swift */,
+                AA0000000000000000000077 /* WidgetDestination.swift */,
+                AA000000000000000000007D /* WidgetConnection.swift */,
+                AA0000000000000000000078 /* Info.plist */,
+                AA0000000000000000000079 /* Localizable.xcstrings */,
+            );
+            path = ezcallWidgets;
             sourceTree = "<group>";
         };
 /* End PBXGroup section */
@@ -91,13 +151,28 @@
                 AA0000000000000000000020 /* Sources */,
                 AA0000000000000000000021 /* Frameworks */,
                 AA0000000000000000000022 /* Resources */,
+                AA0000000000000000000080 /* Embed App Extensions */,
             );
             buildRules = ();
-            dependencies = ();
+            dependencies = (AA0000000000000000000082 /* PBXTargetDependency */,);
             name = ezcall;
             productName = ezcall;
             productReference = AA0000000000000000000010 /* ezcall.app */;
             productType = "com.apple.product-type.application";
+        };
+        AA0000000000000000000081 /* ezcallWidgets */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = AA0000000000000000000088;
+            buildPhases = (
+                AA0000000000000000000084 /* Sources */,
+                AA0000000000000000000085 /* Resources */,
+            );
+            buildRules = ();
+            dependencies = ();
+            name = ezcallWidgets;
+            productName = ezcallWidgets;
+            productReference = AA0000000000000000000075 /* ezcallWidgets.appex */;
+            productType = "com.apple.product-type.app-extension";
         };
 /* End PBXNativeTarget section */
 
@@ -116,22 +191,30 @@
             compatibilityVersion = "Xcode 14.0";
             developmentRegion = en;
             hasScannedForEncodings = 0;
-            knownRegions = (en, Base,);
+            knownRegions = (en, Base, fa, ar, es, fr, tr, it,);
             mainGroup = AA0000000000000000000030;
             productRefGroup = AA0000000000000000000032 /* Products */;
             projectDirPath = "";
             projectRoot = "";
-            targets = (AA0000000000000000000040 /* ezcall */,);
+            targets = (AA0000000000000000000040 /* ezcall */, AA0000000000000000000081 /* ezcallWidgets */,);
         };
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+        AA0000000000000000000085 /* Resources */ = {
+            isa = PBXResourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (AA0000000000000000000074 /* Localizable.xcstrings in Resources */,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
         AA0000000000000000000022 /* Resources */ = {
             isa = PBXResourcesBuildPhase;
             buildActionMask = 2147483647;
             files = (
                 AA0000000000000000000006 /* PrivacyInfo.xcprivacy in Resources */,
                 AA0000000000000000000007 /* Assets.xcassets in Resources */,
+                AA000000000000000000000E /* Localizable.xcstrings in Resources */,
+                AA000000000000000000000F /* InfoPlist.xcstrings in Resources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
@@ -152,10 +235,32 @@
                 AA000000000000000000000A /* MessagesViews.swift in Sources */,
                 AA000000000000000000000B /* SharedViews.swift in Sources */,
                 AA000000000000000000000C /* InCallView.swift in Sources */,
+                AA000000000000000000000D /* EzcallLanguage.swift in Sources */,
+                AA0000000000000000000090 /* SiriShortcuts.swift in Sources */,
+                AA0000000000000000000072 /* WidgetDestination.swift in Sources */,
+                AA000000000000000000007B /* WidgetConnection.swift in Sources */,
+            );
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+        AA0000000000000000000084 /* Sources */ = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (
+                AA0000000000000000000071 /* EzcallWidgets.swift in Sources */,
+                AA0000000000000000000073 /* WidgetDestination.swift in Sources */,
+                AA000000000000000000007C /* WidgetConnection.swift in Sources */,
             );
             runOnlyForDeploymentPostprocessing = 0;
         };
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+        AA0000000000000000000082 /* PBXTargetDependency */ = {
+            isa = PBXTargetDependency;
+            target = AA0000000000000000000081 /* ezcallWidgets */;
+            targetProxy = AA0000000000000000000083;
+        };
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
         AA0000000000000000000050 /* Debug */ = {
@@ -164,6 +269,9 @@
                 CLANG_ENABLE_MODULES = YES;
                 DEBUG_INFORMATION_FORMAT = dwarf;
                 ENABLE_TESTABILITY = YES;
+                CURRENT_PROJECT_VERSION = 34;
+                EZCALL_BUNDLE_IDENTIFIER = app.xcall.relay;
+                MARKETING_VERSION = 0.1.31;
                 SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
                 SWIFT_OPTIMIZATION_LEVEL = "-Onone";
             };
@@ -174,6 +282,9 @@
             buildSettings = {
                 CLANG_ENABLE_MODULES = YES;
                 DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+                CURRENT_PROJECT_VERSION = 34;
+                EZCALL_BUNDLE_IDENTIFIER = app.xcall.relay;
+                MARKETING_VERSION = 0.1.31;
                 SWIFT_COMPILATION_MODE = wholemodule;
                 VALIDATE_PRODUCT = YES;
             };
@@ -183,14 +294,13 @@
             isa = XCBuildConfiguration;
             buildSettings = {
                 ASSETCATALOG_COMPILER_APPICON_NAME = EzcallAppIcon;
+                CODE_SIGN_ENTITLEMENTS = EzcallAppGroup.entitlements;
                 CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 26;
                 ENABLE_PREVIEWS = YES;
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = ezcall/Info.plist;
                 IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-                MARKETING_VERSION = 0.1.25;
-                PRODUCT_BUNDLE_IDENTIFIER = "app.xcall.relay";
+                PRODUCT_BUNDLE_IDENTIFIER = "$(EZCALL_BUNDLE_IDENTIFIER)";
                 PRODUCT_NAME = "$(TARGET_NAME)";
                 SDKROOT = iphoneos;
                 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -205,13 +315,12 @@
             isa = XCBuildConfiguration;
             buildSettings = {
                 ASSETCATALOG_COMPILER_APPICON_NAME = EzcallAppIcon;
+                CODE_SIGN_ENTITLEMENTS = EzcallAppGroup.entitlements;
                 CODE_SIGN_STYLE = Automatic;
-                CURRENT_PROJECT_VERSION = 26;
                 GENERATE_INFOPLIST_FILE = NO;
                 INFOPLIST_FILE = ezcall/Info.plist;
                 IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-                MARKETING_VERSION = 0.1.25;
-                PRODUCT_BUNDLE_IDENTIFIER = "app.xcall.relay";
+                PRODUCT_BUNDLE_IDENTIFIER = "$(EZCALL_BUNDLE_IDENTIFIER)";
                 PRODUCT_NAME = "$(TARGET_NAME)";
                 SDKROOT = iphoneos;
                 SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -219,6 +328,46 @@
                 SWIFT_VERSION = 5.0;
                 TARGETED_DEVICE_FAMILY = 1;
                 EZCALL_TIP_PRODUCT_ID = "";
+            };
+            name = Release;
+        };
+        AA0000000000000000000086 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                APPLICATION_EXTENSION_API_ONLY = YES;
+                CODE_SIGN_ENTITLEMENTS = EzcallAppGroup.entitlements;
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = ezcallWidgets/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                PRODUCT_BUNDLE_IDENTIFIER = "$(EZCALL_BUNDLE_IDENTIFIER).widgets";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = iphoneos;
+                SKIP_INSTALL = YES;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = 1;
+            };
+            name = Debug;
+        };
+        AA0000000000000000000087 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                APPLICATION_EXTENSION_API_ONLY = YES;
+                CODE_SIGN_ENTITLEMENTS = EzcallAppGroup.entitlements;
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                INFOPLIST_FILE = ezcallWidgets/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                PRODUCT_BUNDLE_IDENTIFIER = "$(EZCALL_BUNDLE_IDENTIFIER).widgets";
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = iphoneos;
+                SKIP_INSTALL = YES;
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = 1;
             };
             name = Release;
         };
@@ -234,6 +383,12 @@
         AA0000000000000000000061 = {
             isa = XCConfigurationList;
             buildConfigurations = (AA0000000000000000000052, AA0000000000000000000053,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
+        AA0000000000000000000088 = {
+            isa = XCConfigurationList;
+            buildConfigurations = (AA0000000000000000000086, AA0000000000000000000087,);
             defaultConfigurationIsVisible = 0;
             defaultConfigurationName = Release;
         };

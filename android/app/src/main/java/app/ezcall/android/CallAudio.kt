@@ -1,6 +1,7 @@
 package app.ezcall.android
 
 import android.content.Context
+import android.os.SystemClock
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -24,7 +25,7 @@ import kotlin.concurrent.thread
 internal class CallAudio(private val context: Context, private val events: Events) {
     interface Events {
         fun onAudioStatus(status: Status)
-        fun onAudioStarted(callId: String, key: ByteArray, uplink: Boolean)
+        fun onAudioStarted(callId: String, key: ByteArray, uplink: Boolean, pairFrames: Boolean)
         fun onAudioStopped(callId: String, reason: String?)
         fun onAudioPacket(packet: ByteArray)
     }
@@ -39,24 +40,25 @@ internal class CallAudio(private val context: Context, private val events: Event
     @Volatile var status = Status.NONE
         private set
 
-    private class Stream(val callId: String) {
+    private class Stream(val callId: String, val payloadLimit: Int, val pairFrames: Boolean) {
         val key = ByteArray(32).also(SecureRandom()::nextBytes)
         val seal = Wire.AudioSeal(key, Wire.AudioSeal.ANDROID_TO_IPHONE, Wire.AudioSeal.IPHONE_TO_ANDROID)
         var encoder: Opus.Encoder? = null
         var decoder: Opus.Decoder? = null
+        var pendingFrame: ByteArray? = null
         var open = true
     }
 
     fun connect(launch: Boolean) = post { ensureLink(launch) }
 
-    fun begin(callId: String) = post {
+    fun begin(callId: String, payloadLimit: Int, pairFrames: Boolean) = post {
         endStream(null)
         val current = ensureLink(launch = true)
         if (current == null) {
             events.onAudioStopped(callId, "Call audio isn't running on Android. Set it up in ezcall on Android.")
             return@post
         }
-        val next = Stream(callId)
+        val next = Stream(callId, payloadLimit, pairFrames)
         stream = next
         try {
             AudioBridge.write(current.output, AudioBridge.START)
@@ -65,13 +67,14 @@ internal class CallAudio(private val context: Context, private val events: Event
         }
     }
 
-    fun end() = post { endStream(null) }
+    fun end(reason: String? = null) = post { endStream(reason) }
 
-    fun usePhoneAudioRedirect(enabled: Boolean) = post {
+    fun setReceiverReady(ready: Boolean) = post {
         val current = link ?: return@post
-        if (stream == null) return@post
+        val audio = stream ?: return@post
+        if (!ready) synchronized(audio) { audio.pendingFrame = null }
         try {
-            AudioBridge.write(current.output, AudioBridge.ROUTE, byteArrayOf(if (enabled) 1 else 0))
+            AudioBridge.write(current.output, AudioBridge.RECEIVER_READY, byteArrayOf(if (ready) 1 else 0))
         } catch (_: IOException) {
             drop(current)
         }
@@ -107,9 +110,11 @@ internal class CallAudio(private val context: Context, private val events: Event
             while (true) {
                 val (type, payload) = AudioBridge.read(current.input)
                 when (type) {
-                    AudioBridge.STARTED -> post { started(payload) }
-                    AudioBridge.PCM -> encode(payload)
-                    AudioBridge.ERROR -> post { endStream(String(payload, Charsets.UTF_8).take(160)) }
+                    AudioBridge.STARTED -> post { if (link === current) started(payload) }
+                    AudioBridge.PCM -> if (link === current) encode(payload)
+                    AudioBridge.ERROR -> post {
+                        if (link === current) endStream(String(payload, Charsets.UTF_8).take(160))
+                    }
                 }
             }
         } catch (_: Exception) {
@@ -124,25 +129,32 @@ internal class CallAudio(private val context: Context, private val events: Event
         val current = stream ?: return
         val active = payload.firstOrNull()?.toInt() ?: 0
         synchronized(current) {
-            if (active and AudioBridge.DOWNLINK != 0) current.encoder = runCatching { Opus.Encoder() }.getOrNull()
+            if (active and AudioBridge.DOWNLINK != 0) {
+                // Keep paired notifications small enough to avoid splitting over a 251-byte BLE data link.
+                val frameLimit = if (current.pairFrames) minOf(96, (current.payloadLimit - 2) / 2) else current.payloadLimit
+                current.encoder = runCatching { Opus.Encoder(frameLimit) }.getOrNull()
+            }
             if (active and AudioBridge.UPLINK != 0) current.decoder = runCatching { Opus.Decoder() }.getOrNull()
         }
-        if (current.encoder == null && current.decoder == null) {
+        if (current.encoder == null || current.decoder == null) {
             endStream("Android couldn't start the Opus codec.")
             return
         }
-        events.onAudioStarted(current.callId, current.key.copyOf(), current.decoder != null)
+        events.onAudioStarted(current.callId, current.key.copyOf(), uplink = true, pairFrames = current.pairFrames)
     }
 
     private fun encode(pcm: ByteArray) {
         val current = stream ?: return
         val packets = synchronized(current) {
             if (!current.open) return
-            runCatching { current.encoder?.encode(pcm) }.getOrNull()
-        } ?: return
-        for (packet in packets) {
-            if (packet.size <= MAX_OPUS) events.onAudioPacket(current.seal.seal(packet))
+            val frames = runCatching { current.encoder?.encode(pcm) }.getOrNull() ?: return
+            if (current.pairFrames) frames.mapNotNull { frame ->
+                val first = current.pendingFrame
+                current.pendingFrame = if (first == null) frame else null
+                first?.let { Wire.AudioSeal.pair(it, frame) }
+            } else frames
         }
+        for (packet in packets) events.onAudioPacket(current.seal.seal(packet))
     }
 
     private fun decode(current: Stream, packet: ByteArray) {
@@ -160,6 +172,7 @@ internal class CallAudio(private val context: Context, private val events: Event
     private fun endStream(reason: String?) {
         val current = stream ?: return
         stream = null
+        link?.let { runCatching { AudioBridge.write(it.output, AudioBridge.STOP) } }
         synchronized(current) {
             current.open = false
             current.encoder?.release()
@@ -167,7 +180,6 @@ internal class CallAudio(private val context: Context, private val events: Event
             current.encoder = null
             current.decoder = null
         }
-        link?.let { runCatching { AudioBridge.write(it.output, AudioBridge.STOP) } }
         events.onAudioStopped(current.callId, reason)
     }
 
@@ -198,11 +210,47 @@ internal class CallAudio(private val context: Context, private val events: Event
     // Starting, finding and authenticating the shell-user component.
     object Setup {
         private const val PREFS = "call_audio"
+        private const val USB_WINDOW_MS = 120_000L
+        private const val STARTUP_MS = 7_000L
+        private val usb = UsbAudioAuthorization(SystemClock::elapsedRealtime)
 
         fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
 
         fun disable(context: Context) {
             prefs(context).edit().putBoolean("enabled", false).apply()
+        }
+
+        fun requestUsb() = usb.begin(USB_WINDOW_MS)
+
+        fun cancelUsb(request: UsbAudioAuthorization.Request) = usb.cancel(request)
+
+        @Synchronized
+        fun claimUsb(context: Context, uid: Int): String? {
+            if (!usb.claim(uid)) return null
+            open(context)?.let {
+                runCatching { it.socket.close() }
+                return "true\n"
+            }
+            val (port, token) = credentials(context)
+            return launchCommand(context, port, token) + "\n"
+        }
+
+        fun awaitUsb(context: Context, request: UsbAudioAuthorization.Request): Status {
+            try {
+                while (usb.isPending(request, STARTUP_MS)) {
+                    if (request.claimedAt != null) {
+                        open(context)?.let { link ->
+                            runCatching { link.socket.close() }
+                            prefs(context).edit().putBoolean("enabled", true).apply()
+                            return link.status
+                        }
+                    }
+                    Thread.sleep(250)
+                }
+                throw ComponentNotReady()
+            } finally {
+                usb.cancel(request)
+            }
         }
 
         /** Starts or restarts the component for the setup screen and reports what this phone allows. */
@@ -219,15 +267,10 @@ internal class CallAudio(private val context: Context, private val events: Event
                 if (!enabled(context)) prefs(context).edit().putBoolean("enabled", true).apply()
                 return it
             }
+            if (usb.hasRequest(STARTUP_MS)) throw ComponentNotReady()
             val port = credentials(context).first
             val token = ByteArray(32).also(SecureRandom()::nextBytes)
-            val apk = context.applicationInfo.sourceDir
-            require(apk.matches(Regex("[A-Za-z0-9/._=~+-]+")))
-            val name = CallAudioServer.PROCESS_NAME
-            // Give app_process time to detach before Wireless debugging closes the shell.
-            LocalAdb.shell(context, "trap '' HUP; pkill -x $name; ${CallAudioServer.TOKEN_ENV}=${hex(token)} CLASSPATH='$apk' " +
-                "setsid app_process /system/bin --nice-name=$name ${CallAudioServer::class.java.name} $port " +
-                "</dev/null >/data/local/tmp/$name.log 2>&1 & sleep 0.4", connectPort)
+            LocalAdb.shell(context, launchCommand(context, port, token), connectPort)
             // Store the new token only once adbd has it, so a refused launch leaves the running component reachable.
             check(prefs(context).edit().putString("token", hex(token)).commit())
             repeat(24) {
@@ -238,6 +281,16 @@ internal class CallAudio(private val context: Context, private val events: Event
                 }
             }
             throw ComponentNotReady()
+        }
+
+        private fun launchCommand(context: Context, port: Int, token: ByteArray): String {
+            val apk = context.applicationInfo.sourceDir
+            require(apk.matches(Regex("[A-Za-z0-9/._=~+-]+")))
+            val name = CallAudioServer.PROCESS_NAME
+            // Give app_process time to detach before the ADB shell exits.
+            return "trap '' HUP; pkill -x $name; ${CallAudioServer.TOKEN_ENV}=${hex(token)} CLASSPATH='$apk' " +
+                "setsid app_process /system/bin --nice-name=$name ${CallAudioServer::class.java.name} $port " +
+                "</dev/null >/data/local/tmp/$name.log 2>&1 & sleep 0.4"
         }
 
         class ComponentNotReady : IOException("The call audio component didn't start")
@@ -291,9 +344,5 @@ internal class CallAudio(private val context: Context, private val events: Event
         private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
         private fun hex(value: ByteArray) = value.joinToString("") { "%02x".format(it) }
-    }
-
-    private companion object {
-        const val MAX_OPUS = 400
     }
 }

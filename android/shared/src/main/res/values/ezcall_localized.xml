@@ -10,4 +10,21 @@
     <string name="ez_continue">Continue</string>
     <string name="ez_contacts">Contacts</string>
     <string name="ez_brand">ezcall</string>
+    <string name="ez_test_log">Audio test log</string>
+    <string name="ez_test_copy">Copy log</string>
+    <string name="ez_test_echo_heard">I heard my voice back</string>
+    <string name="ez_test_echo_confirmed">Voice echo confirmed</string>
+    <string name="ez_test_speak_after_tones">Speak after the test tones. EasyCall checks the audio automatically.</string>
+    <string name="ez_test_own_wave">Your microphone</string>
+    <string name="ez_test_incoming_wave">Incoming audio</string>
+    <string name="ez_test_sent_tone_wave">Outgoing test tone</string>
+    <string name="ez_test_remote_mic_wave">Receiver microphone</string>
+    <string name="ez_test_wait_tone">Waiting for test tone playback</string>
+    <string name="ez_test_tone_played">Test tone playback detected</string>
+    <string name="ez_test_wait_mic">Waiting for microphone signal</string>
+    <string name="ez_test_mic_detected">Microphone signal detected</string>
+    <string name="ez_test_wait_echo">Waiting for returned voice playback</string>
+    <string name="ez_test_echo_played">Returned voice playback detected</string>
+    <string name="ez_test_auto_passed">Two-way audio test passed</string>
+    <string name="ez_test_auto_incomplete">Audio test incomplete</string>
 </resources>

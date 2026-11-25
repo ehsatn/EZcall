@@ -13,6 +13,12 @@ internal fun Context.receiverNotice(notice: String): String = when (notice) {
     "Android couldn't place the call." -> getString(R.string.r_dial_failed)
     "Answering on the sending phone…" -> getString(R.string.r_answering)
     "Audio stopped. Continue the call on the sending phone." -> getString(R.string.r_audio_interrupted)
+    "Android couldn't move call audio to the receiving phone. Use the sending phone.",
+    "Android stopped capturing call audio.",
+    "Android stopped receiving call audio.",
+    "Call audio stopped on Android." -> getString(R.string.r_audio_interrupted)
+    "Android couldn't start the Opus codec." -> getString(R.string.r_audio_codec_failed)
+    "Call audio isn't running on Android. Set it up in ezcall on Android." -> getString(R.string.r_audio_setup_needed)
     "Bluetooth disconnected. Reconnecting…" -> getString(R.string.r_reconnecting)
     "Bluetooth scan failed. Trying again." -> getString(R.string.r_scan_failed)
     "Call audio is on the sending phone." -> getString(R.string.r_audio_sender)

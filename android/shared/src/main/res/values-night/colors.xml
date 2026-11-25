@@ -1,7 +1,10 @@
 <resources>
-    <color name="ezcall_background">#101728</color>
-    <color name="ezcall_surface">#182136</color>
-    <color name="ezcall_surface_container">#232F4B</color>
+    <color name="ezcall_background">#111722</color>
+    <color name="ezcall_surface">#111722</color>
+    <color name="ezcall_surface_container_low">#191F2D</color>
+    <color name="ezcall_surface_container">#1E2635</color>
+    <color name="ezcall_surface_container_high">#283142</color>
+    <color name="ezcall_surface_container_highest">#333D50</color>
     <color name="ezcall_on_surface">#E7EDFC</color>
     <color name="ezcall_on_surface_variant">#B5C3DF</color>
     <color name="ezcall_primary">#AEC0FF</color>

@@ -7,12 +7,16 @@ android {
     sourceSets["main"].kotlin.srcDir("../shared/src/main/java")
     sourceSets["main"].res.srcDir("../shared/src/main/res")
 
+    bundle {
+        language { enableSplit = false }
+    }
+
     defaultConfig {
         applicationId = "app.ezcall.android"
         minSdk = 31
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.1.11"
+        versionCode = 21
+        versionName = "0.1.20"
     }
 
     compileOptions {

@@ -39,15 +39,17 @@ Messages are UTF-8 JSON objects. Times use Unix epoch milliseconds. Request IDs 
 | Android | `sms` | SMS fields |
 | Android | `call` | `id`, `address`, `date`, `state` |
 
-| Android | `capabilities` | `control`, `dial` (booleans), `audio` (`none`, `listen` or `two_way`). Optional booleans `texts`, `contacts`, and `send_sms` report Android grants. |
+| Android | `capabilities` | `control`, `dial` (booleans), `audio` (`none`, `listen` or `two_way`). Optional booleans `texts`, `contacts`, and `send_sms` report Android grants. Optional `active_call_id` is the current relayed call ID, or an empty string when there is none. |
 | Receiver | `call_answer` | `id` of a ringing call |
 | Receiver | `call_end` | `id` of a ringing, active or requested call |
 | Receiver | `call_dial` | `id` (new UUID), `address` |
 | Receiver | `call_resume` | `id` of the interrupted active call, `audio` (`"1"` if the audio session is retained) |
 | Android | `call_resumed` | `id`, `audio` (whether the retained audio stream resumed) |
 | Receiver | `audio_ready`, `audio_paused` | `id` of the active SIM call, when supported by `audio_route` in capabilities |
+| Receiver | `test_audio_heard` | `id` of the active simulated call, when that call has `test_audio_confirmation: true` |
+| Receiver | `test_audio_status` | `id` of the active simulated call, when that call has `test_audio_diagnostics: true`. `step` is a known receiver checkpoint. Automatic evidence uses `CUE_PLAYED`, `MIC_SIGNAL`, and `ECHO_PLAYED`. |
 | Android | `call_error` | `id`, `message` |
-| Android | `audio_start` | `id`, `key` (Base64, 32 bytes), `uplink` (boolean) |
+| Android | `audio_start` | `id`, `key` (Base64, 32 bytes), `uplink` (boolean), optional `audio_pairs` (boolean). Simulated calls can include `test_echo_sequence: 4096`. |
 | Android | `audio_stop` | `id`, optional `message` |
 | Receiver | `sms_send` | `id` (new UUID), `address`, `body` |
 | Android | `sms_result` | `id`, `sent` (boolean), optional `message` |
@@ -58,7 +60,7 @@ An SMS object has string `id`, `address`, `body`, numeric `date` and `direction`
 
 Android advertises `send_sms` only when the owner opts in and Android grants the send permission. The receiver waits for the matching result, which reports Android’s send status. A dropped link can leave the result unknown. Retry requires a new explicit action from the user.
 
-After the Android owner confirms **Forget receiving phone**, Android deletes its saved credential and allows only the acknowledgement for the closing session. If an acknowledgement cannot be obtained, Android shows a fresh QR and the owner can clear the old record on Receiver manually. Debug test calls include `simulated: true` and echo authenticated audio payloads from Receiver back down the audio channel.
+After the Android owner confirms **Forget receiving phone**, Android deletes its saved credential and allows only the acknowledgement for the closing session. If an acknowledgement cannot be obtained, Android shows a fresh QR and the owner can clear the old record on Receiver manually. Test calls include `simulated: true`. The Sender streams test tones and then echoes authenticated audio payloads from Receiver back down the audio channel.
 
 ## Calls on the receiving phone
 
@@ -66,11 +68,13 @@ Android sends `capabilities` after each authentication and when call audio start
 
 If Android advertises `resume_call: true` in capabilities, the receiver can retain an active call during a short outage and send `call_resume` after authenticating again. Android confirms only the matching active call within its recovery window. Both sides drop queued audio and keep the live audio key and sequence counters when reattaching that stream. A call that ended during the outage cannot resume.
 
-With `audio_route: true`, an Receiver with an active two-way audio engine can signal readiness. Android requests its PSTN redirection mode only while the relayed call has direct telephony capture and injection. It releases that request on audio pause, Bluetooth loss, a media failure, or the end of the call.
+With `audio_route: true`, a receiver with an active two-way audio engine can signal readiness even while muted. The sender starts relaying PSTN audio after `audio_ready` and leaves the sender phone’s audio mode under Android’s control. The relay pauses or stops on audio pause, Bluetooth loss, a media failure, or the end of the call. If the sender owner chooses to continue locally, Android stops relaying audio for that call and sends `audio_stop`. The cellular call itself can continue.
 
 Audio moves to the receiver only for a call answered or placed from the receiver. When that call is active, Android sends `audio_start` with a fresh key. The audio characteristics then carry one packet per write or notification. Each packet is `05 || sequence || ciphertext || tag`. The sequence is a four-byte big-endian counter that starts at zero in each direction for each `audio_start`. The AES-256-GCM nonce is a four-byte direction (`1` Android → Receiver, `2` Receiver → Android), four zero bytes and the sequence. The first five bytes are the associated data. A receiver accepts any sequence greater than the last one it accepted and drops others. Sequence gaps are allowed because a sender drops stale packets under congestion.
 
-Each payload is one 20 ms Opus packet, mono at 48 kHz, of at most 1,024 bytes. A packet must fit in one ATT payload. Without `uplink`, the receiver only plays audio. Android pauses bulk sync frames while audio streams, since an indication blocks the next notification.
+With `test_echo_sequence`, simulated downlink sequences below that value are tones. The Sender skips to the specified sequence for the first returned microphone packet. Older receivers already accept the gap and can still decode the Opus stream. Android Receiver verifies that non-silent PCM from each phase advances through its playback track.
+
+By default each payload carries one 20 ms Opus packet, mono at 48 kHz. An iPhone or Android Receiver that sends `audio_pairs: "1"` in its authenticated `ready` can receive two Opus packets in one notification. Android enables this for a stream with `audio_pairs: true` in `audio_start`. Its downlink payload is a two-byte big-endian length for the first packet, followed by both Opus packets. The uplink and simulated call streams use single Opus packets. The plaintext payload is limited to 1,024 bytes and the sealed packet must fit in one ATT payload. Without `uplink`, the receiver only plays audio. Android pauses bulk sync while audio streams, since an indication blocks the next notification.
 
 Snapshots are limited to 100 recent SMS records and 5,000 contacts. The receiver stages records until a matched `sync_end` and keeps its previous snapshot after interruption or `error`. A live SMS can arrive during a snapshot and should be preserved. A successful snapshot may contain zero records for a category.
 

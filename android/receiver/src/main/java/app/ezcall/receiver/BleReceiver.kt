@@ -19,6 +19,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.ParcelUuid
 import android.os.SystemClock
+import android.util.Log
+import app.ezcall.android.AudioTestLog
+import app.ezcall.android.AudioTestMetric
 import app.ezcall.android.Wire
 import org.json.JSONObject
 
@@ -33,8 +36,10 @@ internal class BleReceiver(
     private val status: (String) -> Unit,
     private val message: (JSONObject) -> Unit,
     private val audio: (ByteArray) -> Unit,
-    private val disconnected: () -> Unit
+    private val disconnected: () -> Unit,
+    private val testLog: () -> AudioTestLog?
 ) {
+    private data class Frame(val bytes: ByteArray, val diagnostic: String?, val queuedAt: Long)
     private var active = false
     private var scanner: BluetoothLeScanner? = null
     private var scan: ScanCallback? = null
@@ -46,11 +51,15 @@ internal class BleReceiver(
     private var session: Wire.Session? = null
     private var ready = false
     private var discovering = false
+    private var requestedPriority: Int? = null
     private var maxWrite = 20
-    private val frames = ArrayDeque<ByteArray>()
+    private var maxAudioWrite = 20
+    private val frames = ArrayDeque<Frame>()
     private val microphonePackets = ArrayDeque<ByteArray>()
     private var frameOffset = 0
     private var writing: BluetoothGattCharacteristic? = null
+    private var writeStarted = 0L
+    private var microphoneSequence = -1L
     private var lastScan = -6_500L
     private val tried = mutableMapOf<String, Long>()
     private val search = Runnable { startScan() }
@@ -59,7 +68,12 @@ internal class BleReceiver(
         startScan()
     }
     private val setupTimeout = Runnable { retry("The relay did not respond.") }
-    private val writeTimeout = Runnable { retry("The Bluetooth write timed out.") }
+    private val writeTimeout = Runnable {
+        val channel = if (writing?.uuid == Wire.audioIn) "audio" else "control"
+        val detail = "GATT $channel write timed out; frame=${frames.firstOrNull()?.diagnostic ?: "other"}, queuedControl=${frames.size}"
+        Log.w("EzcallReceiver", detail)
+        retry("The Bluetooth write timed out.", detail)
+    }
 
     fun start() {
         active = true
@@ -74,29 +88,76 @@ internal class BleReceiver(
     }
 
     fun send(body: JSONObject): Boolean {
-        if (!ready || frames.size >= 24) return false
+        val log = testLog()
+        val label = log?.controlLabel(body)
+        if (!ready || frames.size >= 24) {
+            label?.let { log?.add("BLE TX $it rejected: ready=$ready queuedControl=${frames.size}") }
+            return false
+        }
+        label?.let { log?.add("BLE TX $it queued: ahead=${frames.size} inFlight=${writeChannel()} controlChunk=$maxWrite") }
         return guarded {
-            enqueue(checkNotNull(session).seal(body.toString().toByteArray()))
+            enqueue(checkNotNull(session).seal(body.toString().toByteArray()), label)
         }
     }
 
-    fun sendAudio(packet: ByteArray) {
-        if (!ready || audioRx == null || packet.size > maxWrite) return
+    fun sendAudio(packet: ByteArray): Boolean {
+        if (!ready || audioRx == null || packet.size > maxAudioWrite) return false
         // Keep up to 60 ms of speech across bursts of GATT write callbacks.
-        if (microphonePackets.size == 3) microphonePackets.removeFirst()
+        if (microphonePackets.size == 3) {
+            microphonePackets.removeFirst()
+            testLog()?.count(AudioTestMetric.UPLINK_QUEUE_DROPPED)
+        }
         microphonePackets.addLast(packet)
         if (writing == null && frames.isEmpty()) writeNextMicrophonePacket()
+        return ready
     }
 
-    fun clearMicrophonePackets() = microphonePackets.clear()
+    fun clearMicrophonePackets() {
+        val log = testLog()
+        repeat(microphonePackets.size) { log?.count(AudioTestMetric.UPLINK_QUEUE_DROPPED) }
+        microphonePackets.clear()
+    }
+
+    fun describeTestLink(log: AudioTestLog) {
+        log.add("BLE link: ready=$ready ATT payload=$maxAudioWrite bytes controlChunk=$maxWrite bytes audioWrite=${audioRx != null} inFlight=${writeChannel()}")
+    }
+
+    private fun writeChannel() = when (writing?.uuid) {
+        Wire.audioIn -> "audio"
+        Wire.receive -> "control"
+        else -> "none"
+    }
+
+    fun setCallPriority(active: Boolean) {
+        val gatt = peer ?: return
+        val priority = if (active) BluetoothGatt.CONNECTION_PRIORITY_HIGH else BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER
+        if (priority == requestedPriority) return
+        val accepted = runCatching { gatt.requestConnectionPriority(priority) }.getOrDefault(false)
+        testLog()?.add("BLE connection priority: requested=${if (active) "high" else "low-power"} accepted=$accepted")
+        if (accepted) {
+            requestedPriority = priority
+            Log.i("EzcallReceiver", if (active) "Requested low-latency Bluetooth for calls" else "Requested low-power Bluetooth")
+        }
+    }
+
+    fun audioPayloadLimit() = maxAudioWrite - Wire.AudioSeal.OVERHEAD
 
     private fun writeNextMicrophonePacket() {
         val packet = microphonePackets.removeFirstOrNull() ?: return
         val target = audioRx ?: return
         val gatt = peer ?: return
-        if (runCatching { write(gatt, target, packet, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) }.getOrDefault(false)) {
+        val log = testLog()
+        writeStarted = SystemClock.elapsedRealtime()
+        val status = runCatching { write(gatt, target, packet, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE) }
+            .getOrDefault(BluetoothStatusCodes.ERROR_UNKNOWN)
+        if (status == BluetoothStatusCodes.SUCCESS) {
             writing = target
+            microphoneSequence = if (log != null) Wire.AudioSeal.sequence(packet) else -1L
+            log?.track(AudioTestMetric.UPLINK_WRITE_SUBMITTED, microphoneSequence)
+            if (log?.count(AudioTestMetric.UPLINK_WRITE_SUBMITTED) == 1) log.add("BLE first microphone write submitted (${packet.size} bytes)")
             handler.postDelayed(writeTimeout, 5_000)
+        } else if (log?.count(AudioTestMetric.UPLINK_WRITE_FAILED) == 1) {
+            log.add("BLE microphone write submit failed: status=$status")
         }
     }
 
@@ -157,16 +218,21 @@ internal class BleReceiver(
 
     private val callbacks = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) = dispatch(gatt) {
+            testLog()?.add("BLE connection callback: state=$newState status=$status")
             if (status != BluetoothGatt.GATT_SUCCESS || newState == BluetoothProfile.STATE_DISCONNECTED) {
                 retry("Bluetooth disconnected. Reconnecting…")
             } else if (newState == BluetoothProfile.STATE_CONNECTED) {
-                gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                if (!gatt.requestMtu(183)) discover(gatt)
+                setCallPriority(true)
+                if (!gatt.requestMtu(517)) discover(gatt)
             }
         }
 
         override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) = dispatch(gatt) {
-            if (status == BluetoothGatt.GATT_SUCCESS) maxWrite = (mtu - 3).coerceIn(20, 180)
+            testLog()?.add("BLE MTU callback: mtu=$mtu status=$status")
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                maxAudioWrite = (mtu - 3).coerceIn(20, 512)
+                maxWrite = minOf(maxAudioWrite, 180)
+            }
             discover(gatt)
         }
 
@@ -196,33 +262,60 @@ internal class BleReceiver(
             }
         }
 
-        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) =
+        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            val callbackAt = SystemClock.elapsedRealtime()
             dispatch(gatt) {
                 if (writing?.uuid != characteristic.uuid) return@dispatch
                 handler.removeCallbacks(writeTimeout)
                 writing = null
+                val elapsed = callbackAt - writeStarted
+                val handlerDelay = SystemClock.elapsedRealtime() - callbackAt
+                val log = testLog()
                 if (characteristic.uuid == Wire.receive) {
-                    check(status == BluetoothGatt.GATT_SUCCESS)
-                    if (frameOffset == frames.first().size) {
+                    val frame = frames.first()
+                    frame.diagnostic?.let {
+                        log?.add("BLE TX $it write callback: offset=$frameOffset/${frame.bytes.size} status=$status gatt=${elapsed}ms handler=${handlerDelay}ms")
+                    }
+                    if (status != BluetoothGatt.GATT_SUCCESS && frame.diagnostic == null) {
+                        log?.add("BLE untracked control write callback failed: status=$status")
+                    }
+                    check(status == BluetoothGatt.GATT_SUCCESS) { "GATT control write callback status=$status" }
+                    if (frameOffset == frame.bytes.size) {
                         frames.removeFirst()
                         frameOffset = 0
                     }
+                } else if (status == BluetoothGatt.GATT_SUCCESS) {
+                    log?.track(AudioTestMetric.UPLINK_WRITE_COMPLETED, microphoneSequence)
+                    if (log?.count(AudioTestMetric.UPLINK_WRITE_COMPLETED) == 1) {
+                        log.add("BLE first microphone write callback: gatt=${elapsed}ms handler=${handlerDelay}ms")
+                    }
+                } else if (log?.count(AudioTestMetric.UPLINK_WRITE_FAILED) == 1) {
+                    log.add("BLE microphone write callback failed: status=$status")
                 }
                 pump()
             }
+        }
 
         @Deprecated("Required for Android 12")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             characteristic.value?.copyOf()?.let { onCharacteristicChanged(gatt, characteristic, it) }
         }
 
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) =
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            val callbackAt = SystemClock.elapsedRealtime()
             dispatch(gatt) {
                 when (characteristic.uuid) {
-                    Wire.transmit -> reader.feed(value, ::receive)
-                    Wire.audioOut -> if (ready) audio(value)
+                    Wire.transmit -> reader.feed(value) { receive(it, callbackAt) }
+                    Wire.audioOut -> if (ready) {
+                        val log = testLog()
+                        if (log?.count(AudioTestMetric.DOWNLINK_RECEIVED) == 1) {
+                            log.add("BLE first audio notification: bytes=${value.size} handler=${SystemClock.elapsedRealtime() - callbackAt}ms")
+                        }
+                        audio(value)
+                    }
                 }
             }
+        }
     }
 
     private fun discover(gatt: BluetoothGatt) {
@@ -253,17 +346,17 @@ internal class BleReceiver(
     }
 
     @Suppress("DEPRECATION")
-    private fun write(gatt: BluetoothGatt, target: BluetoothGattCharacteristic, value: ByteArray, type: Int): Boolean =
+    private fun write(gatt: BluetoothGatt, target: BluetoothGattCharacteristic, value: ByteArray, type: Int): Int =
         if (Build.VERSION.SDK_INT >= 33) {
-            gatt.writeCharacteristic(target, value, type) == BluetoothStatusCodes.SUCCESS
+            gatt.writeCharacteristic(target, value, type)
         } else {
             target.writeType = type
             target.value = value
-            gatt.writeCharacteristic(target)
+            if (gatt.writeCharacteristic(target)) BluetoothStatusCodes.SUCCESS else BluetoothStatusCodes.ERROR_UNKNOWN
         }
 
-    private fun enqueue(body: ByteArray) {
-        frames.addLast(Wire.frame(body))
+    private fun enqueue(body: ByteArray, diagnostic: String? = null) {
+        frames.addLast(Frame(Wire.frame(body), diagnostic, SystemClock.elapsedRealtime()))
         pump()
     }
 
@@ -272,14 +365,23 @@ internal class BleReceiver(
         if (frames.isEmpty()) return writeNextMicrophonePacket()
         val frame = frames.first()
         val target = checkNotNull(rx)
-        val end = minOf(frame.size, frameOffset + maxWrite)
-        check(write(checkNotNull(peer), target, frame.copyOfRange(frameOffset, end), BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT))
+        val end = minOf(frame.bytes.size, frameOffset + maxWrite)
+        writeStarted = SystemClock.elapsedRealtime()
+        val status = write(checkNotNull(peer), target, frame.bytes.copyOfRange(frameOffset, end), BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+        frame.diagnostic?.let {
+            testLog()?.add("BLE TX $it write submit: offset=$frameOffset..$end/${frame.bytes.size} status=$status queued=${writeStarted - frame.queuedAt}ms")
+        }
+        if (status != BluetoothStatusCodes.SUCCESS && frame.diagnostic == null) {
+            testLog()?.add("BLE untracked control write submit failed: status=$status")
+        }
+        check(status == BluetoothStatusCodes.SUCCESS) { "GATT control write submit status=$status" }
         frameOffset = end
         writing = target
         handler.postDelayed(writeTimeout, 5_000)
     }
 
-    private fun receive(body: ByteArray) {
+    private fun receive(body: ByteArray, callbackAt: Long) {
+        val handlerDelay = SystemClock.elapsedRealtime() - callbackAt
         val handshake = hello
         if (handshake != null) {
             // Android may still use the old key if it missed the last `ready`, so try both.
@@ -293,7 +395,8 @@ internal class BleReceiver(
                 secret = used
                 candidate = keys.next
             }
-            val ready = if (rotated) """{"type":"ready","unpair":"1","rekey":"1"}""" else """{"type":"ready","unpair":"1"}"""
+            val ready = if (rotated) """{"type":"ready","unpair":"1","rekey":"1","audio_pairs":"1"}"""
+                else """{"type":"ready","unpair":"1","audio_pairs":"1"}"""
             enqueue(keys.seal(ready.toByteArray()))
             return
         }
@@ -305,10 +408,19 @@ internal class BleReceiver(
             tried.remove(peer?.device?.address)
             ready = true
         }
+        val log = testLog()
+        val label = log?.controlLabel(envelope)
+        if (label != null) log?.add("BLE RX $label authenticated: final-fragment handler=${handlerDelay}ms")
         message(envelope)
+        if (label == null) testLog()?.let { newLog ->
+            if (newLog.controlLabel(envelope) == "call/ringing") {
+                newLog.add("BLE RX call/ringing authenticated: final-fragment handler=${handlerDelay}ms")
+            }
+        }
     }
 
-    private fun retry(detail: String) {
+    private fun retry(detail: String, diagnostic: String = detail) {
+        testLog()?.add("BLE reconnect: $diagnostic; inFlight=${writeChannel()} queuedControl=${frames.size}")
         stopScan()
         closePeer()
         disconnected()
@@ -333,7 +445,9 @@ internal class BleReceiver(
         session = null
         ready = false
         discovering = false
+        requestedPriority = null
         maxWrite = 20
+        maxAudioWrite = 20
         frames.clear()
         clearMicrophonePackets()
         frameOffset = 0
@@ -343,8 +457,8 @@ internal class BleReceiver(
     private fun guarded(action: () -> Unit): Boolean = try {
         action()
         true
-    } catch (_: Exception) {
-        retry("Could not establish a secure Bluetooth link. Check the pairing code and try again.")
+    } catch (error: Exception) {
+        retry("Could not establish a secure Bluetooth link. Check the pairing code and try again.", error.javaClass.simpleName)
         false
     }
 }

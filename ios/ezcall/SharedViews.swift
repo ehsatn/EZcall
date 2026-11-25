@@ -6,22 +6,22 @@ enum RelayDates {
     /// Recents and conversation rows: 10:42, Yesterday, Tuesday, 11/20/26.
     static func list(_ date: Date, now: Date = .now) -> String {
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return date.formatted(date: .omitted, time: .shortened) }
-        if calendar.isDateInYesterday(date) { return String(localized: "Yesterday") }
-        if withinWeek(date, now: now) { return date.formatted(.dateTime.weekday(.wide)) }
-        return date.formatted(date: .numeric, time: .omitted)
+        if calendar.isDateInToday(date) { return date.formatted(.dateTime.hour().minute().locale(EzcallLanguage.current.locale)) }
+        if calendar.isDateInYesterday(date) { return ezText("Yesterday") }
+        if withinWeek(date, now: now) { return date.formatted(.dateTime.weekday(.wide).locale(EzcallLanguage.current.locale)) }
+        return date.formatted(Date.FormatStyle(date: .numeric, time: .omitted).locale(EzcallLanguage.current.locale))
     }
 
     /// Day headings for call details and conversation separators: Today, Yesterday, Tuesday, Fri, Nov 20.
     static func day(_ date: Date, now: Date = .now) -> String {
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return String(localized: "Today") }
-        if calendar.isDateInYesterday(date) { return String(localized: "Yesterday") }
-        if withinWeek(date, now: now) { return date.formatted(.dateTime.weekday(.wide)) }
+        if calendar.isDateInToday(date) { return ezText("Today") }
+        if calendar.isDateInYesterday(date) { return ezText("Yesterday") }
+        if withinWeek(date, now: now) { return date.formatted(.dateTime.weekday(.wide).locale(EzcallLanguage.current.locale)) }
         if calendar.isDate(date, equalTo: now, toGranularity: .year) {
-            return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+            return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().locale(EzcallLanguage.current.locale))
         }
-        return date.formatted(.dateTime.month(.abbreviated).day().year())
+        return date.formatted(.dateTime.month(.abbreviated).day().year().locale(EzcallLanguage.current.locale))
     }
 
     private static func withinWeek(_ date: Date, now: Date) -> Bool {
@@ -90,7 +90,7 @@ struct ContactCard: View {
         self.showsMessage = showsMessage
     }
 
-    private var title: String { name ?? numbers.first ?? String(localized: "No Name") }
+    private var title: String { name ?? numbers.first ?? ezText("No Name") }
 
     var body: some View {
         List {
@@ -122,7 +122,7 @@ struct ContactCard: View {
                 Section(RelayDates.day(latest.timestamp)) {
                     ForEach(calls) { call in
                         HStack(spacing: 16) {
-                            Text(call.timestamp, format: .dateTime.hour().minute())
+                            Text(call.timestamp, format: .dateTime.hour().minute().locale(EzcallLanguage.current.locale))
                                 .monospacedDigit()
                             Text(Self.label(call.state))
                                 .foregroundStyle(.secondary)
@@ -138,12 +138,12 @@ struct ContactCard: View {
                     ForEach(numbers, id: \.self) { number in
                         Button { relay.dial(number) } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("phone").font(.subheadline).foregroundStyle(.primary)
+                                Text("Phone").font(.subheadline).foregroundStyle(.primary)
                                 Text(number).foregroundStyle(.tint)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .accessibilityLabel("Call \(number)")
+                        .accessibilityLabel(ezText("Call %@", number))
                         .contextMenu {
                             Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = number }
                             if showsMessage {
@@ -165,9 +165,9 @@ struct ContactCard: View {
 
     static func label(_ state: RelayCall.State) -> String {
         switch state {
-        case .ringing: String(localized: "Ringing")
-        case .active: String(localized: "On Call")
-        case .ended: String(localized: "Call")
+        case .ringing: ezText("Ringing")
+        case .active: ezText("On Call")
+        case .ended: ezText("Call")
         }
     }
 

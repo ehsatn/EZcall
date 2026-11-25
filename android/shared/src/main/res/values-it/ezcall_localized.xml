@@ -1,0 +1,30 @@
+<resources>
+    <string name="ez_language">Lingua</string>
+    <string name="ez_settings">Impostazioni</string>
+    <string name="ez_pair_phones">Abbina i telefoni</string>
+    <string name="ez_cancel_pairing">Annulla abbinamento</string>
+    <string name="ez_test_passed">Il test di connessione è passato.</string>
+    <string name="ez_cancel">Annulla</string>
+    <string name="ez_forget">Dissocia</string>
+    <string name="ez_close">Chiudi</string>
+    <string name="ez_continue">Continua</string>
+    <string name="ez_contacts">Contatti</string>
+    <string name="ez_brand">ezcall</string>
+    <string name="ez_test_log">Registro del test audio</string>
+    <string name="ez_test_copy">Copia registro</string>
+    <string name="ez_test_echo_heard">Ho sentito il ritorno della mia voce</string>
+    <string name="ez_test_echo_confirmed">Eco della voce confermato</string>
+    <string name="ez_test_speak_after_tones">Parla dopo i toni di prova. ezcall verifica automaticamente l’audio.</string>
+    <string name="ez_test_own_wave">Il tuo microfono</string>
+    <string name="ez_test_incoming_wave">Audio in arrivo</string>
+    <string name="ez_test_sent_tone_wave">Tono di prova inviato</string>
+    <string name="ez_test_remote_mic_wave">Microfono del telefono ricevente</string>
+    <string name="ez_test_wait_tone">In attesa della riproduzione del tono di prova</string>
+    <string name="ez_test_tone_played">Riproduzione del tono di prova rilevata</string>
+    <string name="ez_test_wait_mic">In attesa del segnale del microfono</string>
+    <string name="ez_test_mic_detected">Segnale del microfono rilevato</string>
+    <string name="ez_test_wait_echo">In attesa della riproduzione del ritorno della voce</string>
+    <string name="ez_test_echo_played">Riproduzione del ritorno della voce rilevata</string>
+    <string name="ez_test_auto_passed">Test audio bidirezionale superato</string>
+    <string name="ez_test_auto_incomplete">Test audio incompleto</string>
+</resources>

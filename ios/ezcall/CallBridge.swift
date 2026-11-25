@@ -59,7 +59,7 @@ final class CallBridge: NSObject {
     func setReconnecting(_ id: UUID, name: String, reconnecting: Bool) {
         guard entries[id] != nil else { return }
         let details = CXCallUpdate()
-        details.localizedCallerName = reconnecting ? "\(name) · Reconnecting…" : name
+        details.localizedCallerName = reconnecting ? ezText("%@ · Reconnecting…", name) : name
         provider.reportCall(with: id, updated: details)
     }
 
@@ -115,9 +115,10 @@ final class CallBridge: NSObject {
     }
 
     func ended(_ id: UUID, reason: CXCallEndedReason) {
-        guard let entry = entries.removeValue(forKey: id) else { return }
+        let entry = entries.removeValue(forKey: id)
         finishAnswer(id)
         relay?.phoneCallEnded(id)
+        guard let entry else { return }
         let missed = reason == .remoteEnded && !entry.outgoing && !entry.answered
         provider.reportCall(with: id, endedAt: nil, reason: missed ? .unanswered : reason)
     }
@@ -161,14 +162,22 @@ final class CallBridge: NSObject {
     private func prepareAudioSession() {
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
+        try? session.setPreferredSampleRate(CallAudio.sampleRate)
         try? session.setPreferredIOBufferDuration(0.01)
     }
 }
 
 extension CallBridge: @preconcurrency CXCallObserverDelegate {
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
-        guard entries[call.uuid] != nil, call.hasConnected, !call.hasEnded else { return }
-        logger.info("iOS reports an active ezcall call")
+        guard entries[call.uuid] != nil else { return }
+        if call.hasEnded {
+            entries[call.uuid] = nil
+            finishAnswer(call.uuid)
+            relay?.callHangUp(call.uuid)
+            relay?.phoneCallEnded(call.uuid)
+        } else if call.hasConnected {
+            logger.info("iOS reports an active ezcall call")
+        }
     }
 }
 
@@ -212,11 +221,12 @@ extension CallBridge: @preconcurrency CXProviderDelegate {
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         let id = action.callUUID
         let name = outgoingNames.removeValue(forKey: id) ?? ""
+        entries[id] = Entry(outgoing: true)
         guard relay?.callDial(id, number: action.handle.value) == true else {
+            entries[id] = nil
             action.fail()
             return
         }
-        entries[id] = Entry(outgoing: true)
         relay?.callMuted(false)
         prepareAudioSession()
         provider.reportOutgoingCall(with: id, startedConnectingAt: nil)

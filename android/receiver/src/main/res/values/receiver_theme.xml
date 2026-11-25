@@ -1,6 +1,3 @@
 <resources>
-    <style name="Theme.ezcall.Receiver" parent="Theme.ezcall">
-        <item name="colorSurfaceContainerLow">@color/ezcall_surface</item>
-        <item name="colorSurfaceContainerLowest">@color/ezcall_surface</item>
-    </style>
+    <style name="Theme.ezcall.Receiver" parent="Theme.ezcall" />
 </resources>

@@ -1,0 +1,30 @@
+<resources>
+    <string name="ez_language">Dil</string>
+    <string name="ez_settings">Ayarlar</string>
+    <string name="ez_pair_phones">Telefonlarını eşleştir</string>
+    <string name="ez_cancel_pairing">Eşleştirmeyi iptal et</string>
+    <string name="ez_test_passed">Bağlantı testi geçti.</string>
+    <string name="ez_cancel">İptal</string>
+    <string name="ez_forget">Eşleştirmeyi kaldır</string>
+    <string name="ez_close">Kapat</string>
+    <string name="ez_continue">Devam et</string>
+    <string name="ez_contacts">Kişiler</string>
+    <string name="ez_brand">ezcall</string>
+    <string name="ez_test_log">Ses testi günlüğü</string>
+    <string name="ez_test_copy">Günlüğü kopyala</string>
+    <string name="ez_test_echo_heard">Kendi sesimi geri duydum</string>
+    <string name="ez_test_echo_confirmed">Ses yankısı doğrulandı</string>
+    <string name="ez_test_speak_after_tones">Test seslerinden sonra konuş. ezcall sesi otomatik olarak kontrol eder.</string>
+    <string name="ez_test_own_wave">Mikrofonun</string>
+    <string name="ez_test_incoming_wave">Gelen ses</string>
+    <string name="ez_test_sent_tone_wave">Gönderilen test sesi</string>
+    <string name="ez_test_remote_mic_wave">Alıcı telefonun mikrofonu</string>
+    <string name="ez_test_wait_tone">Test sesinin çalınması bekleniyor</string>
+    <string name="ez_test_tone_played">Test sesinin çalındığı algılandı</string>
+    <string name="ez_test_wait_mic">Mikrofon sinyali bekleniyor</string>
+    <string name="ez_test_mic_detected">Mikrofon sinyali algılandı</string>
+    <string name="ez_test_wait_echo">Ses yankısının çalınması bekleniyor</string>
+    <string name="ez_test_echo_played">Ses yankısının çalındığı algılandı</string>
+    <string name="ez_test_auto_passed">Çift yönlü ses testi başarılı</string>
+    <string name="ez_test_auto_incomplete">Ses testi tamamlanmadı</string>
+</resources>

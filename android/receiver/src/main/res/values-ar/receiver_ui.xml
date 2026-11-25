@@ -1,0 +1,31 @@
+<resources>
+    <string name="r_setup_sender">١. افتح رمز QR على الهاتف المُرسِل</string>
+    <string name="r_setup_sender_detail">في EasyCall على هاتف Android الذي يحمل شريحة SIM، اختر بدء الاقتران.</string>
+    <string name="r_setup_receiver">٢. اقرأ رمز QR هنا</string>
+    <string name="r_setup_receiver_detail">استخدم الكاميرا أو اختر صورة الرمز. اسمح بالوصول إلى الأجهزة القريبة عندما يطلب Android ذلك.</string>
+    <string name="r_setup_optional">إعداد اختياري</string>
+    <string name="r_setup_optional_detail">اختر طريقة تلقي التنبيهات ومكان رنين المكالمات وما إذا كنت تريد استخدام ميكروفون هذا الهاتف.</string>
+    <string name="r_setup_later">الإعداد لاحقًا</string>
+    <string name="r_reconnect_now">إعادة الاتصال</string>
+    <string name="r_reconnect_detail">اترك Bluetooth قيد التشغيل وقرّب الهاتفين من بعضهما.</string>
+    <string name="r_enable_bluetooth">تشغيل Bluetooth</string>
+    <string name="r_link_while_syncing">ابق قريبًا من الهاتف المُرسِل حتى تكتمل المزامنة.</string>
+    <string name="r_camera_unavailable">تعذّر فتح الكاميرا. اختر صورة رمز QR الخاص بالاقتران.</string>
+    <string name="r_settings_connection">الاتصال والمزامنة</string>
+    <string name="r_settings_alerts">التنبيهات</string>
+    <string name="r_settings_preferences">تفضيلات التطبيق</string>
+    <string name="r_manage_notifications">إدارة الإشعارات</string>
+    <string name="r_settings_audio_test">اختبار صوت المكالمة</string>
+    <string name="r_settings_audio_test_detail">ابدأ الاختبار على الهاتف المُرسِل، ثم أجب هنا. لا يستخدم الاختبار مكالمة عبر شريحة SIM.</string>
+    <string name="r_audio_test_running">اختبار الصوت جارٍ</string>
+    <string name="r_settings_unavailable">تعذّر على Android فتح هذه الإعدادات.</string>
+    <string name="r_contact_actions_unavailable">لا يمكن حاليًا الاتصال بهذا الرقم أو إرسال رسالة إليه. تحقّق من إعدادات مشاركة المكالمات والرسائل على الهاتف المُرسِل.</string>
+    <string name="r_dial_zero">٠، المس مطولًا لإدخال علامة الجمع</string>
+    <string name="r_compose_empty">بدء محادثة</string>
+    <string name="r_compose_empty_detail">أدخل رقم هاتف أو اختر جهة اتصال تمت مزامنتها.</string>
+    <string name="r_conversation_empty">لا توجد رسائل في هذه المحادثة</string>
+    <string name="r_conversation_empty_detail">ستظهر الرسائل مع هذا الرقم هنا.</string>
+    <string name="r_settings_microphone">الميكروفون</string>
+    <string name="r_permission_on">مسموح</string>
+    <string name="r_permission_off">متوقف</string>
+</resources>

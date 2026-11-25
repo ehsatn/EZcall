@@ -1,0 +1,30 @@
+<resources>
+    <string name="ez_language">اللغة</string>
+    <string name="ez_settings">الإعدادات</string>
+    <string name="ez_pair_phones">اقرن الهاتفين</string>
+    <string name="ez_cancel_pairing">إلغاء الاقتران</string>
+    <string name="ez_test_passed">اختبار الاتصال قد اجتاز</string>
+    <string name="ez_cancel">إلغاء</string>
+    <string name="ez_forget">إزالة الاقتران</string>
+    <string name="ez_close">إغلاق</string>
+    <string name="ez_continue">متابعة</string>
+    <string name="ez_contacts">جهات الاتصال</string>
+    <string name="ez_brand">ezcall</string>
+    <string name="ez_test_log">سجل اختبار الصوت</string>
+    <string name="ez_test_copy">نسخ السجل</string>
+    <string name="ez_test_echo_heard">سمعت صدى صوتي</string>
+    <string name="ez_test_echo_confirmed">تم تأكيد سماع صدى الصوت</string>
+    <string name="ez_test_speak_after_tones">تحدث بعد سماع نغمات الاختبار. يتحقق ezcall من الصوت تلقائيًا.</string>
+    <string name="ez_test_own_wave">الميكروفون لديك</string>
+    <string name="ez_test_incoming_wave">الصوت الوارد</string>
+    <string name="ez_test_sent_tone_wave">نغمة الاختبار الصادرة</string>
+    <string name="ez_test_remote_mic_wave">ميكروفون الهاتف المستقبِل</string>
+    <string name="ez_test_wait_tone">بانتظار تشغيل نغمة الاختبار</string>
+    <string name="ez_test_tone_played">تم رصد تشغيل نغمة الاختبار</string>
+    <string name="ez_test_wait_mic">بانتظار إشارة الميكروفون</string>
+    <string name="ez_test_mic_detected">تم رصد إشارة الميكروفون</string>
+    <string name="ez_test_wait_echo">بانتظار تشغيل الصوت المرتد</string>
+    <string name="ez_test_echo_played">تم رصد تشغيل الصوت المرتد</string>
+    <string name="ez_test_auto_passed">نجح اختبار الصوت ثنائي الاتجاه</string>
+    <string name="ez_test_auto_incomplete">لم يكتمل اختبار الصوت</string>
+</resources>

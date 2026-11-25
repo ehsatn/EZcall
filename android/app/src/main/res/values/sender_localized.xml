@@ -8,7 +8,7 @@
     <string name="s_guide_wireless">Connect to Wi-Fi and pair this app in Developer options. Tap for the pairing steps.</string>
     <string name="s_pairing_saved">Pairing saved on this phone. Tap to pair again if Android removed it.</string>
     <string name="s_guide_receiver_mic">Microphone on the receiver</string>
-    <string name="s_guide_receiver_mic_detail">When two-way audio is ready, answer on the receiving phone and allow its microphone. If this phone supports listening only, speak into this phone.</string>
+    <string name="s_guide_receiver_mic_detail">When two-way audio is ready, answer on the receiving phone and allow its microphone.</string>
     <string name="s_guide_back">Previous step</string>
     <string name="s_guide_finish">Finish guide</string>
     <string name="s_reopen_guide">Review sharing, Bluetooth pairing and call audio.</string>
@@ -62,8 +62,8 @@
     <string name="s_while_off">While the screen is off</string>
     <string name="s_battery_off">Battery optimization is off for ezcall</string>
     <string name="s_battery_may_pause">Android may pause the relay to save battery</string>
-    <string name="s_simulate">Simulate incoming call</string>
-    <string name="s_simulate_wait">Test call in 5 seconds.</string>
+    <string name="s_simulate">Test call audio</string>
+    <string name="s_simulate_wait">Answer on the receiving phone. Listen for beeps, then speak to hear your voice back.</string>
     <string name="s_simulate_retry">Wait for the current call or reconnect and try again.</string>
     <string name="s_relay">Relay</string>
     <string name="s_notifications_in_status">Allow ezcall notifications to show its relay icon in the status bar.</string>
@@ -78,13 +78,16 @@
     <string name="s_open_dev">Open Developer options</string>
     <string name="s_starting_audio">Starting call audio</string>
     <string name="s_two_way">Two-way audio ready</string>
-    <string name="s_listen_only">Listen only</string>
+    <string name="s_listen_only">Audio stays on this phone</string>
     <string name="s_audio_stopped">Call audio stopped</string>
     <string name="s_audio_relay_start">Starts with the relay</string>
     <string name="s_audio_not_setup">Not set up</string>
     <string name="s_audio_keep_wireless">Connecting on this phone. You can stay in ezcall.</string>
     <string name="s_audio_two_way_info">Use the receiving phone’s speaker and microphone for relayed calls.</string>
-    <string name="s_audio_listen_info">Listen on the receiving phone and speak into this Android phone.</string>
+    <string name="s_call_overlay">Floating call button</string>
+    <string name="s_call_overlay_info">Allow ezcall to appear over the call screen so you can take audio back on this phone.</string>
+    <string name="s_use_handset_audio">Use audio on this phone</string>
+    <string name="s_audio_listen_info">This Android phone keeps call audio when it cannot transfer both the microphone and speaker.</string>
     <string name="s_audio_restart_info">Connect to Wi-Fi and turn on Wireless debugging in Developer options. Then return to ezcall and tap Restart call audio. You can close the settings screen.</string>
     <string name="s_audio_resume_info">Resume the relay to use call audio.</string>
     <string name="s_audio_setup_info">Set this up to hear calls on your receiving phone.</string>
@@ -105,6 +108,11 @@
     <string name="s_audio_port_help">In Developer options → Wireless debugging, find “IP address and port” on the main screen. Return here and enter the number after the colon. The pairing window has a different port.</string>
     <string name="s_audio_port">Connection port</string>
     <string name="s_audio_port_invalid">Enter a port from 1024 to 65535.</string>
+    <string name="s_audio_usb">Set up with USB</string>
+    <string name="s_audio_usb_detail">Start call audio from a computer with Android Platform-Tools.</string>
+    <string name="s_audio_usb_steps">Turn on USB debugging in Developer options. Connect this phone to your computer and approve its debugging request. Keep this dialog open and run this command within two minutes:\n\n%1$s</string>
+    <string name="s_audio_usb_copy">Copy command</string>
+    <string name="s_audio_usb_failed">USB setup did not start call audio. Check the USB debugging prompt and run the command again from a fresh setup dialog.</string>
     <string name="s_audio_component_failed">Connected to Wireless debugging, but the call audio component did not respond. Try starting call audio again.</string>
     <string name="s_audio_unverified">ezcall could not confirm that it reached Wireless debugging on this phone, so it did not start call audio. Another app may be imitating Wireless debugging. Turn Wireless debugging off and on, then try again.</string>
     <string name="s_no_advertising">This Android device does not support Bluetooth LE advertising.</string>
@@ -146,7 +154,7 @@
     <string name="s_wireless_leave_open">In Wireless debugging, open Pair device with pairing code and leave that window open.</string>
     <string name="s_wireless_code">Six-digit code</string>
     <string name="s_wireless_enter">Enter code</string>
-    <string name="s_sender_name">ezcall Sender</string>
+    <string name="s_sender_name">EasyCall Sender</string>
     <string name="s_relay_service_open">The Bluetooth service did not open.</string>
     <string name="s_relay_discovery_failed">Bluetooth discovery failed (%1$d).</string>
     <string name="s_ok">OK</string>
@@ -155,4 +163,23 @@
         <item quantity="one">%d sharing option enabled</item>
         <item quantity="other">%d sharing options enabled</item>
     </plurals>
+    <string name="s_simulate_heard">The receiving phone confirmed it heard the beeps.</string>
+    <string name="s_test_report">Test report</string>
+    <string name="s_test_starting">Starting the test call in 5 seconds.</string>
+    <string name="s_test_ringing">Waiting for the receiving phone to answer.</string>
+    <string name="s_test_audio_started">Answered. Testing audio over Bluetooth.</string>
+    <string name="s_test_reconnecting">Bluetooth dropped. Waiting to reconnect.</string>
+    <string name="s_test_finished">Test ended.</string>
+    <string name="s_test_no_answer">The receiving phone did not answer.</string>
+    <string name="s_test_phone_busy">A cellular call interrupted the test.</string>
+    <string name="s_test_signal_failed">Bluetooth could not queue the test call or its audio setup.</string>
+    <string name="s_test_link_lost">The Bluetooth connection was lost during the test.</string>
+    <string name="s_test_cue_missing">Beep packets have not been queued.</string>
+    <string name="s_test_cue_queued">Beep packets queued for the receiving phone.</string>
+    <string name="s_test_cue_failed">The app could not generate the test beeps.</string>
+    <string name="s_test_playback_unconfirmed">Playback has not been confirmed on the receiving phone.</string>
+    <string name="s_test_mic_received">Microphone packets received during the echo test.</string>
+    <string name="s_test_mic_missing">No microphone packets received during the echo test. Check mute and microphone permission on the receiving phone.</string>
+    <string name="s_test_echo_queued">Echo packets queued for the receiving phone.</string>
+    <string name="s_test_echo_missing">Echo packets have not been queued.</string>
 </resources>
