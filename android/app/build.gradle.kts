@@ -15,8 +15,8 @@ android {
         applicationId = "app.ezcall.android"
         minSdk = 31
         targetSdk = 36
-        versionCode = 21
-        versionName = "0.1.20"
+        versionCode = 22
+        versionName = "0.1.21"
     }
 
     compileOptions {

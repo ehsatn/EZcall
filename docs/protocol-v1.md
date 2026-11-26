@@ -43,13 +43,14 @@ Messages are UTF-8 JSON objects. Times use Unix epoch milliseconds. Request IDs 
 | Receiver | `call_answer` | `id` of a ringing call |
 | Receiver | `call_end` | `id` of a ringing, active or requested call |
 | Receiver | `call_dial` | `id` (new UUID), `address` |
+| Receiver | `call_dtmf` | Active call `id`, `digit` (one of `0`–`9`, `*`, `#`). Send only if `audio_start` advertised `dtmf: true`. |
 | Receiver | `call_resume` | `id` of the interrupted active call, `audio` (`"1"` if the audio session is retained) |
 | Android | `call_resumed` | `id`, `audio` (whether the retained audio stream resumed) |
 | Receiver | `audio_ready`, `audio_paused` | `id` of the active SIM call, when supported by `audio_route` in capabilities |
 | Receiver | `test_audio_heard` | `id` of the active simulated call, when that call has `test_audio_confirmation: true` |
 | Receiver | `test_audio_status` | `id` of the active simulated call, when that call has `test_audio_diagnostics: true`. `step` is a known receiver checkpoint. Automatic evidence uses `CUE_PLAYED`, `MIC_SIGNAL`, and `ECHO_PLAYED`. |
 | Android | `call_error` | `id`, `message` |
-| Android | `audio_start` | `id`, `key` (Base64, 32 bytes), `uplink` (boolean), optional `audio_pairs` (boolean). Simulated calls can include `test_echo_sequence: 4096`. |
+| Android | `audio_start` | `id`, `key` (Base64, 32 bytes), `uplink` (boolean), optional `audio_pairs` and `dtmf` (booleans). Simulated calls can include `test_echo_sequence: 4096`. |
 | Android | `audio_stop` | `id`, optional `message` |
 | Receiver | `sms_send` | `id` (new UUID), `address`, `body` |
 | Android | `sms_result` | `id`, `sent` (boolean), optional `message` |
@@ -71,6 +72,8 @@ If Android advertises `resume_call: true` in capabilities, the receiver can reta
 With `audio_route: true`, a receiver with an active two-way audio engine can signal readiness even while muted. The sender starts relaying PSTN audio after `audio_ready` and leaves the sender phone’s audio mode under Android’s control. The relay pauses or stops on audio pause, Bluetooth loss, a media failure, or the end of the call. If the sender owner chooses to continue locally, Android stops relaying audio for that call and sends `audio_stop`. The cellular call itself can continue.
 
 Audio moves to the receiver only for a call answered or placed from the receiver. When that call is active, Android sends `audio_start` with a fresh key. The audio characteristics then carry one packet per write or notification. Each packet is `05 || sequence || ciphertext || tag`. The sequence is a four-byte big-endian counter that starts at zero in each direction for each `audio_start`. The AES-256-GCM nonce is a four-byte direction (`1` Android → Receiver, `2` Receiver → Android), four zero bytes and the sequence. The first five bytes are the associated data. A receiver accepts any sequence greater than the last one it accepted and drops others. Sequence gaps are allowed because a sender drops stale packets under congestion.
+
+With `dtmf: true`, the Sender synthesizes a tone locally on the active SIM call’s audio uplink. The digit travels on the authenticated control channel, outside the Opus stream. Microphone mute does not affect sender-generated tones. Never replay a digit after a reconnect.
 
 With `test_echo_sequence`, simulated downlink sequences below that value are tones. The Sender skips to the specified sequence for the first returned microphone packet. Older receivers already accept the gap and can still decode the Opus stream. Android Receiver verifies that non-silent PCM from each phase advances through its playback track.
 

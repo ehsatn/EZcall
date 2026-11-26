@@ -11,6 +11,11 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 class CallAudioTest {
     private val key = hex("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f")
@@ -22,11 +27,38 @@ class CallAudioTest {
     private fun android() = Wire.AudioSeal(key, Wire.AudioSeal.ANDROID_TO_IPHONE, Wire.AudioSeal.IPHONE_TO_ANDROID)
     private fun iphone() = Wire.AudioSeal(key, Wire.AudioSeal.IPHONE_TO_ANDROID, Wire.AudioSeal.ANDROID_TO_IPHONE)
 
+    @Test fun handsetMicrophoneMuteIsLimitedToTheTestedSamsungAndAndroidVersion() {
+        assertTrue(CallAudioServer.supportsHandsetMicMute("SM-A175F", 37))
+        assertFalse(CallAudioServer.supportsHandsetMicMute("SM-A175F", 36))
+        assertFalse(CallAudioServer.supportsHandsetMicMute("SM-A176B", 37))
+    }
+
     @Test fun audioPacketsMatchTheSharedFixture() {
         val sender = android()
         assertArrayEquals(first, sender.seal(payload))
         assertArrayEquals(second, sender.seal(payload))
         assertArrayEquals(payload, android().open(fromIphone))
+    }
+
+    @Test fun dtmfSixHasTheExpectedFrequenciesAndAnInterDigitPause() {
+        val pcm = AudioBridge.dtmfPcm('6')
+        assertEquals(AudioBridge.FRAME_BYTES * 12, pcm.size)
+        val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val toneSamples = AudioBridge.FRAME_SAMPLES * 8
+        val bins = listOf(697, 770, 852, 941, 1209, 1336, 1477)
+        val peaks = bins.sortedByDescending { frequency ->
+            var real = 0.0
+            var imaginary = 0.0
+            for (index in 0 until toneSamples) {
+                val phase = 2 * PI * frequency * index / AudioBridge.SAMPLE_RATE
+                real += samples[index] * cos(phase)
+                imaginary += samples[index] * sin(phase)
+            }
+            real * real + imaginary * imaginary
+        }
+        assertEquals(setOf(770, 1477), peaks.take(2).toSet())
+        assertTrue((toneSamples until samples.limit()).all { samples[it] == 0.toShort() })
+        assertThrows(IllegalArgumentException::class.java) { AudioBridge.dtmfPcm('A') }
     }
 
     @Test fun audioAndSmsFragmentsAlternateWithoutDelayingCallControl() {

@@ -1,5 +1,7 @@
 # ezcall on iPhone
 
+[Join the EasyCall Relay beta on TestFlight](https://testflight.apple.com/join/gRnJCZ5E).
+
 Requires iOS 17 or later. Liquid Glass is available on iOS 26 or later. Use Xcode 26 or later on macOS to build. Open `ezcall.xcodeproj` and select the same signing team for ezcall and ezcallWidgets. Set the project’s `EZCALL_BUNDLE_IDENTIFIER` build setting to a bundle ID belonging to that team. The widget target uses that ID with the `.widgets` suffix. Register the App Group with the `group.` prefix followed by `EZCALL_BUNDLE_IDENTIFIER` and enable it in both targets’ provisioning profiles. Select a physical iPhone to try Bluetooth and QR scanning.
 
 From the repository root, check that the app builds without device signing.

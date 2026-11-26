@@ -24,6 +24,8 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -38,6 +40,7 @@ import kotlin.system.exitProcess
 class CallAudioServer private constructor(private val token: ByteArray) {
     private val audio: AudioManager? by lazy(::shellAudioManager)
     private val clients = AtomicInteger()
+    private val handset = HandsetAudio()
     private var media: Media? = null
 
     private fun serve(socket: Socket) {
@@ -61,18 +64,28 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 val (message, payload) = AudioBridge.read(input)
                 when (message) {
                     AudioBridge.START -> owner = start(output)
-                    AudioBridge.STOP -> owner = owner?.let { stop(it); null }
+                    AudioBridge.STOP -> {
+                        val preserveGrace = payload.singleOrNull()?.toInt() == AudioBridge.STOP_FOR_RECOVERY
+                        require(payload.isEmpty() || preserveGrace)
+                        owner?.let { stop(it, preserveGrace) }
+                        owner = null
+                    }
                     AudioBridge.RECEIVER_READY -> {
                         val ready = payload.singleOrNull()?.toInt()
-                        require(ready == 0 || ready == 1)
+                        require(ready == 0 || ready == 1 || ready == AudioBridge.RECEIVER_RECOVERING)
                         synchronized(this) {
-                            if (owner === media) owner?.setReceiverReady(ready == 1)
+                            if (owner === media) owner?.setReceiverReady(ready == 1, ready == AudioBridge.RECEIVER_RECOVERING)
                         }
                     }
                     AudioBridge.PCM -> owner?.play(payload)
+                    AudioBridge.DTMF -> {
+                        val digit = payload.singleOrNull()?.toInt()?.toChar()
+                        if (digit != null && digit in AudioBridge.DTMF_DIGITS) owner?.queueDtmf(digit)
+                    }
                     AudioBridge.SHUTDOWN -> {
                         log("Shutdown requested")
                         synchronized(this) { media?.close() }
+                        handset.restore(wait = true)
                         exitProcess(0)
                     }
                 }
@@ -111,9 +124,9 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         return next
     }
 
-    private fun stop(owner: Media) {
+    private fun stop(owner: Media, preserveGrace: Boolean = false) {
         synchronized(this) {
-            owner.close()
+            owner.close(preserveGrace)
             if (media === owner) media = null
         }
     }
@@ -122,17 +135,20 @@ class CallAudioServer private constructor(private val token: ByteArray) {
     private inner class Media(private val output: DataOutputStream) {
         @Volatile private var running = true
         private val uplink = ArrayBlockingQueue<ByteArray>(AudioBridge.LIVE_QUEUE_FRAMES)
+        private val dtmf = ArrayBlockingQueue<Char>(12)
         private val workers = mutableListOf<Thread>()
         var record: AudioRecord? = null
         var track: AudioTrack? = null
         @Volatile private var receiverReady = false
-        private var failed = false
+        @Volatile private var failed = false
+        @Volatile private var lastDownlinkAt = 0L
 
         fun open() {
             if (!canIntercept()) return
             // OFFHOOK can precede Telecom entering cellular call mode.
             for (attempt in 0..10) {
-                if (audio?.mode == AudioManager.MODE_IN_CALL) {
+                val mode = audio?.mode
+                if (mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_CALL_REDIRECT) {
                     if (record == null) openTelephonyDownlink()
                     if (record != null && track == null) openUplink()
                     if (record != null && track != null) return
@@ -154,8 +170,14 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             }
         }
 
-        fun setReceiverReady(ready: Boolean) {
-            if (!ready) return pauseRelay()
+        fun queueDtmf(digit: Char) {
+            synchronized(this@CallAudioServer) {
+                if (media === this && running && receiverReady) dtmf.offer(digit)
+            }
+        }
+
+        fun setReceiverReady(ready: Boolean, recovering: Boolean) {
+            if (!ready) return pauseRelay(recovering)
             val sink = track ?: return
             if (receiverReady || !running || failed) return
             runCatching {
@@ -168,12 +190,27 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 receiverReady = true
                 log("Call audio relay active")
             }.onFailure { mediaFailed("Android couldn't relay call audio to the receiving phone.", it) }
+            if (receiverReady) handset.silence(this)
         }
 
-        fun close() {
+        fun relaying() = running && receiverReady && !failed
+
+        /** True while far-end audio still arrives and the receiver's voice still reaches the modem. */
+        fun streamsHealthy(): Boolean {
+            val input = record ?: return false
+            val sink = track ?: return false
+            val route = sink.routedDevice?.type
+            return relaying() && input.recordingState == AudioRecord.RECORDSTATE_RECORDING &&
+                input.activeRecordingConfiguration?.isClientSilenced != true &&
+                SystemClock.elapsedRealtime() - lastDownlinkAt < 200 &&
+                sink.playState == AudioTrack.PLAYSTATE_PLAYING &&
+                (route == null || route == AudioDeviceInfo.TYPE_TELEPHONY)
+        }
+
+        fun close(preserveGrace: Boolean = false) {
             if (!running) return
             running = false
-            pauseRelay()
+            pauseRelay(preserveGrace)
             runCatching { record?.stop() }
             workers.forEach { it.join(500) }
             runCatching { record?.release() }
@@ -181,9 +218,11 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             runCatching { track?.release() }
         }
 
-        private fun pauseRelay() {
+        private fun pauseRelay(recovering: Boolean = false) {
             receiverReady = false
+            handset.restore(delayed = recovering)
             uplink.clear()
+            dtmf.clear()
             runCatching {
                 track?.pause()
                 track?.flush()
@@ -214,6 +253,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         if (count < 0) throw IOException("Audio read failed: $count")
                         filled += count
                     }
+                    lastDownlinkAt = SystemClock.elapsedRealtime()
                     if (!running || !receiverReady) {
                         silencedSince = null
                         continue
@@ -240,7 +280,12 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
                 while (running) {
-                    val pcm = uplink.poll(100, TimeUnit.MILLISECONDS) ?: continue
+                    val digit = dtmf.poll()
+                    val pcm = if (digit == null) {
+                        uplink.poll(20, TimeUnit.MILLISECONDS) ?: continue
+                    } else {
+                        AudioBridge.dtmfPcm(digit)
+                    }
                     var offset = 0
                     while (running && receiverReady && offset < pcm.size) {
                         checkTelephonyOutput(sink)
@@ -249,6 +294,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         if (written <= 0) throw IOException("Call audio injection failed: $written")
                         offset += written
                     }
+                    if (digit != null) uplink.clear()
                 }
             } catch (error: Exception) {
                 mediaFailed("Android stopped receiving call audio.", error)
@@ -299,6 +345,176 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         }
     }
 
+    /**
+     * Redirects the call away from the handset and mutes its playback independently, since some devices still
+     * play call audio in redirect mode. Keep the handset quiet during a brief Bluetooth recovery.
+     */
+    @SuppressLint("InlinedApi")
+    private inner class HandsetAudio {
+        private val control = Executors.newSingleThreadScheduledExecutor()
+        // Only touched on the control thread.
+        private var redirected = false
+        private var reapplied = 0
+        private var savedVolume: Int? = null
+        private var mutedByRelay = false
+        private var micMutedByRelay = false
+        private var watch: ScheduledFuture<*>? = null
+        private var restoreTask: ScheduledFuture<*>? = null
+
+        fun silence(owner: Media) {
+            control.execute {
+                if (!owner.relaying()) return@execute
+                restoreTask?.cancel(false)
+                restoreTask = null
+                mutePlayback()
+                if (!redirected) redirect(owner)
+            }
+        }
+
+        fun restore(wait: Boolean = false, delayed: Boolean = false) {
+            val task = control.submit(Runnable {
+                if (!delayed) {
+                    restoreNow()
+                } else if (restoreTask == null && (redirected || mutedByRelay || micMutedByRelay || savedVolume != null)) {
+                    restoreTask = control.schedule(::restoreNow, HANDSET_RECOVERY_MS, TimeUnit.MILLISECONDS)
+                    log("Keeping handset playback quiet for Bluetooth recovery")
+                }
+            })
+            if (wait) runCatching { task.get(1, TimeUnit.SECONDS) }
+        }
+
+        private fun restoreNow() {
+            restoreTask?.cancel(false)
+            restoreTask = null
+            watch?.cancel(false)
+            watch = null
+            val manager = audio ?: return
+            restoreMicrophone(manager)
+            if (redirected) {
+                redirected = false
+                releaseMode(manager)
+                log("Handset audio restored")
+            }
+            if (mutedByRelay) {
+                runCatching {
+                    manager.adjustStreamVolume(CALL_STREAM, AudioManager.ADJUST_UNMUTE, 0)
+                    check(!manager.isStreamMute(CALL_STREAM)) { "Call stream still muted" }
+                    mutedByRelay = false
+                    log("Handset call playback unmuted")
+                }.onFailure { log("Couldn't unmute handset call playback: ${it.message.orEmpty()}") }
+            }
+            val saved = savedVolume ?: return
+            savedVolume = null
+            runCatching {
+                // Leave the volume alone if the user changed it during the call.
+                if (manager.getStreamVolume(CALL_STREAM) == manager.getStreamMinVolume(CALL_STREAM)) {
+                    manager.setStreamVolume(CALL_STREAM, saved, 0)
+                    log("Handset call volume restored to $saved")
+                }
+            }.onFailure { log("Couldn't restore handset call volume: ${it.message.orEmpty()}") }
+        }
+
+        private fun mutePlayback() {
+            val manager = audio ?: return
+            runCatching {
+                if (manager.isStreamMute(CALL_STREAM)) return
+                manager.adjustStreamVolume(CALL_STREAM, AudioManager.ADJUST_MUTE, 0)
+                if (manager.isStreamMute(CALL_STREAM)) {
+                    mutedByRelay = true
+                    log("Handset call playback muted")
+                    return
+                }
+            }.onFailure { log("Couldn't mute handset call playback: ${it.message.orEmpty()}") }
+            if (savedVolume == null) lowerVolume()
+        }
+
+        private fun muteMicrophone(manager: AudioManager) {
+            if (!supportsHandsetMicMute(Build.MODEL, Build.VERSION.SDK_INT)) return
+            runCatching {
+                if (manager.isMicrophoneMute) return
+                manager.isMicrophoneMute = true
+                check(manager.isMicrophoneMute) { "Microphone mute did not take effect" }
+                micMutedByRelay = true
+                log("Handset microphone muted during call redirect")
+            }.onFailure { log("Couldn't mute handset microphone: ${it.message.orEmpty()}") }
+        }
+
+        private fun restoreMicrophone(manager: AudioManager) {
+            if (!micMutedByRelay) return
+            runCatching {
+                manager.isMicrophoneMute = false
+                check(!manager.isMicrophoneMute) { "Microphone is still muted" }
+                micMutedByRelay = false
+                log("Handset microphone restored")
+            }.onFailure { log("Couldn't restore handset microphone: ${it.message.orEmpty()}") }
+        }
+
+        private fun redirect(owner: Media) {
+            val manager = audio ?: return
+            if (Build.VERSION.SDK_INT < 33) return
+            runCatching { manager.mode = AudioManager.MODE_CALL_REDIRECT }.onFailure {
+                log("Call redirect mode refused: ${it.javaClass.simpleName}: ${it.message.orEmpty()}")
+                return
+            }
+            // Give the audio policy time to reroute, then confirm both relayed directions survived.
+            Thread.sleep(REDIRECT_SETTLE_MS)
+            val mode = runCatching { manager.mode }.getOrDefault(-1)
+            // A queued pause or stop will restore the mode according to its own deadline.
+            val healthy = !owner.relaying() || owner.streamsHealthy()
+            if (mode == AudioManager.MODE_CALL_REDIRECT && healthy) {
+                redirected = true
+                reapplied = 0
+                if (owner.relaying()) muteMicrophone(manager)
+                watch = control.scheduleWithFixedDelay(::keepRedirect, 1, 1, TimeUnit.SECONDS)
+                log("Call redirect mode active")
+                return
+            }
+            releaseMode(manager)
+            log("Call redirect mode unusable (mode=$mode, streams=${if (healthy) "ok" else "disturbed"})")
+        }
+
+        private fun keepRedirect() {
+            val manager = audio ?: return
+            if (!redirected) return
+            if (mutedByRelay) mutePlayback()
+            val mode = runCatching { manager.mode }.getOrNull() ?: return
+            if (mode == AudioManager.MODE_CALL_REDIRECT) {
+                muteMicrophone(manager)
+                return
+            }
+            if (reapplied >= MAX_REDIRECT_RETRIES) {
+                log("Android keeps leaving call redirect mode (mode=$mode)")
+                watch?.cancel(false)
+                watch = null
+                redirected = false
+                restoreMicrophone(manager)
+                releaseMode(manager)
+                return
+            }
+            reapplied++
+            log("Android left call redirect mode (mode=$mode); reapplying")
+            runCatching { manager.mode = AudioManager.MODE_CALL_REDIRECT }
+        }
+
+        private fun lowerVolume() {
+            val manager = audio ?: return
+            runCatching {
+                val current = manager.getStreamVolume(CALL_STREAM)
+                val lowest = manager.getStreamMinVolume(CALL_STREAM)
+                if (current > lowest) {
+                    manager.setStreamVolume(CALL_STREAM, lowest, 0)
+                    savedVolume = current
+                }
+                log("Handset call volume lowered ($current -> $lowest); its microphone stays on")
+            }.onFailure { log("Couldn't lower handset call volume: ${it.message.orEmpty()}") }
+        }
+
+        // Withdraws this process's mode request, so Telecom's in-call mode applies again.
+        private fun releaseMode(manager: AudioManager) {
+            runCatching { manager.mode = AudioManager.MODE_NORMAL }
+        }
+    }
+
     // Android 13 system APIs route call audio through the HAL's telephony RX and TX devices when the phone has them.
     private fun canIntercept(): Boolean = Build.VERSION.SDK_INT >= 33 && runCatching {
         AudioManager::class.java.getMethod("isPstnCallAudioInterceptable").invoke(audio) == true
@@ -315,6 +531,13 @@ class CallAudioServer private constructor(private val token: ByteArray) {
     companion object {
         const val TOKEN_ENV = "XCALL_AUDIO_TOKEN"
         const val PROCESS_NAME = "ezcall_audio"
+        private const val CALL_STREAM = AudioManager.STREAM_VOICE_CALL
+        private const val REDIRECT_SETTLE_MS = 400L
+        private const val HANDSET_RECOVERY_MS = 5_000L
+        private const val MAX_REDIRECT_RETRIES = 2
+
+        // shortcut: modem mute is verified on this model and Android version, expand after testing other builds.
+        internal fun supportsHandsetMicMute(model: String, sdk: Int) = model == "SM-A175F" && sdk == 37
 
         @JvmStatic
         fun main(args: Array<String>) {

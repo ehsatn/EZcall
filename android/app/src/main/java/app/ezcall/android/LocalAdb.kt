@@ -6,6 +6,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Process
+import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Log
@@ -29,6 +30,10 @@ internal object LocalAdb {
     private const val TLS_CONNECT = "_adb-tls-connect._tcp."
 
     fun hasKey(): Boolean = runCatching { store().containsAlias(KEY) }.getOrDefault(false)
+
+    fun hasVerifiedSetup(context: Context): Boolean =
+        context.getSharedPreferences("wireless_debugging", Context.MODE_PRIVATE).getInt(LAST_PORT, 0) in 1024..65535 &&
+            runCatching { Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0) == 1 }.getOrDefault(false)
 
     fun key(): KeyStore.PrivateKeyEntry {
         val store = store()

@@ -8,16 +8,16 @@ ezcall displays Android calls and SMS on an iPhone or a second Android phone and
 
 | Device | Release file | Requirements |
 | --- | --- | --- |
-| Android with the SIM | [Sender 0.1.20 · APK](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/ezcall-sender-0.1.20-release.apk) | Android 12+, telephony and BLE peripheral advertising |
-| Second Android phone | [Receiver 0.1.13 · APK](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/ezcall-receiver-0.1.13-release.apk) | Android 12+ and BLE |
-| iPhone | [Receiver 0.1.31 · unsigned IPA](https://github.com/ehsatn/EZcall/releases/download/ezcall-2026-11-25/EasyCall-0.1.31-build34-unsigned.ipa) | iOS 17+. Sign and provision the IPA for your device or install from source using Xcode on a Mac. |
+| Android with the SIM | [Sender 0.1.21 · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-26/ezcall-sender-0.1.21-release.apk) | Android 12+, telephony and BLE peripheral advertising |
+| Second Android phone | [Receiver 0.1.14 · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-26/ezcall-receiver-0.1.14-release.apk) | Android 12+ and BLE |
+| iPhone | [Join EasyCall Relay on TestFlight](https://testflight.apple.com/join/gRnJCZ5E) | iOS 17+ and the TestFlight app |
 
 Open the APK on the phone that will perform that role and follow Android’s installer prompts. Each component has its own version. The release includes SHA-256 checksums. Sender 0.1.9 changed its Android application ID. If upgrading from 0.1.8, pair the new Sender and repeat optional call-audio setup. [Release notes and checksums](https://github.com/ehsatn/EZcall/releases/latest) · [Earlier binaries](https://github.com/ehsatn/EZcall/releases/tag/binary-archive-1)
 
 ## Set up a sending and receiving phone
 
 1. On Android 12 or later, install the Sender APK from the table above on a phone that supports BLE peripheral advertising. To build it yourself, open the `android` directory in Android Studio and follow the [Android build instructions](android/README.md).
-2. For an Android receiver, install [ezcall Receiver](android/receiver/README.md) on a second phone running Android 12 or later. For an iPhone receiver, on a Mac open `ios/ezcall.xcodeproj` in Xcode 26 or later. Select your signing team and run ezcall on a physical iPhone with iOS 17 or later. The app uses Liquid Glass on iOS 26 or later. [iOS build instructions](ios/README.md) · [Apple device build guide](https://developer.apple.com/documentation/xcode/running-your-app-in-simulator-or-on-a-device)
+2. On the receiving phone, install the Android Receiver APK or open the TestFlight invitation from the table above. The iPhone app uses Liquid Glass on iOS 26 or later. [Android Receiver instructions](android/receiver/README.md) · [iOS build instructions](ios/README.md)
 3. On the sender, open **Connection → Start pairing**, choose what to share and show the QR. Optional call audio setup is under **Settings**. On the receiving phone, scan the Android QR and grant Bluetooth access. Allow notifications for incoming calls and SMS.
 4. On iPhone, tap the gear at the top left of **Recents**, then **Test Connection**. Use the bottom tabs for **Recents**, **Contacts**, **Keypad** and **Messages**. In **Messages**, search or tap the compose button to send an SMS. Sending uses the Android SIM and requires **Send SMS from the receiving phone** on the sender.
 5. On Android Receiver, open **Settings → Test connection** and use **Calls**, **Messages** and **Contacts**. A sender supports one receiver at a time. **Forget receiving phone** on the sender opens a fresh QR while preserving sharing and audio settings.

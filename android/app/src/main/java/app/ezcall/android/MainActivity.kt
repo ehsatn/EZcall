@@ -641,7 +641,9 @@ class MainActivity : AppCompatActivity() {
             }
             Step.LINK -> connectionPanel = stack().also { content.addView(it, space(top = 20)) }
             Step.AUDIO -> {
-                content.addView(outlineButton(getString(R.string.s_setup_audio), ::openAudioSetup), space(top = 16))
+                val setup = if (wirelessAudioReady()) textButton(getString(R.string.s_ui_audio_setup_methods), ::openAudioSetup)
+                    else outlineButton(getString(R.string.s_setup_audio), ::openAudioSetup)
+                content.addView(setup, space(top = 16))
                 setGuideAction(R.string.s_ui_finish_guide) {
                     saveStep(null)
                     closeGuide()
@@ -657,6 +659,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showGuideHelp(step: Step, title: String) {
+        if (step == Step.AUDIO && wirelessAudioReady()) {
+            MaterialAlertDialogBuilder(this).setTitle(title).setMessage(R.string.s_wireless_paired)
+                .setPositiveButton(R.string.ez_close, null).show()
+            return
+        }
         val help = ScrollView(this).apply {
             addView(stack().apply {
                 setPaddingRelative(dp(24), dp(8), dp(24), dp(8))
@@ -828,6 +835,9 @@ class MainActivity : AppCompatActivity() {
     private fun liveAudio(): CallAudio.Status? = RelayState.audio?.takeUnless { it == CallAudio.Status.NONE }
         ?: setupAudioReady?.takeUnless { RelayState.current.running }
 
+    private fun wirelessAudioReady(active: CallAudio.Status? = liveAudio(), paired: Boolean = WirelessPairing.isPaired(this)) =
+        active != null && paired && LocalAdb.hasVerifiedSetup(this)
+
     private fun audioTitle(): String = when {
         audioBusy -> getString(R.string.s_starting_audio)
         liveAudio() == CallAudio.Status.TWO_WAY -> getString(R.string.s_two_way)
@@ -845,6 +855,7 @@ class MainActivity : AppCompatActivity() {
         val relayRunning: Boolean,
         val paired: Boolean,
         val canStart: Boolean,
+        val wirelessReady: Boolean,
         val overlayEnabled: Boolean,
         val callsReady: Boolean,
         val error: Int?
@@ -854,8 +865,9 @@ class MainActivity : AppCompatActivity() {
         val panel = audioPanel ?: return
         val paired = WirelessPairing.isPaired(this)
         val configured = CallAudio.Setup.enabled(this)
-        val display = AudioDisplay(audioTitle(), liveAudio(), configured, audioBusy, RelayState.current.running, paired,
-            paired || (configured && LocalAdb.hasKey()), Settings.canDrawOverlays(this),
+        val active = liveAudio()
+        val display = AudioDisplay(audioTitle(), active, configured, audioBusy, RelayState.current.running, paired,
+            paired || (configured && LocalAdb.hasKey()), wirelessAudioReady(active, paired), Settings.canDrawOverlays(this),
             Feature.CALLS.active(this) && Feature.CONTROL.active(this) && hasPermission(permission.ANSWER_PHONE_CALLS),
             setupAudioError)
         if (shownAudio == display) return
@@ -883,11 +895,20 @@ class MainActivity : AppCompatActivity() {
         }, space())
         if (detail == null) {
             panel.addView(surfaceCard(settingsRow(R.drawable.ic_headset, getString(R.string.s_ui_audio_setup_methods),
-                getString(R.string.s_ui_audio_setup_choices), action = ::openAudioSetup).view), space(top = 12))
+                getString(if (display.wirelessReady) R.string.s_wireless_paired else R.string.s_ui_audio_setup_choices),
+                action = ::openAudioSetup).view), space(top = 12))
             return
         }
 
         val methods = stack().apply {
+            if (display.wirelessReady) {
+                addView(body(getString(R.string.s_wireless_paired)).apply {
+                    setPaddingRelative(dp(16), dp(12), dp(16), 0)
+                }, space())
+                addView(textButton(getString(R.string.s_restart_audio)) { setupAudio() }
+                    .apply { isEnabled = !display.busy }, space())
+                return@apply
+            }
             val wirelessAction = if (!display.canStart) R.string.s_pair_wireless
                 else if (display.configured) R.string.s_restart_audio else R.string.s_setup_audio
             addView(settingsRow(R.drawable.ic_link, getString(wirelessAction),

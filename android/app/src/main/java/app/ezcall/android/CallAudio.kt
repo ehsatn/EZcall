@@ -67,14 +67,26 @@ internal class CallAudio(private val context: Context, private val events: Event
         }
     }
 
-    fun end(reason: String? = null) = post { endStream(reason) }
+    fun end(reason: String? = null, replacingAfterRecovery: Boolean = false) =
+        post { endStream(reason, replacingAfterRecovery) }
 
-    fun setReceiverReady(ready: Boolean) = post {
+    fun setReceiverReady(ready: Boolean, recovering: Boolean = false) = post {
         val current = link ?: return@post
         val audio = stream ?: return@post
         if (!ready) synchronized(audio) { audio.pendingFrame = null }
         try {
-            AudioBridge.write(current.output, AudioBridge.RECEIVER_READY, byteArrayOf(if (ready) 1 else 0))
+            val state = if (recovering) AudioBridge.RECEIVER_RECOVERING else if (ready) 1 else 0
+            AudioBridge.write(current.output, AudioBridge.RECEIVER_READY, byteArrayOf(state.toByte()))
+        } catch (_: IOException) {
+            drop(current)
+        }
+    }
+
+    fun sendDtmf(callId: String, digit: Char) = post {
+        val current = link ?: return@post
+        if (stream?.callId != callId) return@post
+        try {
+            AudioBridge.write(current.output, AudioBridge.DTMF, byteArrayOf(digit.code.toByte()))
         } catch (_: IOException) {
             drop(current)
         }
@@ -169,10 +181,13 @@ internal class CallAudio(private val context: Context, private val events: Event
         }
     }
 
-    private fun endStream(reason: String?) {
+    private fun endStream(reason: String?, replacingAfterRecovery: Boolean = false) {
         val current = stream ?: return
         stream = null
-        link?.let { runCatching { AudioBridge.write(it.output, AudioBridge.STOP) } }
+        link?.let {
+            val payload = if (replacingAfterRecovery) byteArrayOf(AudioBridge.STOP_FOR_RECOVERY.toByte()) else ByteArray(0)
+            runCatching { AudioBridge.write(it.output, AudioBridge.STOP, payload) }
+        }
         synchronized(current) {
             current.open = false
             current.encoder?.release()
