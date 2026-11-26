@@ -142,14 +142,16 @@ private extension View {
 struct ConversationView: View {
     @ObservedObject var relay: RelayController
     let address: String
+    private let messageID: String?
     @State private var showContact = false
     @State private var confirmRetry = false
-    @State private var requestedMessageID: String?
+    @State private var scrollPosition: String?
 
     init(relay: RelayController, address: String, messageID: String? = nil) {
         self.relay = relay
         self.address = address
-        _requestedMessageID = State(initialValue: messageID)
+        self.messageID = messageID
+        _scrollPosition = State(initialValue: messageID)
     }
 
     private struct Row: Identifiable {
@@ -194,35 +196,33 @@ struct ConversationView: View {
 
     var body: some View {
         let rows = self.rows
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(rows) { row in
-                        VStack(spacing: 0) {
-                            if row.separator { separator(row.date, first: row.id == rows.first?.id) }
-                            bubbleRow(row)
-                                .font(.body)
-                                .padding(.top, row.separator ? 0 : 10)
-                        }
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(rows) { row in
+                    VStack(spacing: 0) {
+                        if row.separator { separator(row.date, first: row.id == rows.first?.id) }
+                        bubbleRow(row)
+                            .font(.body)
+                            .padding(.top, row.separator ? 0 : 10)
                     }
-                    status
-                    Color.clear.frame(height: 1).id("bottom")
+                    .id(row.id)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                status
+                Color.clear.frame(height: 1).id("bottom")
             }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .task {
-                guard let requestedMessageID else { return }
-                await Task.yield()
-                guard !Task.isCancelled else { return }
-                proxy.scrollTo(requestedMessageID, anchor: .center)
-                self.requestedMessageID = nil
-            }
-            .onChange(of: rows.last?.id) {
-                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
+            .scrollTargetLayout()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .defaultScrollAnchor(.bottom)
+        .scrollPosition(id: $scrollPosition, anchor: .center)
+        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: messageID) { _, id in
+            scrollPosition = id
+        }
+        .onChange(of: rows.last?.id) {
+            guard messageID == nil else { return }
+            withAnimation(.easeOut(duration: 0.25)) { scrollPosition = "bottom" }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)

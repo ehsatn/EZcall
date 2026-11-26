@@ -11,6 +11,7 @@ final class CallBridge: NSObject {
         let outgoing: Bool
         var answered = false
         var connected = false
+        var appEndAction: UUID?
     }
 
     weak var relay: RelayController?
@@ -19,7 +20,6 @@ final class CallBridge: NSObject {
     private let controller = CXCallController()
     private let logger = Logger(subsystem: "app.xcall.relay", category: "CallKit")
     private var entries = [UUID: Entry]()
-    private var outgoingNames = [UUID: String]()
     private var answering: CXAnswerCallAction?
 
     override init() {
@@ -60,6 +60,7 @@ final class CallBridge: NSObject {
         guard entries[id] != nil else { return }
         let details = CXCallUpdate()
         details.localizedCallerName = reconnecting ? ezText("%@ · Reconnecting…", name) : name
+        details.supportsHolding = false
         provider.reportCall(with: id, updated: details)
     }
 
@@ -81,16 +82,10 @@ final class CallBridge: NSObject {
         }
     }
 
-    func dial(_ number: String, name: String) {
-        let id = UUID()
-        outgoingNames[id] = name
-        let action = CXStartCallAction(call: id, handle: CXHandle(type: .phoneNumber, value: number))
-        controller.request(CXTransaction(action: action)) { [weak self] error in
+    func requestOutgoingCall(_ action: CXStartCallAction, onRejection: @escaping @MainActor () -> Void) {
+        controller.request(CXTransaction(action: action)) { error in
             guard error != nil else { return }
-            Task { @MainActor in
-                self?.outgoingNames[id] = nil
-                self?.relay?.callFailed("iPhone couldn’t start the call.")
-            }
+            Task { @MainActor in onRejection() }
         }
     }
 
@@ -104,6 +99,7 @@ final class CallBridge: NSObject {
         if entry.outgoing || entry.answered {
             entry.connected = true
             entries[id] = entry
+            logger.notice("Android reports an active SIM call (CallKit audio active=\(self.audioActive, privacy: .public))")
             relay?.phoneCallConnected(id, at: connectedAt)
             if entry.outgoing { provider.reportOutgoingCall(with: id, connectedAt: connectedAt) }
         } else {
@@ -125,7 +121,6 @@ final class CallBridge: NSObject {
 
     func endAll(reason: CXCallEndedReason) {
         for id in Array(entries.keys) { ended(id, reason: reason) }
-        outgoingNames.removeAll()
     }
 
     func requestMute(_ id: UUID, muted: Bool) {
@@ -140,17 +135,26 @@ final class CallBridge: NSObject {
     }
 
     func requestEnd(_ id: UUID) {
-        guard has(id) else { return }
-        controller.request(CXTransaction(action: CXEndCallAction(call: id))) { [weak self] error in
+        guard var entry = entries[id], entry.appEndAction == nil else { return }
+        let action = CXEndCallAction(call: id)
+        let actionID = action.uuid
+        entry.appEndAction = actionID
+        entries[id] = entry
+        controller.request(CXTransaction(action: action)) { [weak self] error in
             guard error != nil else { return }
-            Task { @MainActor in self?.relay?.phoneCallEndFailed(id) }
+            Task { @MainActor in
+                guard let self, self.entries[id]?.appEndAction == actionID else { return }
+                self.entries[id]?.appEndAction = nil
+                self.logger.info("EasyCall end transaction rejected")
+                self.relay?.phoneCallEndFailed(id)
+            }
         }
     }
 
     private func update(address: String, name: String) -> CXCallUpdate {
         let update = CXCallUpdate()
         update.remoteHandle = address.isEmpty ? CXHandle(type: .generic, value: name) : CXHandle(type: .phoneNumber, value: address)
-        update.localizedCallerName = name
+        if !name.isEmpty { update.localizedCallerName = name }
         update.hasVideo = false
         update.supportsHolding = false
         update.supportsGrouping = false
@@ -161,7 +165,11 @@ final class CallBridge: NSObject {
 
     private func prepareAudioSession() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth])
+        } catch {
+            logger.error("Could not configure CallKit voice audio session")
+        }
         try? session.setPreferredSampleRate(CallAudio.sampleRate)
         try? session.setPreferredIOBufferDuration(0.01)
     }
@@ -171,9 +179,11 @@ extension CallBridge: @preconcurrency CXCallObserverDelegate {
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
         guard entries[call.uuid] != nil else { return }
         if call.hasEnded {
+            let otherCall = callObserver.calls.contains { $0.uuid != call.uuid && !$0.hasEnded }
+            logger.notice("CallKit observer reports local end (audio active=\(self.audioActive, privacy: .public), another call=\(otherCall, privacy: .public))")
             entries[call.uuid] = nil
             finishAnswer(call.uuid)
-            relay?.callHangUp(call.uuid)
+            relay?.callPresentationEnded(call.uuid)
             relay?.phoneCallEnded(call.uuid)
         } else if call.hasConnected {
             logger.info("iOS reports an active ezcall call")
@@ -183,9 +193,9 @@ extension CallBridge: @preconcurrency CXCallObserverDelegate {
 
 extension CallBridge: @preconcurrency CXProviderDelegate {
     func providerDidReset(_ provider: CXProvider) {
+        logger.notice("CallKit provider reset")
         answering = nil
         entries.removeAll()
-        outgoingNames.removeAll()
         audioActive = false
         relay?.callsReset()
     }
@@ -202,36 +212,60 @@ extension CallBridge: @preconcurrency CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {
-        guard let answer = answering, answer === action else { return }
+        if let end = action as? CXEndCallAction, entries[end.callUUID]?.appEndAction == end.uuid {
+            entries[end.callUUID]?.appEndAction = nil
+            logger.info("EasyCall end transaction timed out")
+            relay?.phoneCallEndFailed(end.callUUID)
+        }
+        guard let answer = action as? CXAnswerCallAction else { return }
+        logger.notice("CallKit answer action timed out")
+        guard answering === answer else { return }
         answering = nil
-        // Otherwise Android may still pick up the call after iOS has dropped it.
-        relay?.callHangUp(answer.callUUID)
+        relay?.callPresentationEnded(answer.callUUID)
         ended(answer.callUUID, reason: .failed)
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        if entries.removeValue(forKey: action.callUUID) != nil {
-            finishAnswer(action.callUUID)
-            relay?.callHangUp(action.callUUID)
-            relay?.phoneCallEnded(action.callUUID)
+        let id = action.callUUID
+        if let entry = entries.removeValue(forKey: id) {
+            let fromApp = entry.appEndAction == action.uuid
+            let answerExpired = answering.map { $0.callUUID == id && $0.timeoutDate <= Date() } ?? false
+            finishAnswer(id)
+            if answerExpired && !fromApp {
+                logger.notice("CallKit end action arrived after the answer deadline")
+                relay?.callPresentationEnded(id)
+            } else {
+                let otherCall = controller.callObserver.calls.contains { $0.uuid != id && !$0.hasEnded }
+                logger.notice("Forwarding end action (requested in EasyCall=\(fromApp, privacy: .public), another call=\(otherCall, privacy: .public))")
+                relay?.callHangUp(id)
+            }
+            relay?.phoneCallEnded(id)
+        } else {
+            logger.debug("CallKit end action has no live EasyCall entry")
         }
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         let id = action.callUUID
-        let name = outgoingNames.removeValue(forKey: id) ?? ""
+        let number = action.handle.value
         entries[id] = Entry(outgoing: true)
-        guard relay?.callDial(id, number: action.handle.value) == true else {
+        guard let relay, relay.callDial(id, number: number) else {
             entries[id] = nil
             action.fail()
             return
         }
-        relay?.callMuted(false)
+        relay.callMuted(false)
         prepareAudioSession()
+        let name = relay.name(for: number)
         provider.reportOutgoingCall(with: id, startedConnectingAt: nil)
-        if !name.isEmpty { provider.reportCall(with: id, updated: update(address: action.handle.value, name: name)) }
+        provider.reportCall(with: id, updated: update(address: number, name: name == number ? "" : name))
         action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        logger.notice("Rejecting unsupported CallKit hold action (on hold=\(action.isOnHold, privacy: .public))")
+        action.fail()
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
@@ -240,11 +274,13 @@ extension CallBridge: @preconcurrency CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        logger.notice("CallKit activated audio session")
         audioActive = true
         relay?.callAudioSession(true)
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        logger.notice("CallKit deactivated audio session")
         audioActive = false
         relay?.callAudioSession(false)
     }

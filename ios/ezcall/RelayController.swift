@@ -96,11 +96,18 @@ final class RelayController: NSObject, ObservableObject {
 
     private struct StagedSync {
         let id: String
+        let requestedAt = Date().timeIntervalSince1970
         var started = false
+        var smsRevoked = false
         var bytes = 0
         var messages: [RelaySMS] = []
         var contacts: [RelayContact] = []
-        var liveMessages: [RelaySMS] = []
+    }
+
+    private struct SyncRequest: Encodable {
+        let type = "sync"
+        let id: String
+        let watch = true
     }
 
     private let service = CBUUID(string: "1C79EA10-64D7-4F93-94EE-881ACB0D5E74")
@@ -130,7 +137,7 @@ final class RelayController: NSObject, ObservableObject {
     @Published private(set) var testing = false
     @Published private(set) var syncing = false
     @Published private(set) var alerts = UNAuthorizationStatus.notDetermined
-    @Published var openedSMSNotification: String?
+    @Published private(set) var openedSMSNotifications: [String] = []
     @Published private(set) var callControl = false
     @Published private(set) var canDial = false
     @Published private(set) var audioMode = AudioMode.off
@@ -179,6 +186,9 @@ final class RelayController: NSObject, ObservableObject {
     private var initialized = false
     private var vaultRead = false
     private lazy var calls = CallBridge()
+    private var outgoingDial: (id: UUID, sent: Bool)?
+    private var outgoingCallIDs = Set<UUID>()
+    private var sentOutgoingCall: PhoneCall? { outgoingDial?.sent == true ? phoneCall : nil }
     private var audioChannel: CBCharacteristic?
     private var pendingAudioWrites: [(packet: Data, expires: ContinuousClock.Instant)] = []
     private var nextAudioWriteAt = ContinuousClock.now
@@ -198,6 +208,7 @@ final class RelayController: NSObject, ObservableObject {
     private var dialDeadlines = [UUID: Timer]()
     private var smsRequest: String?
     private var smsDeadline: Timer?
+    private var smsSnapshotRetry: Timer?
     private var smsCompletion: ((Bool, String) -> Void)?
     private(set) var receivedCapabilities = false
     private var sharing: (texts: Bool, contacts: Bool)?
@@ -214,7 +225,7 @@ final class RelayController: NSObject, ObservableObject {
 
     func becameActive() {
         start()
-        if !vaultRead { restoreVault() }
+        protectedDataBecameAvailable()
         refreshAlerts()
         microphone = AVAudioApplication.shared.recordPermission
         if let recoveryDeadline, ContinuousClock.now >= recoveryDeadline { expireCallRecovery() }
@@ -224,6 +235,10 @@ final class RelayController: NSObject, ObservableObject {
         }
         tryConnect()
         if status == .connected && needsSync { syncNow() }
+    }
+
+    func protectedDataBecameAvailable() {
+        if !vaultRead { restoreVault() }
     }
 
     func pair(with code: String) -> Bool {
@@ -278,7 +293,9 @@ final class RelayController: NSObject, ObservableObject {
             namedContacts.removeAll()
             namedSuffixes.removeAll()
             outgoingSMS = nil
-            openedSMSNotification = nil
+            openedSMSNotifications.removeAll()
+            smsSnapshotRetry?.invalidate()
+            smsSnapshotRetry = nil
             let notifications = UNUserNotificationCenter.current()
             notifications.removeAllPendingNotificationRequests()
             notifications.removeAllDeliveredNotifications()
@@ -321,7 +338,7 @@ final class RelayController: NSObject, ObservableObject {
         let id = UUID().uuidString
         sync = StagedSync(id: id)
         needsSync = false
-        send(type: "sync", id: id)
+        send(SyncRequest(id: id))
         armSyncDeadline()
     }
 
@@ -335,18 +352,59 @@ final class RelayController: NSObject, ObservableObject {
     /// Places a call on Android's SIM through the iOS call interface.
     func dial(_ number: String) {
         let trimmed = number.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, phoneCall == nil else { return }
         guard status == .connected, canDial else {
             report(status == .connected ? "Turn on Call control in ezcall on Android to call from iPhone."
                 : "Connect to your Android to make calls.")
             return
         }
-        if audioMode == .twoWay, AVAudioApplication.shared.recordPermission == .undetermined {
-            requestMicrophone { [weak self] in self?.dial(trimmed) }
+        let needsPermission = audioMode == .twoWay && AVAudioApplication.shared.recordPermission == .undetermined
+        guard !needsPermission || UIApplication.shared.applicationState == .active else { return }
+        let id = UUID()
+        outgoingCallIDs.insert(id)
+        prepareOutgoingDial(id, number: trimmed)
+        if needsPermission {
+            requestMicrophone { [weak self] in self?.requestOutgoingCall(id, number: trimmed) }
+        } else {
+            requestOutgoingCall(id, number: trimmed)
+        }
+    }
+
+    private func prepareOutgoingDial(_ id: UUID, number: String) {
+        outgoingDial = (id, false)
+        feedback = nil
+        phoneCall = PhoneCall(id: id, address: number)
+    }
+
+    private func requestOutgoingCall(_ id: UUID, number: String) {
+        guard outgoingDial?.id == id else { return }
+        guard handshake == .authenticated, canDial else {
+            failOutgoingDial(id, message: "Connect to your Android to make calls.")
             return
         }
-        let contact = name(for: trimmed)
-        calls.dial(trimmed, name: contact == trimmed ? "" : contact)
+        let action = CXStartCallAction(call: id, handle: CXHandle(type: .phoneNumber, value: number))
+        dialDeadlines[id] = after(25) { relay in
+            relay.failOutgoingDial(id, message: "iPhone couldn’t start the call.")
+        }
+        calls.requestOutgoingCall(action) { [weak self] in
+            guard let self, self.outgoingDial?.sent == false else { return }
+            self.failOutgoingDial(id, message: "iPhone couldn’t start the call.")
+        }
+    }
+
+    private func closeOutgoingDial(_ id: UUID) {
+        guard outgoingDial?.id == id else { return }
+        outgoingDial = nil
+        if pendingHangUp?.id == id { pendingHangUp = nil }
+        dialDeadlines.removeValue(forKey: id)?.invalidate()
+        phoneCallEnded(id)
+    }
+
+    private func failOutgoingDial(_ id: UUID, message: String) {
+        guard outgoingDial?.id == id else { return }
+        closeOutgoingDial(id)
+        calls.ended(id, reason: .failed)
+        report(message)
     }
 
     func requestMicrophone(completion: (@MainActor () -> Void)? = nil) {
@@ -396,7 +454,7 @@ final class RelayController: NSObject, ObservableObject {
     // MARK: CallKit actions
 
     func callAnswer(_ id: UUID) -> Bool {
-        guard let call = activeCall, call.state == .ringing, UUID(uuidString: call.id) == id,
+        guard outgoingDial == nil, let call = activeCall, call.state == .ringing, UUID(uuidString: call.id) == id,
               (handshake == .authenticated && (callControl || call.simulated == true)) || callReconnecting else { return false }
         callMuted(false)
         queuedAnswer = id
@@ -417,48 +475,79 @@ final class RelayController: NSObject, ObservableObject {
     }
 
     func callHangUp(_ id: UUID) {
+        if handshake != .authenticated, callReconnecting,
+           sentOutgoingCall?.id == id || activeCall.flatMap({ UUID(uuidString: $0.id) }) == id,
+           let recoveryDeadline {
+            pendingHangUp = (id, recoveryDeadline)
+            logger.notice("Queued SIM hangup during Bluetooth recovery")
+        }
+        clearCallPresentation(id)
+        guard handshake == .authenticated else { return }
+        logger.notice("Sending SIM hangup over Bluetooth")
+        send(type: "call_end", id: id.uuidString.lowercased())
+    }
+
+    func callPresentationEnded(_ id: UUID) {
+        if audioCallID == id { notifyPhoneAudio(ready: false) }
+        clearCallPresentation(id)
+    }
+
+    private func clearCallPresentation(_ id: UUID) {
+        if audioCallID == id { stopAudio() }
+        guard sentOutgoingCall?.id != id else { return }
         if queuedAnswer == id { queuedAnswer = nil }
         dialDeadlines.removeValue(forKey: id)?.invalidate()
         if callReconnecting, activeCall.flatMap({ UUID(uuidString: $0.id) }) == id {
-            if handshake != .authenticated, let recoveryDeadline {
-                pendingHangUp = (id, recoveryDeadline)
-            }
             finishCallRecovery()
             activeCall = nil
         }
-        if audioCallID == id { stopAudio() }
-        guard handshake == .authenticated else { return }
-        send(["type": "call_end", "id": id.uuidString.lowercased()])
     }
 
     func callDial(_ id: UUID, number: String) -> Bool {
-        guard handshake == .authenticated, canDial else { return false }
+        if outgoingDial?.id != id {
+            // Phone Recents can submit a new start action. A cancelled app action may also arrive late.
+            guard outgoingCallIDs.insert(id).inserted, outgoingDial == nil, phoneCall == nil,
+                  handshake == .authenticated, canDial else { return false }
+            prepareOutgoingDial(id, number: number)
+        }
+        guard outgoingDial?.id == id, outgoingDial?.sent == false, phoneCall?.id == id else { return false }
+        guard handshake == .authenticated, canDial else {
+            failOutgoingDial(id, message: "Connect to your Android to make calls.")
+            return false
+        }
         send(["type": "call_dial", "id": id.uuidString.lowercased(), "address": number])
         guard handshake == .authenticated else { return false }
-        phoneCall = PhoneCall(id: id, address: number)
+        outgoingDial?.sent = true
+        logger.info("Sent outgoing dial to Android: \(id.uuidString, privacy: .public)")
+        dialDeadlines.removeValue(forKey: id)?.invalidate()
         dialDeadlines[id] = after(25) { relay in
-            relay.dialDeadlines[id] = nil
-            relay.calls.ended(id, reason: .failed)
-            relay.report("Android didn’t start the call.")
+            relay.failOutgoingDial(id, message: "Android didn’t confirm the call. Check Android before retrying.")
         }
         return true
     }
 
     func phoneCallConnected(_ id: UUID, at date: Date) {
-        guard phoneCall?.id == id else { return }
+        guard phoneCall?.id == id, phoneCall?.connectedAt == nil else { return }
         phoneCall?.connectedAt = date
     }
 
     func phoneCallEnded(_ id: UUID) {
-        guard phoneCall?.id == id else { return }
+        // CallKit can end its presentation while the Android SIM call is still live.
+        guard phoneCall?.id == id, outgoingDial?.id != id else { return }
         phoneCall = nil
         if data.endCalls(matching: id.uuidString.lowercased()) { persist() }
     }
 
     func endPhoneCall(_ id: UUID) {
-        guard phoneCall?.id == id else { return }
+        guard let call = phoneCall, call.id == id else { return }
         phoneCall?.endFailed = false
-        calls.requestEnd(id)
+        if calls.has(id), !call.endFailed || sentOutgoingCall?.id != id {
+            calls.requestEnd(id)
+        } else if outgoingDial?.id == id {
+            if outgoingDial?.sent == false { closeOutgoingDial(id) }
+            else if handshake == .authenticated || callReconnecting { callHangUp(id) }
+            else { phoneCallEndFailed(id) }
+        }
     }
 
     func phoneCallEndFailed(_ id: UUID) {
@@ -528,12 +617,15 @@ final class RelayController: NSObject, ObservableObject {
 
     func callsReset() {
         callAudioSession(false)
+        stopAudio()
+        // Android can still finish a dial after CallKit resets.
+        if sentOutgoingCall != nil { return }
+        if let id = outgoingDial?.id { closeOutgoingDial(id) }
         if let id = phoneCall?.id { phoneCallEnded(id) }
         phoneCall = nil
         queuedAnswer = nil
         if callReconnecting { activeCall = nil }
         finishCallRecovery()
-        stopAudio()
         dialDeadlines.values.forEach { $0.invalidate() }
         dialDeadlines.removeAll()
     }
@@ -584,19 +676,24 @@ final class RelayController: NSObject, ObservableObject {
     }
 
     private func restoreVault() {
+        let unlocked = UIApplication.shared.isProtectedDataAvailable
         do {
-            pairing = try LocalVault.loadPairing()
-            retainedData = try? LocalVault.loadArchive()
-            vaultRead = true
-            isPaired = pairing != nil
-            guard let pairing else { return }
-            do {
-                data = try LocalVault.loadData(using: pairing.cacheKey)
-                if data.endCalls() { persist() }
-                indexContacts()
-            } catch {
-                feedback = "Couldn’t read the saved inbox. Sync to refresh it."
+            let record = try LocalVault.loadPairing(canInitialize: unlocked)
+            if let record {
+                do {
+                    data = try LocalVault.loadData(using: record.cacheKey)
+                } catch {
+                    guard unlocked else { throw error }
+                    feedback = "Couldn’t read the saved inbox. Sync to refresh it."
+                }
             }
+            pairing = record
+            vaultRead = true
+            retainedData = try? LocalVault.loadArchive()
+            isPaired = record != nil
+            guard record != nil else { return }
+            if data.endCalls() { persist() }
+            indexContacts()
             status = .waiting
             prepareBluetooth()
         } catch {
@@ -715,6 +812,7 @@ final class RelayController: NSObject, ObservableObject {
             finishCallRecovery()
             activeCall = nil
             stopAudio()
+            if let id = outgoingDial?.id { closeOutgoingDial(id) }
             calls.endAll(reason: .failed)
             if data.endCalls() { persist() }
         }
@@ -734,16 +832,23 @@ final class RelayController: NSObject, ObservableObject {
     }
 
     private func beginCallRecovery() -> Bool {
-        guard let call = activeCall, let id = UUID(uuidString: call.id), calls.has(id),
-              canResumeCall || callReconnecting,
-              call.state == .active || (call.state == .ringing && call.simulated != true && (callControl || callReconnecting))
-        else { return false }
+        guard canResumeCall || callReconnecting else { return false }
+        let id: UUID
+        let address: String
+        if let outgoing = sentOutgoingCall {
+            (id, address) = (outgoing.id, outgoing.address)
+        } else if let call = activeCall, let callID = UUID(uuidString: call.id), calls.has(callID),
+                  call.state == .active || (call.state == .ringing && call.simulated != true && (callControl || callReconnecting)) {
+            (id, address) = (callID, call.address)
+        } else {
+            return false
+        }
         if let recoveryDeadline { return ContinuousClock.now < recoveryDeadline }
         recoveryDeadline = ContinuousClock.now.advanced(by: .seconds(18))
         callReconnecting = true
         callAudio?.stop()
         callAudioActive = false
-        calls.setReconnecting(id, name: name(for: call.address), reconnecting: true)
+        calls.setReconnecting(id, name: name(for: address), reconnecting: true)
         logger.info("Call waiting for Bluetooth recovery")
         recoveryTask = UIApplication.shared.beginBackgroundTask(withName: "Bluetooth call recovery") { [weak self] in
             Task { @MainActor in self?.expireCallRecovery() }
@@ -768,7 +873,8 @@ final class RelayController: NSObject, ObservableObject {
         queuedAnswer = nil
         finishCallRecovery()
         stopAudio()
-        if let id = activeCall.flatMap({ UUID(uuidString: $0.id) }) {
+        if let id = sentOutgoingCall?.id ?? activeCall.flatMap({ UUID(uuidString: $0.id) }) {
+            closeOutgoingDial(id)
             calls.ended(id, reason: .failed)
             if data.endCalls(matching: id.uuidString.lowercased()) { persist() }
         }
@@ -777,7 +883,12 @@ final class RelayController: NSObject, ObservableObject {
 
     private func requestCallRecovery() {
         guard !resumeRequested, let recoveryDeadline, let call = activeCall, call.state == .active,
-              let id = UUID(uuidString: call.id) else { return }
+              let id = UUID(uuidString: call.id), sentOutgoingCall.map({ $0.id == id }) ?? true else { return }
+        if sentOutgoingCall?.id == id, !calls.has(id) {
+            finishCallRecovery()
+            if needsSync { syncNow() }
+            return
+        }
         guard canResumeCall, ContinuousClock.now < recoveryDeadline else {
             expireCallRecovery()
             return
@@ -866,7 +977,7 @@ final class RelayController: NSObject, ObservableObject {
         send(envelope)
     }
 
-    private func send(_ envelope: [String: String]) {
+    private func send(_ envelope: some Encodable) {
         do {
             let payload = try JSONEncoder().encode(envelope)
             guard let body = try link?.seal(payload) else { throw WireError.malformed }
@@ -948,6 +1059,7 @@ final class RelayController: NSObject, ObservableObject {
         if let pendingHangUp {
             self.pendingHangUp = nil
             if ContinuousClock.now < pendingHangUp.deadline {
+                logger.notice("Sending queued SIM hangup after Bluetooth recovery")
                 send(type: "call_end", id: pendingHangUp.id.uuidString.lowercased())
             }
         }
@@ -967,27 +1079,36 @@ final class RelayController: NSObject, ObservableObject {
         case "sms":
             let message = try decoder.decode(RelaySMS.self, from: payload)
             guard valid(message) else { throw WireError.malformed }
-            let isNew = !data.messages.contains { $0.id == message.id }
-            data.merge([message])
-            if let count = sync?.liveMessages.count, count < 500 { sync?.liveMessages.append(message) }
-            persist()
-            if isNew && message.direction == "in" {
+            guard sharing?.texts != false else { return }
+            let isNew = data.receiveSMS(message, at: Date().timeIntervalSince1970)
+            if persist(), isNew && message.direction == "in" {
                 let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     ? ezText("New message on Android") : message.body
                 alert(body, title: name(for: message.address), id: notificationID("message", message.id),
                       messageID: message.id)
             }
+        case "sync_changed":
+            needsSync = true
+            if UIApplication.shared.applicationState == .active { syncNow() }
         case "call":
             let call = try decoder.decode(RelayCall.self, from: payload)
             guard validID(call.id), call.address.utf8.count <= 256, validDate(call.date) else {
                 throw WireError.malformed
             }
+            let id = UUID(uuidString: call.id)
+            let outgoing = sentOutgoingCall
+            let matchesOutgoing = outgoing != nil && outgoing?.id == id
             let simulated = call.simulated == true
+            if call.state != .ended, !matchesOutgoing, outgoing != nil { return }
             let isNew = simulated ? activeCall?.id != call.id : !data.calls.contains { $0.id == call.id }
             if !simulated { data.update(call) }
-            let wasRingingDuringRecovery = callReconnecting && activeCall?.id == call.id && activeCall?.state == .ringing
-            if callReconnecting, activeCall?.id != call.id, call.state != .ended { expireCallRecovery() }
+            let wasRingingDuringRecovery = outgoing == nil && callReconnecting &&
+                activeCall?.id == call.id && activeCall?.state == .ringing
+            if callReconnecting, outgoing == nil, activeCall?.id != call.id, call.state != .ended { expireCallRecovery() }
             if call.state == .ended {
+                if callReconnecting, matchesOutgoing || (outgoing == nil && activeCall?.id == call.id) {
+                    finishCallRecovery()
+                }
                 if activeCall?.id == call.id { activeCall = nil }
             } else {
                 activeCall = call
@@ -1008,6 +1129,7 @@ final class RelayController: NSObject, ObservableObject {
                 }
             }
             route(call, isNew: isNew)
+            if matchesOutgoing, callReconnecting, call.state == .active { requestCallRecovery() }
         case "capabilities":
             let capabilities = try decoder.decode(Capabilities.self, from: payload)
             callControl = capabilities.control
@@ -1015,7 +1137,11 @@ final class RelayController: NSObject, ObservableObject {
             canResumeCall = capabilities.resume_call == true
             supportsAudioRedirect = capabilities.audio_route == true
             if let currentID = capabilities.active_call_id {
-                if let activeCall, activeCall.id != currentID {
+                if let outgoing = sentOutgoingCall {
+                    if callReconnecting, outgoing.connectedAt != nil, UUID(uuidString: currentID) != outgoing.id {
+                        expireCallRecovery()
+                    }
+                } else if let activeCall, activeCall.id != currentID {
                     if callReconnecting { expireCallRecovery() }
                     else {
                         self.activeCall = nil
@@ -1031,12 +1157,15 @@ final class RelayController: NSObject, ObservableObject {
             audioMode = AudioMode(rawValue: capabilities.audio) ?? .off
             canSendSMS = capabilities.send_sms ?? false
             receivedCapabilities = true
-            if let texts = capabilities.texts, let contacts = capabilities.contacts {
-                if let previous = sharing, previous.texts != texts || previous.contacts != contacts {
+            if let texts = capabilities.texts {
+                let contacts = capabilities.contacts ?? sharing?.contacts ?? false
+                let previous = sharing
+                sharing = (texts, contacts)
+                if !texts && (previous?.texts != false || !data.messages.isEmpty) { revokeSMSSharing() }
+                if let previous, previous.texts != texts || previous.contacts != contacts {
                     needsSync = true
                     syncNow()
                 }
-                sharing = (texts, contacts)
             }
         case "sms_result":
             let result = try decoder.decode(SMSResult.self, from: payload)
@@ -1053,17 +1182,27 @@ final class RelayController: NSObject, ObservableObject {
             resumeCall(try decoder.decode(CallResumed.self, from: payload))
         case "call_error":
             let notice = try decoder.decode(Notice.self, from: payload)
-            if let id = UUID(uuidString: notice.id) {
-                if queuedAnswer == id { queuedAnswer = nil }
-                if activeCall.flatMap({ UUID(uuidString: $0.id) }) == id {
-                    if callReconnecting { finishCallRecovery() }
-                    activeCall = nil
+            guard let id = UUID(uuidString: notice.id),
+                  sentOutgoingCall?.id == id || queuedAnswer == id || calls.has(id) else { return }
+            if sentOutgoingCall?.id == id, callReconnecting {
+                finishCallRecovery()
+                if resumeRequested, activeCall.flatMap({ UUID(uuidString: $0.id) }) == id {
+                    // Android may have gone off-hook while BLE was down. End still works by SIM call UUID.
+                    calls.setReconnecting(id, name: name(for: phoneCall?.address ?? ""), reconnecting: false)
+                    stopAudio()
+                    if needsSync { syncNow() }
+                    return
                 }
-                dialDeadlines.removeValue(forKey: id)?.invalidate()
-                if audioCallID == id { stopAudio() }
-                calls.ended(id, reason: .failed)
-                if data.endCalls(matching: notice.id) { persist() }
             }
+            if queuedAnswer == id { queuedAnswer = nil }
+            if activeCall.flatMap({ UUID(uuidString: $0.id) }) == id {
+                if callReconnecting { finishCallRecovery() }
+                activeCall = nil
+            }
+            closeOutgoingDial(id)
+            if audioCallID == id { stopAudio() }
+            calls.ended(id, reason: .failed)
+            if data.endCalls(matching: notice.id) { persist() }
             report(String((notice.message ?? "Android couldn’t complete the call action.").prefix(200)))
         case "sync_begin", "sms_batch", "contacts_batch", "sync_end", "error":
             try handleSync(header, payload: payload)
@@ -1076,6 +1215,7 @@ final class RelayController: NSObject, ObservableObject {
         let id = UUID(uuidString: call.id)
         switch call.state {
         case .ringing:
+            if let id, sentOutgoingCall?.id == id { return }
             if isNew { logger.info("Authenticated ringing event received") }
             if isNew && (call.simulated == true || (callControl && audioMode == .twoWay)) {
                 requestMicrophone()
@@ -1093,11 +1233,11 @@ final class RelayController: NSObject, ObservableObject {
             guard let id else { return }
             dialDeadlines.removeValue(forKey: id)?.invalidate()
             calls.connected(id)
+            if sentOutgoingCall?.id == id { phoneCallConnected(id, at: Date()) }
         case .ended:
             guard let id else { return }
             if queuedAnswer == id { queuedAnswer = nil }
-            if callReconnecting, activeCall == nil { finishCallRecovery() }
-            dialDeadlines.removeValue(forKey: id)?.invalidate()
+            closeOutgoingDial(id)
             if audioCallID == id { stopAudio() }
             calls.ended(id, reason: .remoteEnded)
         }
@@ -1213,13 +1353,17 @@ final class RelayController: NSObject, ObservableObject {
         case "sync_end":
             guard stage.started else { throw WireError.malformed }
             var newData = data
-            newData.messages = []
-            newData.merge(stage.messages + stage.liveMessages)
+            if !stage.smsRevoked {
+                newData.replaceSMS(with: stage.messages, requestedAt: stage.requestedAt, sharing: sharing?.texts != false)
+            }
             newData.replaceContacts(stage.contacts)
             guard let pairing else { throw WireError.malformed }
             do {
                 try LocalVault.saveData(newData, using: pairing.cacheKey)
+                let remaining = Set(newData.messages.map(\.id))
+                removeSMSNotifications(for: data.messages.filter { !remaining.contains($0.id) })
                 data = newData
+                retryUnconfirmedSMS()
                 indexContacts()
                 finishSync("Messages and contacts are up to date.")
             } catch {
@@ -1246,12 +1390,15 @@ final class RelayController: NSObject, ObservableObject {
             validDate(message.date) && ["in", "out"].contains(message.direction)
     }
 
-    private func persist() {
-        guard let pairing else { return }
+    @discardableResult
+    private func persist() -> Bool {
+        guard let pairing else { return false }
         do {
             try LocalVault.saveData(data, using: pairing.cacheKey)
+            return true
         } catch {
             feedback = "Couldn’t save recent activity on this iPhone."
+            return false
         }
     }
 
@@ -1298,7 +1445,7 @@ final class RelayController: NSObject, ObservableObject {
         }
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         let logger = self.logger
-        UNUserNotificationCenter.current().add(request) { error in
+        UNUserNotificationCenter.current().add(request) { @Sendable error in
             if error != nil {
                 logger.info("Could not schedule ezcall notification")
             } else if id.hasPrefix("call-") {
@@ -1311,9 +1458,57 @@ final class RelayController: NSObject, ObservableObject {
         type + "-" + Data(SHA256.hash(data: Data(id.utf8))).base64EncodedString()
     }
 
-    func messageForSMSNotification(_ identifier: String) -> RelaySMS? {
-        data.messages.first {
-            $0.id == identifier || notificationID("message", $0.id) == identifier
+    var smsNotificationDestination: MessageDestination? {
+        for identifier in openedSMSNotifications {
+            if let message = data.messages.first(where: {
+                $0.id == identifier || notificationID("message", $0.id) == identifier
+            }) {
+                return MessageDestination(address: message.address, messageID: message.id)
+            }
+        }
+        return nil
+    }
+
+    func enqueueSMSNotification(_ identifier: String) {
+        guard !identifier.isEmpty, identifier.utf8.count <= 128, sharing?.texts != false,
+              !openedSMSNotifications.contains(identifier) else { return }
+        openedSMSNotifications = Array((openedSMSNotifications + [identifier]).suffix(32))
+    }
+
+    func consumeSMSNotification(_ id: String) {
+        let requestID = notificationID("message", id)
+        openedSMSNotifications.removeAll { $0 == id || $0 == requestID }
+    }
+
+    private func removeSMSNotifications(for messages: [RelaySMS]) {
+        guard !messages.isEmpty else { return }
+        let messageIDs = Set(messages.map(\.id))
+        let requestIDs = messageIDs.map { notificationID("message", $0) }
+        let identifiers = messageIDs.union(requestIDs)
+        openedSMSNotifications.removeAll { identifiers.contains($0) }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: requestIDs)
+        center.removeDeliveredNotifications(withIdentifiers: requestIDs)
+    }
+
+    private func revokeSMSSharing() {
+        sync?.smsRevoked = true
+        removeSMSNotifications(for: data.messages)
+        openedSMSNotifications.removeAll()
+        data.replaceSMS(with: [], requestedAt: 0, sharing: false)
+        smsSnapshotRetry?.invalidate()
+        smsSnapshotRetry = nil
+        persist()
+    }
+
+    private func retryUnconfirmedSMS() {
+        smsSnapshotRetry?.invalidate()
+        smsSnapshotRetry = nil
+        guard let deadline = data.unconfirmedSMS?.values.min() else { return }
+        let delay = max(0.1, deadline - Date().timeIntervalSince1970)
+        smsSnapshotRetry = after(delay) { relay in
+            relay.needsSync = true
+            if UIApplication.shared.applicationState == .active { relay.syncNow() }
         }
     }
 
