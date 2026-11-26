@@ -12,7 +12,7 @@ ezcall displays Android calls and SMS on an iPhone or a second Android phone and
 | Second Android phone | [Receiver 0.1.14 · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-26/ezcall-receiver-0.1.14-release.apk) | Android 12+ and BLE |
 | iPhone | [Join EasyCall Relay on TestFlight](https://testflight.apple.com/join/gRnJCZ5E) | iOS 17+ and the TestFlight app |
 
-Open the APK on the phone that will perform that role and follow Android’s installer prompts. Each component has its own version. The release includes SHA-256 checksums. Sender 0.1.9 changed its Android application ID. If upgrading from 0.1.8, pair the new Sender and repeat optional call-audio setup. [Release notes and checksums](https://github.com/ehsatn/EZcall/releases/latest) · [Earlier binaries](https://github.com/ehsatn/EZcall/releases/tag/binary-archive-1)
+Open the APK on the phone that will perform that role and follow Android’s installer prompts. Each component has its own version. The release includes SHA-256 checksums. Sender 0.1.9 changed its Android application ID. If upgrading from 0.1.8, pair the new Sender and repeat optional call-audio setup. [Release notes and checksums](https://github.com/ehsatn/EZcall/releases/latest)
 
 ## Set up a sending and receiving phone
 
