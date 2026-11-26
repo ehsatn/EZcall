@@ -50,11 +50,38 @@ struct RelayData: Codable {
     var messages: [RelaySMS] = []
     var calls: [RelayCall] = []
     var contacts: [RelayContact] = []
+    private(set) var unconfirmedSMS: [String: TimeInterval]? = nil
 
-    mutating func merge(_ messages: [RelaySMS]) {
+    private mutating func merge(_ messages: [RelaySMS]) {
         var byID: [String: RelaySMS] = [:]
         for message in self.messages + messages { byID[message.id] = message }
         self.messages = Array(byID.values.sorted { $0.date > $1.date }.prefix(500))
+        let retained = Set(self.messages.map(\.id))
+        unconfirmedSMS = unconfirmedSMS?.filter { retained.contains($0.key) }
+    }
+
+    @discardableResult
+    mutating func receiveSMS(_ message: RelaySMS, at now: TimeInterval) -> Bool {
+        let isNew = !messages.contains { $0.id == message.id }
+        if isNew {
+            // The broadcast can arrive before the provider exposes the row to a snapshot.
+            unconfirmedSMS = (unconfirmedSMS ?? [:]).merging([message.id: now + 5]) { old, _ in old }
+        }
+        merge([message])
+        return isNew
+    }
+
+    mutating func replaceSMS(with snapshot: [RelaySMS], requestedAt: TimeInterval, sharing: Bool) {
+        guard sharing else {
+            messages = []
+            unconfirmedSMS = nil
+            return
+        }
+        let confirmed = Set(snapshot.map(\.id))
+        unconfirmedSMS = unconfirmedSMS?.filter { $0.value > requestedAt && !confirmed.contains($0.key) }
+        let awaitingProvider = messages.filter { unconfirmedSMS?[$0.id] != nil }
+        messages = []
+        merge(snapshot + awaitingProvider)
     }
 
     mutating func update(_ call: RelayCall) {
@@ -100,7 +127,7 @@ struct PairingRecord: Codable {
 }
 
 enum LocalVault {
-    enum Failure: Error { case keychain(OSStatus), corrupt }
+    enum Failure: Error { case keychain(OSStatus), corrupt, protectedDataUnavailable }
 
     private static let query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
@@ -112,9 +139,12 @@ enum LocalVault {
         query.merging([kSecAttrAccount as String: "archive"]) { _, new in new }
     }
 
-    static func loadPairing() throws -> PairingRecord? {
+    static func loadPairing(canInitialize: Bool) throws -> PairingRecord? {
         let marker = try directory().appendingPathComponent("installed")
-        if !FileManager.default.fileExists(atPath: marker.path) {
+        do {
+            _ = try Data(contentsOf: marker)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            guard canInitialize else { throw Failure.protectedDataUnavailable }
             try removePairing()
             try removeArchive()
             try Data().write(to: marker, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
@@ -195,8 +225,12 @@ enum LocalVault {
 
     private static func loadData(using key: Data, at path: URL) throws -> RelayData {
         guard key.count == 32 else { throw Failure.corrupt }
-        guard FileManager.default.fileExists(atPath: path.path) else { return RelayData() }
-        let encrypted = try Data(contentsOf: path)
+        let encrypted: Data
+        do {
+            encrypted = try Data(contentsOf: path)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            return RelayData()
+        }
         guard encrypted.count <= 8_388_608 else { throw Failure.corrupt }
         let box = try AES.GCM.SealedBox(combined: encrypted)
         let plain = try AES.GCM.open(box, using: SymmetricKey(data: key))

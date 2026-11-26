@@ -47,7 +47,10 @@ struct EzcallApp: App {
                 .onOpenURL(perform: openWidget)
                 .onContinueUserActivity("INStartCallIntent", perform: redial)
                 .onContinueUserActivity("INStartAudioCallIntent", perform: redial)
-                .onChange(of: relay.openedSMSNotification, initial: true) { openSMSNotificationIfReady() }
+                .onChange(of: relay.smsNotificationDestination, initial: true) { openSMSNotificationIfReady() }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+                    openSMSNotificationIfReady()
+                }
                 .onChange(of: setupComplete) { openSMSNotificationIfReady() }
                 .onChange(of: relay.canDial) { dialRecentIfReady() }
                 .task(id: pendingRedial) {
@@ -88,14 +91,13 @@ struct EzcallApp: App {
 
     private func openSMSNotificationIfReady() {
         guard scenePhase == .active, relay.isPaired, setupComplete,
-              let identifier = relay.openedSMSNotification else { return }
-        relay.openedSMSNotification = nil
+              UIApplication.shared.isProtectedDataAvailable,
+              let destination = relay.smsNotificationDestination, let messageID = destination.messageID else { return }
         settings = false
         if let id = relay.phoneCall?.id { minimizedCall = id }
         tab = .messages
-        messagePath = relay.messageForSMSNotification(identifier).map {
-            [MessageDestination(address: $0.address, messageID: $0.id)]
-        } ?? []
+        messagePath = [destination]
+        relay.consumeSMSNotification(messageID)
     }
 
     private func openWidget(_ url: URL) {
@@ -328,13 +330,24 @@ private final class EzcallDelegate: NSObject, UIApplicationDelegate, UNUserNotif
         return []
     }
 
+    func applicationProtectedDataDidBecomeAvailable(_ application: UIApplication) {
+        RelayController.shared.protectedDataBecameAvailable()
+    }
+
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                           didReceive response: UNNotificationResponse) async {
+                                           didReceive response: UNNotificationResponse,
+                                           withCompletionHandler completionHandler: @escaping @Sendable () -> Void) {
         let request = response.notification.request
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              request.content.categoryIdentifier == "relay-sms" || request.identifier.hasPrefix("message-") else { return }
+              request.content.categoryIdentifier == "relay-sms" || request.identifier.hasPrefix("message-") else {
+            completionHandler()
+            return
+        }
         let identifier = request.content.userInfo["messageID"] as? String ?? request.identifier
-        await MainActor.run { RelayController.shared.openedSMSNotification = identifier }
+        Task { @MainActor in
+            RelayController.shared.enqueueSMSNotification(identifier)
+            completionHandler()
+        }
     }
 
     @objc private func coverScene(_ notification: Notification) {
