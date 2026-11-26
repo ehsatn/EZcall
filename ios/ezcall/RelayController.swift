@@ -1099,7 +1099,9 @@ final class RelayController: NSObject, ObservableObject {
             let outgoing = sentOutgoingCall
             let matchesOutgoing = outgoing != nil && outgoing?.id == id
             let simulated = call.simulated == true
-            if call.state != .ended, !matchesOutgoing, outgoing != nil { return }
+            if call.state != .ended, !matchesOutgoing,
+               outgoing != nil || id.map({ outgoingCallIDs.contains($0) }) == true { return }
+            if matchesOutgoing, outgoing?.connectedAt != nil, call.state == .ringing { return }
             let isNew = simulated ? activeCall?.id != call.id : !data.calls.contains { $0.id == call.id }
             if !simulated { data.update(call) }
             let wasRingingDuringRecovery = outgoing == nil && callReconnecting &&
@@ -1183,6 +1185,7 @@ final class RelayController: NSObject, ObservableObject {
         case "call_error":
             let notice = try decoder.decode(Notice.self, from: payload)
             guard let id = UUID(uuidString: notice.id),
+                  !outgoingCallIDs.contains(id) || sentOutgoingCall?.id == id,
                   sentOutgoingCall?.id == id || queuedAnswer == id || calls.has(id) else { return }
             if sentOutgoingCall?.id == id, callReconnecting {
                 finishCallRecovery()

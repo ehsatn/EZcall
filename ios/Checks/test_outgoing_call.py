@@ -52,6 +52,7 @@ class OutgoingCallCheck(unittest.TestCase):
         self.assertIn("if let outgoing = sentOutgoingCall", method(self.relay, "func beginCallRecovery("))
         events = method(self.relay, "func handle(_ header:")
         self.assertIn("if matchesOutgoing, callReconnecting, call.state == .active", events)
+        self.assertIn("!outgoingCallIDs.contains(id) || sentOutgoingCall?.id == id", events)
         self.assertIn("sentOutgoingCall?.id == id || queuedAnswer == id || calls.has(id) else { return }", events)
 
     def test_window_and_minimize_use_the_current_call_uuid(self):
