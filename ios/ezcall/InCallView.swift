@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct InCallView: View {
     @ObservedObject var relay: RelayController
+    let callID: UUID
     let minimize: () -> Void
     @State private var speaker = false
     @State private var more = false
@@ -13,7 +14,7 @@ struct InCallView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            if let call = relay.phoneCall {
+            if let call = relay.phoneCall, call.id == callID {
                 ScrollView {
                     VStack(spacing: 14) {
                         HStack(spacing: 6) {
@@ -44,7 +45,8 @@ struct InCallView: View {
                         } else if call.connectedAt != nil && !relay.callAudioActive && !relay.callReconnecting {
                             Text("Audio on Android").foregroundStyle(.secondary)
                         }
-                        if relay.activeCall?.test_audio_confirmation == true, call.connectedAt != nil {
+                        if relay.activeCall?.test_audio_confirmation == true,
+                           relay.activeCall.flatMap({ UUID(uuidString: $0.id) }) == callID, call.connectedAt != nil {
                             Text("Listen for the beeps, then speak to hear your voice back.")
                                 .multilineTextAlignment(.center)
                             Button {
@@ -103,8 +105,7 @@ struct InCallView: View {
                         GridRow {
                             ForEach(Array(row), id: \.self) { digit in
                                 Button {
-                                    guard let id = relay.phoneCall?.id,
-                                          relay.sendCallTone(digit, for: id) else {
+                                    guard relay.sendCallTone(digit, for: callID) else {
                                         outputError = "Couldn’t send the tone. Try again."
                                         keypad = false
                                         return

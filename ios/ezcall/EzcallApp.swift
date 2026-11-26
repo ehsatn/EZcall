@@ -47,7 +47,10 @@ struct EzcallApp: App {
                 .onOpenURL(perform: openWidget)
                 .onContinueUserActivity("INStartCallIntent", perform: redial)
                 .onContinueUserActivity("INStartAudioCallIntent", perform: redial)
-                .onChange(of: relay.openedSMSNotification, initial: true) { openSMSNotificationIfReady() }
+                .onChange(of: relay.smsNotificationDestination, initial: true) { openSMSNotificationIfReady() }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+                    openSMSNotificationIfReady()
+                }
                 .onChange(of: setupComplete) { openSMSNotificationIfReady() }
                 .onChange(of: relay.canDial) { dialRecentIfReady() }
                 .task(id: pendingRedial) {
@@ -65,14 +68,13 @@ struct EzcallApp: App {
                 .environment(\.locale, language.locale)
                 .environment(\.layoutDirection, language.direction)
         }
-        .onChange(of: visibleCallID, initial: true) {
-            appDelegate.presentCall(visibleCallID, relay: relay) { minimizedCall = $0 }
-        }
+        .onChange(of: visibleCallID, initial: true) { presentVisibleCall() }
         .onChange(of: scenePhase, initial: true) {
             if scenePhase == .active {
                 relay.becameActive()
                 dialRecentIfReady()
                 openSMSNotificationIfReady()
+                presentVisibleCall()
             }
         }
         .onChange(of: relay.isPaired) {
@@ -88,14 +90,13 @@ struct EzcallApp: App {
 
     private func openSMSNotificationIfReady() {
         guard scenePhase == .active, relay.isPaired, setupComplete,
-              let identifier = relay.openedSMSNotification else { return }
-        relay.openedSMSNotification = nil
+              UIApplication.shared.isProtectedDataAvailable,
+              let destination = relay.smsNotificationDestination, let messageID = destination.messageID else { return }
         settings = false
         if let id = relay.phoneCall?.id { minimizedCall = id }
         tab = .messages
-        messagePath = relay.messageForSMSNotification(identifier).map {
-            [MessageDestination(address: $0.address, messageID: $0.id)]
-        } ?? []
+        messagePath = [destination]
+        relay.consumeSMSNotification(messageID)
     }
 
     private func openWidget(_ url: URL) {
@@ -116,10 +117,19 @@ struct EzcallApp: App {
         return id
     }
 
+    private func presentVisibleCall() {
+        appDelegate.presentCall(visibleCallID, relay: relay) { id in
+            if relay.phoneCall?.id == id { minimizedCall = id }
+        }
+    }
+
     @ViewBuilder
     private var appContent: some View {
         if relay.isPaired && setupComplete {
             homeTabs
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if let call = relay.phoneCall, call.id == minimizedCall { ongoingBar(call) }
+                }
                 .onChange(of: tab) { _, selected in
                     if selected != .messages { lastCallTab = selected }
                 }
@@ -226,7 +236,7 @@ struct EzcallApp: App {
         case .keypad:
             KeypadView(relay: relay)
         case .recents:
-            NavigationStack { RecentsView(relay: relay, openSettings: openSettings, openCall: { minimizedCall = nil })
+            NavigationStack { RecentsView(relay: relay, openSettings: openSettings)
                     .settingsButton(openSettings) }
                 .id(callListID)
         case .contacts:
@@ -269,7 +279,7 @@ private final class EzcallDelegate: NSObject, UIApplicationDelegate, UNUserNotif
     }
 
     private func updateCallWindow() {
-        guard let (id, relay, minimize) = requestedCall else {
+        guard let (id, relay, minimize) = requestedCall, relay.phoneCall?.id == id else {
             let wasKey = callWindow?.isKeyWindow == true
             callWindow?.isHidden = true
             callWindow = nil
@@ -280,13 +290,16 @@ private final class EzcallDelegate: NSObject, UIApplicationDelegate, UNUserNotif
         }
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) else { return }
-        guard presentedCallID != id || callWindow?.windowScene !== scene else { return }
+        if presentedCallID == id, let callWindow, callWindow.windowScene === scene {
+            if !callWindow.isKeyWindow || callWindow.isHidden { callWindow.makeKeyAndVisible() }
+            return
+        }
         let window = callWindow ?? UIWindow(windowScene: scene)
         if window.windowScene !== scene { window.windowScene = scene }
         if callWindow == nil { previousKeyWindow = scene.keyWindow }
         window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue + 1)
         let language = EzcallLanguage.current
-        window.rootViewController = UIHostingController(rootView: InCallView(relay: relay) { minimize(id) }
+        window.rootViewController = UIHostingController(rootView: InCallView(relay: relay, callID: id) { minimize(id) }
             .environment(\.locale, language.locale)
             .environment(\.layoutDirection, language.direction))
         window.accessibilityViewIsModal = true
@@ -328,13 +341,24 @@ private final class EzcallDelegate: NSObject, UIApplicationDelegate, UNUserNotif
         return []
     }
 
+    func applicationProtectedDataDidBecomeAvailable(_ application: UIApplication) {
+        RelayController.shared.protectedDataBecameAvailable()
+    }
+
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                           didReceive response: UNNotificationResponse) async {
+                                           didReceive response: UNNotificationResponse,
+                                           withCompletionHandler completionHandler: @escaping @Sendable () -> Void) {
         let request = response.notification.request
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-              request.content.categoryIdentifier == "relay-sms" || request.identifier.hasPrefix("message-") else { return }
+              request.content.categoryIdentifier == "relay-sms" || request.identifier.hasPrefix("message-") else {
+            completionHandler()
+            return
+        }
         let identifier = request.content.userInfo["messageID"] as? String ?? request.identifier
-        await MainActor.run { RelayController.shared.openedSMSNotification = identifier }
+        Task { @MainActor in
+            RelayController.shared.enqueueSMSNotification(identifier)
+            completionHandler()
+        }
     }
 
     @objc private func coverScene(_ notification: Notification) {
@@ -579,7 +603,6 @@ private struct SetupPermissionsView: View {
 private struct RecentsView: View {
     @ObservedObject var relay: RelayController
     let openSettings: () -> Void
-    let openCall: () -> Void
     @State private var detail: CallDetail?
     @State private var showStatus = false
 
@@ -623,9 +646,6 @@ private struct RecentsView: View {
                 ContentUnavailableView("No Calls", systemImage: "clock",
                     description: Text("Calls from your Android will appear here."))
             }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let call = relay.phoneCall { ongoingBar(call) }
         }
         .navigationTitle("Calls")
         .navigationDestination(item: $detail) { detail in card(for: detail) }
@@ -719,7 +739,10 @@ private struct RecentsView: View {
                            calls: calls)
     }
 
-    private func ongoingBar(_ call: RelayController.PhoneCall) -> some View {
+}
+
+private extension EzcallApp {
+    func ongoingBar(_ call: RelayController.PhoneCall) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(relay.name(for: call.address))
@@ -728,6 +751,8 @@ private struct RecentsView: View {
                 Group {
                     if call.endFailed {
                         Text("Couldn’t end the call. Try again.")
+                    } else if relay.callReconnecting {
+                        Text("Reconnecting…")
                     } else if let connectedAt = call.connectedAt {
                         Text(connectedAt, style: .timer).monospacedDigit()
                     } else {
@@ -739,7 +764,9 @@ private struct RecentsView: View {
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
-            Button(action: openCall) {
+            Button {
+                if relay.phoneCall?.id == call.id { minimizedCall = nil }
+            } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .frame(width: 44, height: 44)
             }
@@ -987,6 +1014,7 @@ private struct KeypadView: View {
         }
         .buttonStyle(KeypadKeyStyle(size: size, tint: Color(uiColor: .systemGreen)))
         .accessibilityLabel("Call")
+        .disabled(relay.phoneCall != nil)
     }
 
     private func deleteKey(size: CGFloat) -> some View {

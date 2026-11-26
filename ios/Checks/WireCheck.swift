@@ -91,6 +91,26 @@ struct WireCheck {
         let saved = RelayData().retaining(data).retaining(data)
         try check(saved.messages == [message] && saved.contacts == [contact] && saved.calls.map(\.state) == [.ended, .ended],
                   "Saved data retains all categories and deduplicates exact records")
+
+        let oldCache = Data(#"{"messages":[],"calls":[],"contacts":[]}"#.utf8)
+        var inbox = try JSONDecoder().decode(RelayData.self, from: oldCache)
+        let multipart = RelaySMS(id: "multipart", address: "synthetic", body: ["Test ", "message"].joined(),
+                                 date: 101, direction: "in")
+        try check(inbox.receiveSMS(message, at: 100), "Live SMS precedes the initial snapshot")
+        try check(inbox.receiveSMS(multipart, at: 102), "Live multipart SMS arrives during the snapshot")
+        let cachedInbox = try JSONEncoder().encode(inbox)
+        inbox = try JSONDecoder().decode(RelayData.self, from: cachedInbox)
+        inbox.replaceSMS(with: [], requestedAt: 101, sharing: true)
+        try check(inbox.messages == [multipart, message], "Cold restore and an early snapshot keep both live messages")
+        try check(!inbox.receiveSMS(multipart, at: 103), "Repeated live delivery uses the same identity")
+        inbox.replaceSMS(with: [multipart], requestedAt: 108, sharing: true)
+        try check(inbox.messages == [multipart] && inbox.unconfirmedSMS?.isEmpty == true,
+                  "Provider confirmation keeps one row, and a later omission removes an unconfirmed row")
+        inbox.replaceSMS(with: [], requestedAt: 109, sharing: true)
+        try check(inbox.messages.isEmpty, "An authoritative snapshot removes a deleted confirmed SMS")
+        inbox.receiveSMS(message, at: 110)
+        inbox.replaceSMS(with: [multipart], requestedAt: 111, sharing: false)
+        try check(inbox.messages.isEmpty && inbox.unconfirmedSMS == nil, "Revocation clears live and snapshot SMS")
         print("iOS wire fixture passed")
     }
 

@@ -14,6 +14,7 @@ final class CallAudio: @unchecked Sendable {
     private static let logger = Logger(subsystem: "app.xcall.relay", category: "CallAudio")
 
     let uplink: Bool
+    let senderDtmf: Bool
     private let engine = AVAudioEngine()
     private let pcm: AVAudioFormat
     private let opus: AVAudioFormat
@@ -45,7 +46,7 @@ final class CallAudio: @unchecked Sendable {
         }
     }
 
-    init(key: Data, uplink: Bool, payloadLimit: Int, pairFrames: Bool, routeChanged: @escaping @Sendable () -> Void,
+    init(key: Data, uplink: Bool, payloadLimit: Int, pairFrames: Bool, senderDtmf: Bool, routeChanged: @escaping @Sendable () -> Void,
          send: @escaping @Sendable (Data) -> Void) throws {
         guard let pcm = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Self.sampleRate,
                                       channels: 1, interleaved: false) else { throw CallAudioError.format }
@@ -73,6 +74,7 @@ final class CallAudio: @unchecked Sendable {
         self.payloadLimit = payloadLimit
         self.pairFrames = pairFrames
         self.uplink = uplink
+        self.senderDtmf = senderDtmf
         self.playback = playback
         self.routeChanged = routeChanged
         self.send = send
