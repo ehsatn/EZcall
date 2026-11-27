@@ -140,6 +140,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         var record: AudioRecord? = null
         var track: AudioTrack? = null
         @Volatile private var receiverReady = false
+        @Volatile private var uplinkGeneration = 0
         @Volatile private var failed = false
         @Volatile private var lastDownlinkAt = 0L
 
@@ -220,6 +221,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
 
         private fun pauseRelay(recovering: Boolean = false) {
             receiverReady = false
+            uplinkGeneration++
             handset.restore(delayed = recovering)
             uplink.clear()
             dtmf.clear()
@@ -277,24 +279,42 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         }
 
         private fun inject(sink: AudioTrack) {
+            var generation = uplinkGeneration
+            var voice = AudioBridge.UplinkPcm()
+            var tone: ByteArray? = null
+            var toneOffset = 0
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
                 while (running) {
-                    val digit = dtmf.poll()
-                    val pcm = if (digit == null) {
-                        uplink.poll(20, TimeUnit.MILLISECONDS) ?: continue
-                    } else {
-                        AudioBridge.dtmfPcm(digit)
+                    if (!receiverReady) {
+                        Thread.sleep(10)
+                        continue
+                    }
+                    if (generation != uplinkGeneration) {
+                        generation = uplinkGeneration
+                        voice = AudioBridge.UplinkPcm()
+                        tone = null
+                    }
+                    if (tone == null) {
+                        tone = dtmf.poll()?.let(AudioBridge::dtmfPcm)
+                        toneOffset = 0
+                    }
+                    val signal = tone
+                    // The blocking track write paces the stream even while Bluetooth supplies no PCM.
+                    val pcm = voice.frame(uplink.poll())
+                    if (signal != null) {
+                        AudioBridge.mixDtmf(pcm, signal, toneOffset)
+                        toneOffset += pcm.size
+                        if (toneOffset >= signal.size) tone = null
                     }
                     var offset = 0
-                    while (running && receiverReady && offset < pcm.size) {
+                    while (running && receiverReady && generation == uplinkGeneration && offset < pcm.size) {
                         checkTelephonyOutput(sink)
                         val written = sink.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
-                        if (!receiverReady) break
+                        if (!receiverReady || generation != uplinkGeneration) break
                         if (written <= 0) throw IOException("Call audio injection failed: $written")
                         offset += written
                     }
-                    if (digit != null) uplink.clear()
                 }
             } catch (error: Exception) {
                 mediaFailed("Android stopped receiving call audio.", error)
@@ -326,7 +346,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                     ?.singleOrNull()
                     ?.let { candidate.setPreferredDevice(it) }
                 runCatching {
-                    candidate.setBufferSizeInFrames(AudioBridge.FRAME_SAMPLES * AudioBridge.LIVE_QUEUE_FRAMES)
+                    candidate.setBufferSizeInFrames(AudioBridge.FRAME_SAMPLES * 3)
                     candidate.setStartThresholdInFrames(AudioBridge.FRAME_SAMPLES * 2)
                 }
                 track = candidate

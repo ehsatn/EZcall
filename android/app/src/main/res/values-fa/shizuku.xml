@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_audio_shizuku">راه‌اندازی با Shizuku</string>
+    <string name="s_audio_shizuku_restart">راه‌اندازی مجدد با Shizuku</string>
+    <string name="s_audio_shizuku_detail">Shizuku را روی همین گوشی اجرا کنید و برای صدای تماس به ایزی‌کال اجازه دسترسی بدهید.</string>
+    <string name="s_audio_shizuku_start">Shizuku را روی همین گوشی نصب و اجرا کنید و دوباره تلاش کنید.</string>
+    <string name="s_audio_shizuku_unsupported">برای صدای تماس، نسخهٔ ۱۳ یا جدیدتر Shizuku را از طریق اشکال‌زدایی اندروید اجرا کنید.</string>
+    <string name="s_audio_shizuku_denied">در بخش برنامه‌های مجاز Shizuku به ایزی‌کال اجازه بدهید و دوباره تلاش کنید.</string>
+    <string name="s_audio_shizuku_failed">صدای تماس از طریق Shizuku راه‌اندازی نشد. بررسی کنید Shizuku در حال اجراست و ایزی‌کال مجوز دارد.</string>
+</resources>

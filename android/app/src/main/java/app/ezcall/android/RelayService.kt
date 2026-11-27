@@ -140,6 +140,7 @@ internal class RelayService : Service() {
     private var handsetAudioCall: String? = null
     private var audioCall: String? = null
     private var audioPublished = false
+    private var retriedAudioCall: String? = null
     private var restartAudioAfterStop = false
     private var callAudioOverlay: Triple<WindowManager, MaterialButton, String>? = null
     private var recoveringCall: CallRecovery? = null
@@ -147,6 +148,9 @@ internal class RelayService : Service() {
     private var pendingDial: Dial? = null
 
     internal data class Call(val id: String, val address: String, val date: Long, val state: String, val fromReceiver: Boolean = false) {
+        fun canRetryAudio(failedId: String, relayedId: String?, handsetId: String?, retriedId: String?) =
+            state == "active" && id == failedId && id == relayedId && id != handsetId && id != retriedId
+
         fun withCallerSharing(enabled: Boolean) =
             if (enabled || fromReceiver || address.isEmpty()) this else copy(address = "")
 
@@ -193,6 +197,7 @@ internal class RelayService : Service() {
             handler.post {
                 if (audioCall != callId) return@post
                 val restart = restartAudioAfterStop
+                val failedBeforePublishing = reason != null && !audioPublished
                 restartAudioAfterStop = false
                 releaseCallSetupWakeLock()
                 audioCall = null
@@ -201,6 +206,14 @@ internal class RelayService : Service() {
                 if (restart && !stopped && relayedCall == callId && call?.state == "active" &&
                     handsetAudioCall != callId && recoveringCall == null) {
                     Log.i("EzcallRelay", "Restarting call audio after Bluetooth recovery")
+                    startAudio(callId)
+                    return@post
+                }
+                if (failedBeforePublishing && !stopped && recoveringCall == null &&
+                    call?.canRetryAudio(callId, relayedCall, handsetAudioCall, retriedAudioCall) == true &&
+                    transport?.let { it.audioReady() && it.audioPayloadLimit() > 0 } == true) {
+                    retriedAudioCall = callId
+                    Log.i("EzcallRelay", "Retrying call audio setup for the active call")
                     startAudio(callId)
                     return@post
                 }
@@ -528,6 +541,7 @@ internal class RelayService : Service() {
             .put("active_call_id", (simulatedCall ?: call?.takeUnless { it.id == handsetAudioCall || it.state == "ended" })?.id.orEmpty())
             .put("audio", (callAudio?.status ?: CallAudio.Status.NONE).wire)
             .put("texts", texts)
+            .put("incremental_sync", true)
             .put("contacts", contacts)
             .put("send_sms", Feature.SEND_SMS.active(this)))
     }
@@ -636,7 +650,9 @@ internal class RelayService : Service() {
             }
             "sync" -> {
                 if (message.optBoolean("watch")) watchData()
-                sync(id)
+                val since = (message.opt("smsCursor") as? String)?.let(PhoneData.SmsCursor::decode)
+                val contactsVersion = (message.opt("contactsVersion") as? String)?.takeIf { it.length == 64 }
+                sync(id, since, contactsVersion)
             }
             "call_answer" -> answer(id.lowercase())
             "call_end" -> hangUp(id.lowercase())
@@ -882,7 +898,7 @@ internal class RelayService : Service() {
         if (callSetupWakeLock.isHeld) callSetupWakeLock.release()
     }
 
-    private fun sync(id: String) {
+    private fun sync(id: String, since: PhoneData.SmsCursor?, contactsVersion: String?) {
         if (busySync) {
             sendSyncError(id)
             return
@@ -892,7 +908,7 @@ internal class RelayService : Service() {
         snapshotID = id
         busySync = true
         worker.execute {
-            val result = runCatching { PhoneData(this).snapshot(id) }.getOrNull()
+            val result = runCatching { PhoneData(this).snapshot(id, since, contactsVersion) }.getOrNull()
             handler.post {
                 if (channel !== transport || activeGeneration != generation || snapshotID != id || stopped) return@post
                 busySync = false
@@ -966,6 +982,7 @@ internal class RelayService : Service() {
                 if (recoveringCall?.id == relayedCall) recoveringCall = null
                 relayedCall = null
                 handsetAudioCall = null
+                retriedAudioCall = null
                 if (call != null) sendCall("ended", number)
                 call = null
             }

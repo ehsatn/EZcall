@@ -1,5 +1,26 @@
 <resources>
-    <style name="Theme.ezcall.Sender" parent="Theme.ezcall" />
+    <style name="Theme.ezcall.Sender" parent="Theme.ezcall">
+        <item name="colorSurface">@color/sender_surface</item>
+        <item name="colorSurfaceContainerLow">@color/sender_card</item>
+    </style>
+    <color name="sender_surface">#F5F6FA</color>
+    <color name="sender_card">#EEF1F8</color>
+    <color name="sender_welcome_background">#173AA6</color>
+    <color name="sender_welcome_description">#E0E9FF</color>
+    <color name="sender_welcome_button_ink">#15398B</color>
+    <color name="sender_qr_border">#C9D2E3</color>
+    <style name="TextAppearance.ezcall.SenderHeadline" parent="TextAppearance.ezcall.HeadlineLarge">
+        <item name="android:textSize">32sp</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+    <style name="TextAppearance.ezcall.SenderWelcome" parent="TextAppearance.ezcall.SenderHeadline">
+        <item name="android:textSize">44sp</item>
+        <item name="lineHeight">48sp</item>
+    </style>
+    <style name="TextAppearance.ezcall.SenderWordmark" parent="TextAppearance.ezcall.TitleLarge">
+        <item name="android:textSize">24sp</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
     <style name="ThemeOverlay.ezcall.SenderOutlinedButton" parent="">
         <item name="materialButtonStyle">@style/Widget.Material3.Button.OutlinedButton</item>
     </style>

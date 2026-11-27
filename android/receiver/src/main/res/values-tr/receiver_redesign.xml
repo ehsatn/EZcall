@@ -1,0 +1,26 @@
+<resources>
+    <string name="r_pair_intro">SIM kartınızın takılı olduğu Android telefondan arama ve mesaj alın.</string>
+    <string name="r_call_brand">ezcall Alıcı</string>
+    <string name="r_calling">Aranıyor…</string>
+    <string name="r_history_outgoing">Giden</string>
+    <string name="r_history_incoming">Gelen</string>
+    <string name="r_history_missed">Cevapsız</string>
+    <string name="r_calling_settings">Arama</string>
+    <string name="r_calls_and_alerts">Aramalar ve uyarılar</string>
+    <string name="r_calls_and_alerts_detail">Bildirimler, kilit ekranı ve mikrofon</string>
+    <string name="r_check_call_audio">Hoparlörü ve mikrofonu kontrol edin</string>
+    <string name="r_app_settings">Uygulama</string>
+    <string name="r_keypad">Tuş takımı</string>
+    <string name="r_incomplete_number">Telefon numarasının tamamını girin.</string>
+    <string name="r_sms_via_sender">Gönderen telefon üzerinden SMS</string>
+    <string name="r_text_message">Kısa mesaj</string>
+    <string name="r_community_support">Topluluk desteği</string>
+    <string name="r_financial_support">Maddi destek</string>
+    <string name="r_recommend">ezcall’ı önerin</string>
+    <string name="r_recommend_detail">Uygulamayı yararlanabilecek biriyle paylaşın.</string>
+    <string name="r_rate">ezcall’a puan verin</string>
+    <string name="r_rate_detail">App Store veya Google Play’de puan verin.</string>
+    <string name="r_rate_stores_unavailable">Mağaza sayfaları henüz herkese açık değil. Geri bildirim gönderebilir veya beta sürümüne bakabilirsiniz.</string>
+    <string name="r_open_beta">iPhone beta sürümünü aç</string>
+    <string name="r_support_intro">Daha fazla kişinin ezcall’ı keşfetmesine yardımcı olun veya geliştirilmesini destekleyin.</string>
+</resources>

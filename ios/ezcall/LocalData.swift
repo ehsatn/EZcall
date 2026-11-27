@@ -50,38 +50,35 @@ struct RelayData: Codable {
     var messages: [RelaySMS] = []
     var calls: [RelayCall] = []
     var contacts: [RelayContact] = []
-    private(set) var unconfirmedSMS: [String: TimeInterval]? = nil
-
-    private mutating func merge(_ messages: [RelaySMS]) {
-        var byID: [String: RelaySMS] = [:]
-        for message in self.messages + messages { byID[message.id] = message }
-        self.messages = Array(byID.values.sorted { $0.date > $1.date }.prefix(500))
-        let retained = Set(self.messages.map(\.id))
-        unconfirmedSMS = unconfirmedSMS?.filter { retained.contains($0.key) }
-    }
+    var smsCursor: String? = nil
+    var smsImportComplete: Bool? = nil
+    var contactsVersion: String? = nil
 
     @discardableResult
-    mutating func receiveSMS(_ message: RelaySMS, at now: TimeInterval) -> Bool {
-        let isNew = !messages.contains { $0.id == message.id }
-        if isNew {
-            // The broadcast can arrive before the provider exposes the row to a snapshot.
-            unconfirmedSMS = (unconfirmedSMS ?? [:]).merging([message.id: now + 5]) { old, _ in old }
-        }
-        merge([message])
-        return isNew
+    mutating func receiveSMS(_ message: RelaySMS) -> Bool {
+        guard !messages.contains(where: { $0.id == message.id }) else { return false }
+        let index = messages.firstIndex { $0.date < message.date } ?? messages.endIndex
+        messages.insert(message, at: index)
+        return true
     }
 
-    mutating func replaceSMS(with snapshot: [RelaySMS], requestedAt: TimeInterval, sharing: Bool) {
-        guard sharing else {
-            messages = []
-            unconfirmedSMS = nil
-            return
+    mutating func mergeSMS(_ incoming: [RelaySMS], cursor: String?, more: Bool) {
+        if !incoming.isEmpty {
+            var byID: [String: RelaySMS] = [:]
+            for message in messages { byID[message.id] = message }
+            for message in incoming { byID[message.id] = message }
+            messages = byID.values.sorted { $0.date == $1.date ? $0.id < $1.id : $0.date > $1.date }
         }
-        let confirmed = Set(snapshot.map(\.id))
-        unconfirmedSMS = unconfirmedSMS?.filter { $0.value > requestedAt && !confirmed.contains($0.key) }
-        let awaitingProvider = messages.filter { unconfirmedSMS?[$0.id] != nil }
+        if let cursor {
+            smsCursor = cursor
+            if !more { smsImportComplete = true }
+        }
+    }
+
+    mutating func clearSMS() {
         messages = []
-        merge(snapshot + awaitingProvider)
+        smsCursor = nil
+        smsImportComplete = nil
     }
 
     mutating func update(_ call: RelayCall) {
@@ -110,11 +107,13 @@ struct RelayData: Codable {
     }
 
     func retaining(_ source: RelayData) -> RelayData {
-        RelayData(messages: Set(messages + source.messages).sorted { $0.date > $1.date },
-                  calls: Set(calls + source.calls.map(\.ended)).sorted { $0.date > $1.date },
-                  contacts: Set(contacts + source.contacts).sorted {
-                      $0.name.localizedStandardCompare($1.name) == .orderedAscending
-                  })
+        var retained = RelayData(calls: Set(calls + source.calls.map(\.ended)).sorted { $0.date > $1.date },
+                                 contacts: Set(contacts + source.contacts).sorted {
+                                     $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                                 })
+        retained.messages = messages
+        retained.mergeSMS(source.messages, cursor: nil, more: false)
+        return retained
     }
 }
 
@@ -231,7 +230,6 @@ enum LocalVault {
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
             return RelayData()
         }
-        guard encrypted.count <= 8_388_608 else { throw Failure.corrupt }
         let box = try AES.GCM.SealedBox(combined: encrypted)
         let plain = try AES.GCM.open(box, using: SymmetricKey(data: key))
         return try JSONDecoder().decode(RelayData.self, from: plain)
@@ -243,8 +241,7 @@ enum LocalVault {
 
     private static func saveData(_ data: RelayData, using key: Data, at path: URL) throws {
         let plain = try JSONEncoder().encode(data)
-        guard let encrypted = try AES.GCM.seal(plain, using: SymmetricKey(data: key)).combined,
-              encrypted.count <= 8_388_608 else { throw Failure.corrupt }
+        guard let encrypted = try AES.GCM.seal(plain, using: SymmetricKey(data: key)).combined else { throw Failure.corrupt }
         try encrypted.write(to: path, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 

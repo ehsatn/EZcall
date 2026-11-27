@@ -96,21 +96,25 @@ struct WireCheck {
         var inbox = try JSONDecoder().decode(RelayData.self, from: oldCache)
         let multipart = RelaySMS(id: "multipart", address: "synthetic", body: ["Test ", "message"].joined(),
                                  date: 101, direction: "in")
-        try check(inbox.receiveSMS(message, at: 100), "Live SMS precedes the initial snapshot")
-        try check(inbox.receiveSMS(multipart, at: 102), "Live multipart SMS arrives during the snapshot")
+        try check(inbox.receiveSMS(message), "Live SMS can arrive during the initial import")
+        inbox.mergeSMS([message], cursor: "1:1", more: true)
+        try check(inbox.smsImportComplete == nil, "A partial page does not complete the import")
         let cachedInbox = try JSONEncoder().encode(inbox)
         inbox = try JSONDecoder().decode(RelayData.self, from: cachedInbox)
-        inbox.replaceSMS(with: [], requestedAt: 101, sharing: true)
-        try check(inbox.messages == [multipart, message], "Cold restore and an early snapshot keep both live messages")
-        try check(!inbox.receiveSMS(multipart, at: 103), "Repeated live delivery uses the same identity")
-        inbox.replaceSMS(with: [multipart], requestedAt: 108, sharing: true)
-        try check(inbox.messages == [multipart] && inbox.unconfirmedSMS?.isEmpty == true,
-                  "Provider confirmation keeps one row, and a later omission removes an unconfirmed row")
-        inbox.replaceSMS(with: [], requestedAt: 109, sharing: true)
-        try check(inbox.messages.isEmpty, "An authoritative snapshot removes a deleted confirmed SMS")
-        inbox.receiveSMS(message, at: 110)
-        inbox.replaceSMS(with: [multipart], requestedAt: 111, sharing: false)
-        try check(inbox.messages.isEmpty && inbox.unconfirmedSMS == nil, "Revocation clears live and snapshot SMS")
+        try check(inbox.smsCursor == "1:1" && inbox.messages == [message], "Cold restore preserves both rows and their import cursor")
+        inbox.mergeSMS([multipart], cursor: "101:2", more: false)
+        try check(!inbox.receiveSMS(multipart), "Live delivery and catch-up deduplicate the same message")
+        inbox.mergeSMS([], cursor: "101:2", more: false)
+        try check(inbox.messages == [multipart, message] && inbox.smsImportComplete == true,
+                  "An empty update keeps the local history and completed import")
+        let older = (0..<501).map {
+            RelaySMS(id: "older-\($0)", address: "1", body: "test", date: 0, direction: "in")
+        }
+        inbox.mergeSMS(older, cursor: nil, more: false)
+        try check(inbox.messages.count == 503, "An import retains more than 500 messages")
+        inbox.clearSMS()
+        try check(inbox.messages.isEmpty && inbox.smsCursor == nil && inbox.smsImportComplete == nil,
+                  "Revocation clears the inbox and import metadata")
         print("iOS wire fixture passed")
     }
 

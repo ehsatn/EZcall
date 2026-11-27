@@ -68,8 +68,6 @@
     <string name="s_relay">Relay</string>
     <string name="s_notifications_in_status">Allow ezcall notifications to show its relay icon in the status bar.</string>
     <string name="s_battery_action">Allow relay with screen off</string>
-    <string name="s_donate">Donate</string>
-    <string name="s_no_browser">No browser is available.</string>
     <string name="s_android_battery_setting">Adjust the Android battery setting</string>
     <string name="s_battery_already_off">Battery optimization is already off for ezcall.</string>
     <string name="s_battery_help">In Battery settings, choose Unrestricted for ezcall to keep the relay active.</string>

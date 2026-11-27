@@ -17,7 +17,9 @@ struct AudioJitterCheck {
         precondition(CallAudio.toneSamples("A") == nil)
         for digit in "123456789*0#" {
             let samples = CallAudio.toneSamples(digit)!
-            precondition(samples.count == frame * 12 && samples.prefix(frame * 8).contains { abs($0) > 0.2 })
+            precondition(samples.count == frame * 12)
+            let peak = samples.prefix(frame * 8).map { abs($0) }.max()!
+            precondition((0.105...0.111).contains(peak))
             precondition(samples.suffix(frame * 4).allSatisfy { $0 == 0 })
         }
         var buffer = Jitter()

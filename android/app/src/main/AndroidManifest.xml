@@ -38,6 +38,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name="app.ezcall.android.SupportActivity" android:exported="false" />
         <service android:name=".RelayService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice|remoteMessaging" />
@@ -48,6 +49,10 @@
             </intent-filter>
         </receiver>
         <receiver android:name=".WirelessPairing" android:exported="false" />
+        <provider android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
         <!-- Verifies Wireless debugging and serves one-shot USB setup to the shell UID. -->
         <provider android:name=".AdbIdentityProvider"
             android:authorities="${applicationId}.adbcheck"

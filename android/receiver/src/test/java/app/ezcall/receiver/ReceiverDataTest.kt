@@ -7,6 +7,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReceiverDataTest {
+    @Test fun dialerValidatesInternationalInputAndPreservesLocalShortCodes() {
+        assertEquals(null, receiverDialNumber("+1 202 55"))
+        assertEquals(null, receiverDialNumber("123phone"))
+        assertEquals(null, receiverDialNumber("##"))
+        assertEquals("+989123456789", receiverDialNumber("+۹۸ (۹۱۲) ۳۴۵-۶۷۸۹"))
+        assertEquals("123", receiverDialNumber("123"))
+        assertEquals("*123#", receiverDialNumber("*123#"))
+    }
+
     @Test fun nativePhoneOnlyAcceptsTheCurrentControllableRingingCall() {
         val state = ReceiverState
         try {

@@ -1,0 +1,4 @@
+<resources>
+    <color name="receiver_surface">#111722</color>
+    <color name="receiver_call_surface">#151D38</color>
+</resources>

@@ -1,6 +1,6 @@
 <resources>
-    <string name="r_setup_sender">1. Open the QR code on the sending phone</string>
-    <string name="r_setup_sender_detail">In EasyCall on the Android phone with your SIM, choose Start pairing.</string>
+    <string name="r_setup_sender">On your sending phone</string>
+    <string name="r_setup_sender_detail">Open ezcall Sender and show its pairing QR code.</string>
     <string name="r_setup_receiver">2. Read the QR code here</string>
     <string name="r_setup_receiver_detail">Use the camera or choose a QR image. Allow Nearby devices when Android asks.</string>
     <string name="r_setup_optional">Optional setup</string>

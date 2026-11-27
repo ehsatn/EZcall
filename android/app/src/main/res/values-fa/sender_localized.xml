@@ -68,8 +68,6 @@
     <string name="s_relay">انتقال</string>
     <string name="s_notifications_in_status">برای نمایش نشان انتقال در نوار وضعیت، به ایزی کال اجازهٔ اعلان بدهید.</string>
     <string name="s_battery_action">ادامهٔ انتقال با صفحهٔ خاموش</string>
-    <string name="s_donate">حمایت مالی</string>
-    <string name="s_no_browser">مرورگری در دسترس نیست.</string>
     <string name="s_android_battery_setting">تغییر تنظیم باتری در اندروید</string>
     <string name="s_battery_already_off">بهینه‌سازی باتری برای ایزی کال از قبل غیرفعال است.</string>
     <string name="s_battery_help">برای فعال ماندن انتقال، در تنظیمات باتری حالت بدون محدودیت را برای ایزی کال انتخاب کنید.</string>

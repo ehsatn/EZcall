@@ -1,0 +1,15 @@
+<resources>
+    <string name="ez_support_title">ezcall’a destek ol</string>
+    <string name="ez_support_optional">İsteğe bağlı destek</string>
+    <string name="ez_support_copy">Adresi kopyala</string>
+    <string name="ez_support_copied">Adres kopyalandı</string>
+    <string name="ez_support_prompt">ezcall’ı beğendiyseniz destek olabilirsiniz.</string>
+    <string name="ez_support_action">Destek ol</string>
+    <string name="ez_support_development">ezcall’ı geliştirmemize yardım edin</string>
+    <string name="ez_support_intro">Destek olmak isteğe bağlıdır. Tüm özellikler ücretsiz kalır.</string>
+    <string name="ez_support_network">Her cüzdan için belirtilen ağı kullanın.</string>
+    <string name="ez_support_feedback">Geri bildiriminiz de ezcall’ı geliştirmemize yardımcı olur.</string>
+    <string name="ez_support_feedback_action">Geri bildirim gönder</string>
+    <string name="ez_support_no_browser">Kullanılabilir tarayıcı yok</string>
+    <string name="ez_support_star">GitHub’da ezcall’a yıldız ver</string>
+</resources>

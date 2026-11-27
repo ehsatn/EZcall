@@ -1,0 +1,23 @@
+<resources>
+    <string name="ez_wallet_tron" translatable="false">TU9wqZRsxcMUsMiButMX9awBg8zxZWA7Mq</string>
+    <string name="ez_wallet_ethereum" translatable="false">0xFe8aa49dC021c8ceF13f19006aC1f526CA413b1e</string>
+    <string name="ez_wallet_usdt_tron" translatable="false">USDT · TRC20</string>
+    <string name="ez_wallet_ethereum_assets" translatable="false">USDT (ERC20) · ETH</string>
+    <string name="ez_network_tron" translatable="false">TRON</string>
+    <string name="ez_network_mainnet" translatable="false">Ethereum Mainnet</string>
+    <style name="Widget.ezcall.SupportCard" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
+    </style>
+    <style name="Widget.ezcall.WalletAddress" parent="">
+        <item name="android:textAppearance">@style/TextAppearance.ezcall.BodyMedium</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:textDirection">ltr</item>
+        <item name="android:layoutDirection">ltr</item>
+        <item name="android:gravity">start</item>
+        <item name="android:breakStrategy">simple</item>
+        <item name="android:textIsSelectable">true</item>
+    </style>
+</resources>

@@ -1,0 +1,15 @@
+<resources>
+    <string name="ez_support_title">حمایت از ezcall</string>
+    <string name="ez_support_optional">حمایت مالی اختیاری</string>
+    <string name="ez_support_copy">کپی آدرس</string>
+    <string name="ez_support_copied">آدرس کپی شد</string>
+    <string name="ez_support_prompt">اگر از ایزی‌کال خوشتان آمده، می‌توانید از آن حمایت کنید.</string>
+    <string name="ez_support_action">حمایت</string>
+    <string name="ez_support_development">به توسعهٔ ایزی‌کال کمک کنید</string>
+    <string name="ez_support_intro">حمایت مالی اختیاری است و همهٔ امکانات رایگان می‌مانند.</string>
+    <string name="ez_support_network">برای هر کیف پول، از شبکهٔ مشخص‌شده استفاده کنید.</string>
+    <string name="ez_support_feedback">بازخورد شما هم به بهتر شدن ایزی‌کال کمک می‌کند.</string>
+    <string name="ez_support_feedback_action">ارسال بازخورد</string>
+    <string name="ez_support_no_browser">مرورگری در دسترس نیست</string>
+    <string name="ez_support_star">ستاره دادن به ezcall در GitHub</string>
+</resources>

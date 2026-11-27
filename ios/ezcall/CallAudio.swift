@@ -232,7 +232,7 @@ final class CallAudio: @unchecked Sendable {
         for i in 0..<count {
             let phase = 2 * Double.pi * Double(i) / sampleRate
             let fade = min(1, Double(min(i, count - 1 - i)) / 192)
-            samples[i] = Float(0.22 * fade * (sin(low * phase) + sin(high * phase)))
+            samples[i] = Float(0.055 * fade * (sin(low * phase) + sin(high * phase)))
         }
         return samples
     }

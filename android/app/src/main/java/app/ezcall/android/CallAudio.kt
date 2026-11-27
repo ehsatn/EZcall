@@ -231,6 +231,23 @@ internal class CallAudio(private val context: Context, private val events: Event
 
         fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
 
+        enum class Method {
+            SHIZUKU, WIRELESS, USB;
+
+            companion object {
+                fun restore(saved: String?, legacyShizuku: Boolean): Method? =
+                    entries.firstOrNull { it.name == saved } ?: SHIZUKU.takeIf { saved == null && legacyShizuku }
+            }
+        }
+
+        fun method(context: Context): Method? = prefs(context).let {
+            Method.restore(it.getString("method", null), it.getBoolean("shizuku", false))
+        }
+
+        private fun rememberMethod(context: Context, method: Method) {
+            prefs(context).edit().putBoolean("enabled", true).putString("method", method.name).remove("shizuku").apply()
+        }
+
         fun disable(context: Context) {
             prefs(context).edit().putBoolean("enabled", false).apply()
         }
@@ -247,7 +264,7 @@ internal class CallAudio(private val context: Context, private val events: Event
                 return "true\n"
             }
             val (port, token) = credentials(context)
-            return launchCommand(context, port, token) + "\n"
+            return launchCommand(context.applicationInfo.sourceDir, port, token) + "\n"
         }
 
         fun awaitUsb(context: Context, request: UsbAudioAuthorization.Request): Status {
@@ -256,7 +273,7 @@ internal class CallAudio(private val context: Context, private val events: Event
                     if (request.claimedAt != null) {
                         open(context)?.let { link ->
                             runCatching { link.socket.close() }
-                            prefs(context).edit().putBoolean("enabled", true).apply()
+                            rememberMethod(context, Method.USB)
                             return link.status
                         }
                     }
@@ -269,15 +286,18 @@ internal class CallAudio(private val context: Context, private val events: Event
         }
 
         /** Starts or restarts the component for the setup screen and reports what this phone allows. */
-        fun start(context: Context, connectPort: Int? = null): Status {
-            val probe = launch(context, connectPort)
+        @Synchronized
+        fun start(context: Context, connectPort: Int? = null, shizuku: Boolean = false): Status {
+            val probe = launch(context, connectPort, shizuku)
+            rememberMethod(context, if (shizuku) Method.SHIZUKU else Method.WIRELESS)
             runCatching { probe.socket.close() }
             return probe.status
         }
 
-        /** Starts or restarts the component over Wireless debugging and waits for it to answer. */
+        /** Starts the component using the selected method and waits for its authenticated response. */
         @Synchronized
-        fun launch(context: Context, connectPort: Int? = null): Link {
+        fun launch(context: Context, connectPort: Int? = null,
+                   shizuku: Boolean = method(context) == Method.SHIZUKU): Link {
             open(context)?.let {
                 if (!enabled(context)) prefs(context).edit().putBoolean("enabled", true).apply()
                 return it
@@ -285,24 +305,25 @@ internal class CallAudio(private val context: Context, private val events: Event
             if (usb.hasRequest(STARTUP_MS)) throw ComponentNotReady()
             val port = credentials(context).first
             val token = ByteArray(32).also(SecureRandom()::nextBytes)
-            LocalAdb.shell(context, launchCommand(context, port, token), connectPort)
-            // Store the new token only once adbd has it, so a refused launch leaves the running component reachable.
+            if (shizuku) ShizukuAudioLauncher.launch(context, port, token)
+            else LocalAdb.shell(context, launchCommand(context.applicationInfo.sourceDir, port, token), connectPort)
+            // Keep the previous token if the launcher rejects the request.
             check(prefs(context).edit().putString("token", hex(token)).commit())
             repeat(24) {
                 Thread.sleep(250)
                 open(context)?.let {
-                    prefs(context).edit().putBoolean("enabled", true).apply()
+                    rememberMethod(context, if (shizuku) Method.SHIZUKU else Method.WIRELESS)
                     return it
                 }
             }
             throw ComponentNotReady()
         }
 
-        private fun launchCommand(context: Context, port: Int, token: ByteArray): String {
-            val apk = context.applicationInfo.sourceDir
+        internal fun launchCommand(apk: String, port: Int, token: ByteArray): String {
+            require(port in 20_000..59_999 && token.size == 32)
             require(apk.matches(Regex("[A-Za-z0-9/._=~+-]+")))
             val name = CallAudioServer.PROCESS_NAME
-            // Give app_process time to detach before the ADB shell exits.
+            // Give app_process time to detach before the launcher shell exits.
             return "trap '' HUP; pkill -x $name; ${CallAudioServer.TOKEN_ENV}=${hex(token)} CLASSPATH='$apk' " +
                 "setsid app_process /system/bin --nice-name=$name ${CallAudioServer::class.java.name} $port " +
                 "</dev/null >/data/local/tmp/$name.log 2>&1 & sleep 0.4"

@@ -1,0 +1,26 @@
+<resources>
+    <string name="r_pair_intro">تماس‌ها و پیامک‌های گوشی اندرویدی دارای سیم‌کارتتان را دریافت کنید.</string>
+    <string name="r_call_brand">گیرندهٔ ezcall</string>
+    <string name="r_calling">در حال تماس…</string>
+    <string name="r_history_outgoing">خروجی</string>
+    <string name="r_history_incoming">ورودی</string>
+    <string name="r_history_missed">بی‌پاسخ</string>
+    <string name="r_calling_settings">تماس</string>
+    <string name="r_calls_and_alerts">تماس‌ها و اعلان‌ها</string>
+    <string name="r_calls_and_alerts_detail">اعلان‌ها، صفحهٔ قفل و میکروفون</string>
+    <string name="r_check_call_audio">بررسی بلندگو و میکروفون</string>
+    <string name="r_app_settings">برنامه</string>
+    <string name="r_keypad">شماره‌گیر</string>
+    <string name="r_incomplete_number">شمارهٔ تلفن را کامل وارد کنید.</string>
+    <string name="r_sms_via_sender">پیامک از طریق فرستنده</string>
+    <string name="r_text_message">متن پیام</string>
+    <string name="r_community_support">حمایت کاربران</string>
+    <string name="r_financial_support">حمایت مالی</string>
+    <string name="r_recommend">معرفی ezcall</string>
+    <string name="r_recommend_detail">برنامه را به کسی معرفی کنید که ممکن است برایش مفید باشد.</string>
+    <string name="r_rate">امتیاز به ezcall</string>
+    <string name="r_rate_detail">در اپ‌استور یا گوگل پلی به برنامه امتیاز بدهید.</string>
+    <string name="r_rate_stores_unavailable">صفحهٔ عمومی فروشگاه‌ها در دسترس نیست. می‌توانید بازخورد بفرستید یا نسخهٔ آزمایشی را ببینید.</string>
+    <string name="r_open_beta">نسخهٔ آزمایشی آیفون</string>
+    <string name="r_support_intro">به دیگران کمک کنید ezcall را پیدا کنند یا از توسعهٔ آن حمایت کنید.</string>
+</resources>

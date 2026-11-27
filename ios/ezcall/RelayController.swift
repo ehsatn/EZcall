@@ -60,6 +60,7 @@ final class RelayController: NSObject, ObservableObject {
         let texts: Bool?
         let contacts: Bool?
         let send_sms: Bool?
+        let incremental_sync: Bool?
     }
 
     private struct AudioStart: Decodable {
@@ -97,9 +98,10 @@ final class RelayController: NSObject, ObservableObject {
 
     private struct StagedSync {
         let id: String
-        let requestedAt = Date().timeIntervalSince1970
+        let smsCursor: String?
         var started = false
         var smsRevoked = false
+        var contactsRevoked = false
         var bytes = 0
         var messages: [RelaySMS] = []
         var contacts: [RelayContact] = []
@@ -109,6 +111,14 @@ final class RelayController: NSObject, ObservableObject {
         let type = "sync"
         let id: String
         let watch = true
+        let smsCursor: String?
+        let contactsVersion: String?
+    }
+
+    private struct SyncEnd: Decodable {
+        let smsCursor: String?
+        let moreSMS: Bool?
+        let contactsVersion: String?
     }
 
     private let service = CBUUID(string: "1C79EA10-64D7-4F93-94EE-881ACB0D5E74")
@@ -118,6 +128,7 @@ final class RelayController: NSObject, ObservableObject {
     private let audioTx = CBUUID(string: "1C79EA14-64D7-4F93-94EE-881ACB0D5E74")
     private let decoder = JSONDecoder()
     private let logger = Logger(subsystem: "app.xcall.relay", category: "Relay")
+    private let lastSyncPreference = "ezcall.lastSuccessfulSync"
 
     @Published private(set) var status = Status.unlinked
     @Published private(set) var isPaired = false
@@ -135,8 +146,10 @@ final class RelayController: NSObject, ObservableObject {
     @Published private(set) var feedback: String?
     @Published private(set) var testResult: String?
     @Published private(set) var syncResult: String?
+    @Published private(set) var lastSyncedAt: Date?
     @Published private(set) var testing = false
     @Published private(set) var syncing = false
+    @Published private(set) var incrementalSync = false
     @Published private(set) var alerts = UNAuthorizationStatus.notDetermined
     @Published private(set) var openedSMSNotifications: [String] = []
     @Published private(set) var callControl = false
@@ -184,6 +197,7 @@ final class RelayController: NSObject, ObservableObject {
     private var sync: StagedSync?
     private var syncDeadline: Timer?
     private var needsSync = false
+    private var refreshingInBackground = false
     private var initialized = false
     private var vaultRead = false
     private lazy var calls = CallBridge()
@@ -209,7 +223,6 @@ final class RelayController: NSObject, ObservableObject {
     private var dialDeadlines = [UUID: Timer]()
     private var smsRequest: String?
     private var smsDeadline: Timer?
-    private var smsSnapshotRetry: Timer?
     private var smsCompletion: ((Bool, String) -> Void)?
     private(set) var receivedCapabilities = false
     private var sharing: (texts: Bool, contacts: Bool)?
@@ -235,7 +248,9 @@ final class RelayController: NSObject, ObservableObject {
             clearSession()
         }
         tryConnect()
-        if status == .connected && needsSync { syncNow() }
+        if needsSync || lastSyncedAt.map({ Date().timeIntervalSince($0) >= 60 }) != false {
+            checkForUpdates()
+        }
     }
 
     func protectedDataBecameAvailable() {
@@ -295,8 +310,6 @@ final class RelayController: NSObject, ObservableObject {
             namedSuffixes.removeAll()
             outgoingSMS = nil
             openedSMSNotifications.removeAll()
-            smsSnapshotRetry?.invalidate()
-            smsSnapshotRetry = nil
             let notifications = UNUserNotificationCenter.current()
             notifications.removeAllPendingNotificationRequests()
             notifications.removeAllDeliveredNotifications()
@@ -305,6 +318,8 @@ final class RelayController: NSObject, ObservableObject {
             feedback = nil
             testResult = nil
             syncResult = nil
+            lastSyncedAt = nil
+            UserDefaults.standard.removeObject(forKey: lastSyncPreference)
             if let id {
                 acknowledgingUnpair = true
                 send(type: "unpair_ack", id: id)
@@ -332,14 +347,45 @@ final class RelayController: NSObject, ObservableObject {
         }
     }
 
+    var canSync: Bool {
+        status == .connected && receivedCapabilities && !callReconnecting && audioCallID == nil && !syncing
+    }
+
+    var importingSMS: Bool { incrementalSync && sharing?.texts == true && data.smsImportComplete != true }
+
+    func checkForUpdates() {
+        guard incrementalSync || lastSyncedAt == nil else { return }
+        syncNow()
+    }
+
+    func refreshInBackground() async {
+        start()
+        guard isPaired, lastSyncedAt != nil else { return }
+        refreshingInBackground = true
+        defer { refreshingInBackground = false }
+        tryConnect()
+        let clock = ContinuousClock()
+        let connectDeadline = clock.now + .seconds(8)
+        let deadline = clock.now + .seconds(24)
+        while !receivedCapabilities && clock.now < connectDeadline {
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        }
+        guard !Task.isCancelled, incrementalSync, !importingSMS else { return }
+        checkForUpdates()
+        while syncing && clock.now < deadline {
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        }
+    }
+
     func syncNow() {
-        guard status == .connected, !callReconnecting, !syncing else { return }
+        guard canSync else { return }
         syncing = true
         syncResult = nil
         let id = UUID().uuidString
-        sync = StagedSync(id: id)
+        let cursor = incrementalSync ? data.smsCursor ?? "0:0" : nil
+        sync = StagedSync(id: id, smsCursor: cursor)
         needsSync = false
-        send(SyncRequest(id: id))
+        send(SyncRequest(id: id, smsCursor: cursor, contactsVersion: incrementalSync ? data.contactsVersion : nil))
         armSyncDeadline()
     }
 
@@ -689,6 +735,7 @@ final class RelayController: NSObject, ObservableObject {
             if let record {
                 do {
                     data = try LocalVault.loadData(using: record.cacheKey)
+                    lastSyncedAt = UserDefaults.standard.object(forKey: lastSyncPreference) as? Date
                 } catch {
                     guard unlocked else { throw error }
                     feedback = "Couldn’t read the saved inbox. Sync to refresh it."
@@ -829,6 +876,7 @@ final class RelayController: NSObject, ObservableObject {
         canDial = false
         canSendSMS = false
         receivedCapabilities = false
+        incrementalSync = false
         sharing = nil
         if let id = smsRequest {
             finishSMS(id, sent: false, message: "The link dropped. Check Android before sending again.")
@@ -893,7 +941,7 @@ final class RelayController: NSObject, ObservableObject {
               let id = UUID(uuidString: call.id), sentOutgoingCall.map({ $0.id == id }) ?? true else { return }
         if sentOutgoingCall?.id == id, !calls.has(id) {
             finishCallRecovery()
-            if needsSync { syncNow() }
+            if needsSync { checkForUpdates() }
             return
         }
         guard canResumeCall, ContinuousClock.now < recoveryDeadline else {
@@ -919,7 +967,7 @@ final class RelayController: NSObject, ObservableObject {
             stopAudio()
         }
         logger.info("Active call resumed, audio active=\(self.callAudioActive)")
-        if UIApplication.shared.applicationState == .active, needsSync { syncNow() }
+        if UIApplication.shared.applicationState == .active, needsSync { checkForUpdates() }
     }
 
     private func retry(preferSavedPeer: Bool = true) {
@@ -1047,6 +1095,8 @@ final class RelayController: NSObject, ObservableObject {
             pendingPairDeadline?.invalidate()
             rejected.removeAll()
             data = RelayData()
+            lastSyncedAt = nil
+            UserDefaults.standard.removeObject(forKey: lastSyncPreference)
             namedContacts.removeAll()
             namedSuffixes.removeAll()
             outgoingSMS = nil
@@ -1070,7 +1120,6 @@ final class RelayController: NSObject, ObservableObject {
                 send(type: "call_end", id: pendingHangUp.id.uuidString.lowercased())
             }
         }
-        if !callReconnecting, UIApplication.shared.applicationState == .active { syncNow() }
     }
 
     private func handle(_ header: Header, payload: Data) throws {
@@ -1087,8 +1136,7 @@ final class RelayController: NSObject, ObservableObject {
             let message = try decoder.decode(RelaySMS.self, from: payload)
             guard valid(message) else { throw WireError.malformed }
             guard sharing?.texts != false else { return }
-            let isNew = data.receiveSMS(message, at: Date().timeIntervalSince1970)
-            if persist(), isNew && message.direction == "in" {
+            if data.receiveSMS(message), persist(), message.direction == "in" {
                 let body = message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     ? ezText("New message on Android") : message.body
                 alert(body, title: name(for: message.address), id: notificationID("message", message.id),
@@ -1096,7 +1144,7 @@ final class RelayController: NSObject, ObservableObject {
             }
         case "sync_changed":
             needsSync = true
-            if UIApplication.shared.applicationState == .active { syncNow() }
+            if UIApplication.shared.applicationState == .active { checkForUpdates() }
         case "call":
             let call = try decoder.decode(RelayCall.self, from: payload)
             guard validID(call.id), call.address.utf8.count <= 256, validDate(call.date) else {
@@ -1165,17 +1213,27 @@ final class RelayController: NSObject, ObservableObject {
             if callReconnecting { requestCallRecovery() }
             audioMode = AudioMode(rawValue: capabilities.audio) ?? .off
             canSendSMS = capabilities.send_sms ?? false
+            incrementalSync = capabilities.incremental_sync == true
             receivedCapabilities = true
             if let texts = capabilities.texts {
                 let contacts = capabilities.contacts ?? sharing?.contacts ?? false
                 let previous = sharing
                 sharing = (texts, contacts)
-                if !texts && (previous?.texts != false || !data.messages.isEmpty) { revokeSMSSharing() }
+                if !texts && (!data.messages.isEmpty || data.smsCursor != nil || previous?.texts == true) {
+                    revokeSMSSharing()
+                }
+                if !contacts && (!data.contacts.isEmpty || data.contactsVersion != nil || previous?.contacts == true) {
+                    sync?.contactsRevoked = true
+                    data.replaceContacts([])
+                    data.contactsVersion = nil
+                    indexContacts()
+                    persist()
+                }
                 if let previous, previous.texts != texts || previous.contacts != contacts {
                     needsSync = true
-                    syncNow()
                 }
             }
+            if needsSync, UIApplication.shared.applicationState == .active { checkForUpdates() }
         case "sms_result":
             let result = try decoder.decode(SMSResult.self, from: payload)
             let message = result.message ?? (result.sent ? "Sent from Android" : "Android couldn’t send the SMS.")
@@ -1200,7 +1258,7 @@ final class RelayController: NSObject, ObservableObject {
                     // Android may have gone off-hook while BLE was down. End still works by SIM call UUID.
                     calls.setReconnecting(id, name: name(for: phoneCall?.address ?? ""), reconnecting: false)
                     stopAudio()
-                    if needsSync { syncNow() }
+                    if needsSync { checkForUpdates() }
                     return
                 }
             }
@@ -1307,7 +1365,10 @@ final class RelayController: NSObject, ObservableObject {
         audioWriteTimer?.cancel()
         audioWriteTimer = nil
         nextAudioWriteAt = .now
-        if wasStreaming { armSyncDeadline() }
+        if wasStreaming {
+            armSyncDeadline()
+            if needsSync, UIApplication.shared.applicationState == .active { checkForUpdates() }
+        }
     }
 
     private func flushAudioWrite() {
@@ -1363,20 +1424,45 @@ final class RelayController: NSObject, ObservableObject {
             sync = stage
         case "sync_end":
             guard stage.started else { throw WireError.malformed }
-            var newData = data
-            if !stage.smsRevoked {
-                newData.replaceSMS(with: stage.messages, requestedAt: stage.requestedAt, sharing: sharing?.texts != false)
+            let end = try decoder.decode(SyncEnd.self, from: payload)
+            let more = end.moreSMS == true && !stage.smsRevoked && sharing?.texts != false
+            if let cursor = end.smsCursor {
+                let parts = cursor.split(separator: ":", omittingEmptySubsequences: false)
+                guard stage.smsCursor != nil, cursor.utf8.count <= 39, parts.count == 2,
+                      let date = Int64(parts[0]), date >= 0, let row = Int64(parts[1]), row >= 0 else {
+                    throw WireError.malformed
+                }
             }
-            newData.replaceContacts(stage.contacts)
+            if more, end.smsCursor == nil || end.smsCursor == stage.smsCursor || stage.messages.isEmpty {
+                throw WireError.malformed
+            }
+            if let version = end.contactsVersion, version.utf8.count != 64 { throw WireError.malformed }
+            let completingImport = end.smsCursor != nil && !more && data.smsImportComplete != true
+            let updateSMS = !stage.smsRevoked && sharing?.texts != false &&
+                (!stage.messages.isEmpty || end.smsCursor != data.smsCursor || completingImport)
+            let updateContacts = !stage.contactsRevoked && sharing?.contacts != false &&
+                (stage.smsCursor == nil || end.contactsVersion != nil)
             guard let pairing else { throw WireError.malformed }
             do {
-                try LocalVault.saveData(newData, using: pairing.cacheKey)
-                let remaining = Set(newData.messages.map(\.id))
-                removeSMSNotifications(for: data.messages.filter { !remaining.contains($0.id) })
-                data = newData
-                retryUnconfirmedSMS()
-                indexContacts()
-                finishSync("Messages and contacts are up to date.")
+                if updateSMS || updateContacts {
+                    var newData = data
+                    if updateSMS { newData.mergeSMS(stage.messages, cursor: end.smsCursor, more: more) }
+                    if updateContacts {
+                        newData.replaceContacts(stage.contacts)
+                        newData.contactsVersion = end.contactsVersion
+                    }
+                    try LocalVault.saveData(newData, using: pairing.cacheKey)
+                    data = newData
+                    if updateContacts { indexContacts() }
+                }
+                if more {
+                    needsSync = true
+                } else {
+                    let now = Date()
+                    lastSyncedAt = now
+                    UserDefaults.standard.set(now, forKey: lastSyncPreference)
+                }
+                finishSync(more ? nil : "Messages and contacts are up to date.")
             } catch {
                 finishSync("Couldn’t save the update. Previous items were kept.")
             }
@@ -1506,21 +1592,8 @@ final class RelayController: NSObject, ObservableObject {
         sync?.smsRevoked = true
         removeSMSNotifications(for: data.messages)
         openedSMSNotifications.removeAll()
-        data.replaceSMS(with: [], requestedAt: 0, sharing: false)
-        smsSnapshotRetry?.invalidate()
-        smsSnapshotRetry = nil
+        data.clearSMS()
         persist()
-    }
-
-    private func retryUnconfirmedSMS() {
-        smsSnapshotRetry?.invalidate()
-        smsSnapshotRetry = nil
-        guard let deadline = data.unconfirmedSMS?.values.min() else { return }
-        let delay = max(0.1, deadline - Date().timeIntervalSince1970)
-        smsSnapshotRetry = after(delay) { relay in
-            relay.needsSync = true
-            if UIApplication.shared.applicationState == .active { relay.syncNow() }
-        }
     }
 
     private func after(_ delay: TimeInterval, _ run: @escaping @MainActor (RelayController) -> Void) -> Timer {
@@ -1541,13 +1614,15 @@ final class RelayController: NSObject, ObservableObject {
         }
     }
 
-    private func finishSync(_ result: String) {
+    private func finishSync(_ result: String?) {
         syncDeadline?.invalidate()
         syncDeadline = nil
         sync = nil
         syncing = false
         syncResult = result
-        if status == .connected, handshake == .authenticated, needsSync { syncNow() }
+        if needsSync, UIApplication.shared.applicationState == .active || (refreshingInBackground && !importingSMS) {
+            checkForUpdates()
+        }
     }
 
     private func finishTest(_ result: String) {

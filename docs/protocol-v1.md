@@ -30,16 +30,16 @@ Messages are UTF-8 JSON objects. Times use Unix epoch milliseconds. Request IDs 
 | Receiver | `ping` | `id` |
 | Android | `pong` | `id` |
 | Receiver | `sync` | `id`, optional boolean `watch` to request change notifications for shared data on this link |
-| Android | `sync_changed` | Shared contacts or SMS changed. A subscribed receiver requests a fresh snapshot. |
+| Android | `sync_changed` | Shared contacts or SMS changed. A subscribed receiver can request an update. |
 | Android | `sync_begin` | `id`, optional two-letter SIM `country` for matching national and international phone numbers |
 | Android | `sms_batch` | `id`, `items` array of SMS objects |
 | Android | `contacts_batch` | `id`, `items` array of contact objects |
-| Android | `sync_end` | `id` |
+| Android | `sync_end` | `id`, optional incremental sync fields described below |
 | Android | `error` | `id`, `message` |
 | Android | `sms` | SMS fields |
 | Android | `call` | `id`, `address`, `date`, `state` |
 
-| Android | `capabilities` | `control`, `dial` (booleans), `audio` (`none`, `listen` or `two_way`). Optional booleans `texts`, `contacts`, and `send_sms` report Android grants. Optional `active_call_id` is the current relayed call ID, or an empty string when there is none. |
+| Android | `capabilities` | `control`, `dial` (booleans), `audio` (`none`, `listen` or `two_way`). Optional booleans `texts`, `contacts`, and `send_sms` report Android grants. Optional `incremental_sync` advertises cursor-based sync. Optional `active_call_id` is the current relayed call ID, or an empty string when there is none. |
 | Receiver | `call_answer` | `id` of a ringing call |
 | Receiver | `call_end` | `id` of a ringing, active or requested call |
 | Receiver | `call_dial` | `id` (new UUID), `address` |
@@ -79,6 +79,10 @@ With `test_echo_sequence`, simulated downlink sequences below that value are ton
 
 By default each payload carries one 20 ms Opus packet, mono at 48 kHz. An iPhone or Android Receiver that sends `audio_pairs: "1"` in its authenticated `ready` can receive two Opus packets in one notification. Android enables this for a stream with `audio_pairs: true` in `audio_start`. Its downlink payload is a two-byte big-endian length for the first packet, followed by both Opus packets. The uplink and simulated call streams use single Opus packets. The plaintext payload is limited to 1,024 bytes and the sealed packet must fit in one ATT payload. Without `uplink`, the receiver only plays audio. Android pauses bulk sync while audio streams, since an indication blocks the next notification.
 
-Snapshots are limited to 100 recent SMS records and 5,000 contacts. The receiver stages records until a matched `sync_end` and keeps its previous snapshot after interruption or `error`. A live SMS can arrive during a snapshot and should be preserved. A successful snapshot may contain zero records for a category.
+Without a cursor, snapshots contain up to 100 recent SMS and 5,000 contacts for compatibility with older receivers.
+
+When Android advertises `incremental_sync`, the receiver can add `smsCursor` to `sync`. Send `"0:0"` to start. Android pages through inbox and sent SMS in ascending order by provider timestamp and row ID, with up to 100 SMS per page. `sync_end` returns the cursor for the next request and sets `moreSMS: true` when another page is ready. A receiver commits the page and its cursor together and merges live events by SMS ID.
+
+The receiver may also send its last `contactsVersion`. Android returns a contacts snapshot and the new version in `sync_end` when the shared contacts change. A new version with no contacts means the current contact list is empty. Omission of the version leaves previously synced contacts intact unless sharing has been revoked. Interrupted pages do not advance the receiver's cursor.
 
 Fixed values for interoperability tests are in [protocol-v1.json](../tests/protocol-v1.json), including audio packets in both directions. Its predictable QR secret and audio key are for tests only.

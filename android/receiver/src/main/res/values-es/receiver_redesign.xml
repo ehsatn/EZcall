@@ -1,0 +1,26 @@
+<resources>
+    <string name="r_pair_intro">Recibe llamadas y mensajes del teléfono Android que tiene tu SIM.</string>
+    <string name="r_call_brand">Receptor ezcall</string>
+    <string name="r_calling">Llamando…</string>
+    <string name="r_history_outgoing">Saliente</string>
+    <string name="r_history_incoming">Entrante</string>
+    <string name="r_history_missed">Perdida</string>
+    <string name="r_calling_settings">Llamadas</string>
+    <string name="r_calls_and_alerts">Llamadas y alertas</string>
+    <string name="r_calls_and_alerts_detail">Notificaciones, pantalla de bloqueo y micrófono</string>
+    <string name="r_check_call_audio">Comprueba el altavoz y el micrófono</string>
+    <string name="r_app_settings">Aplicación</string>
+    <string name="r_keypad">Teclado</string>
+    <string name="r_incomplete_number">Introduce un número de teléfono completo.</string>
+    <string name="r_sms_via_sender">SMS a través del emisor</string>
+    <string name="r_text_message">Mensaje de texto</string>
+    <string name="r_community_support">Apoyo de la comunidad</string>
+    <string name="r_financial_support">Apoyo económico</string>
+    <string name="r_recommend">Recomienda ezcall</string>
+    <string name="r_recommend_detail">Comparte la aplicación con alguien a quien pueda resultarle útil.</string>
+    <string name="r_rate">Valora ezcall</string>
+    <string name="r_rate_detail">Deja una valoración en App Store o Google Play.</string>
+    <string name="r_rate_stores_unavailable">Las fichas públicas de las tiendas no están disponibles. Puedes enviar comentarios o ver la versión beta.</string>
+    <string name="r_open_beta">Ver la beta para iPhone</string>
+    <string name="r_support_intro">Ayuda a que más personas encuentren ezcall o apoya su desarrollo.</string>
+</resources>

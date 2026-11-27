@@ -1,0 +1,35 @@
+<resources>
+    <string name="s_ui_usb_debugging">Débogage USB</string>
+    <string name="s_ui_audio_configured_with">Configuré avec %1$s</string>
+    <string name="s_ui_welcome_title">Une SIM.\nDeux téléphones.</string>
+    <string name="s_ui_welcome_detail">Recevez les appels et les SMS de cet Android sur un second téléphone.</string>
+    <string name="s_ui_start_guide">Démarrer le guide de configuration</string>
+    <string name="s_ui_skip_setup">Ignorer la configuration</string>
+    <string name="s_ui_connection_intro">Associez ce téléphone à celui qui recevra vos appels et SMS.</string>
+    <string name="s_ui_sharing_intro">Choisissez ce que le téléphone récepteur peut voir ou faire. Android peut demander une autorisation.</string>
+    <string name="s_ui_guide_progress">%1$d sur %2$d</string>
+    <string name="s_ui_guide_paired">Vos téléphones sont associés</string>
+    <string name="s_ui_continue_pairing">Continuer vers l’association</string>
+    <string name="s_ui_finish_later">Vous pouvez terminer maintenant et configurer le son plus tard.</string>
+    <string name="s_ui_pairing_nearby">Gardez les deux téléphones à proximité</string>
+    <string name="s_ui_pairing_bluetooth">Laissez le Bluetooth activé pendant l’association.</string>
+    <string name="s_ui_contacts_group">Contacts</string>
+    <string name="s_ui_app_group">Application</string>
+    <string name="s_ui_settings_audio">Configurez le son, consultez les méthodes ou lancez un test.</string>
+    <string name="s_ui_audio_methods_intro">Configurez le son des appels sur le téléphone Android qui contient votre SIM.</string>
+    <string name="s_ui_wireless_method">Débogage sans fil</string>
+    <string name="s_ui_wireless_method_detail">Utilisez le Wi-Fi et les options pour les développeurs sur ce téléphone.</string>
+    <string name="s_ui_usb_method">USB</string>
+    <string name="s_ui_call_controls_group">Commandes d’appel</string>
+    <string name="s_ui_call_control_detail">Choisissez les actions accessibles au récepteur dans Partage.</string>
+    <string name="s_ui_help_sharing_title">Que dois-je partager ?</string>
+    <string name="s_ui_help_pairing_title">Où scanner le code ?</string>
+    <string name="s_ui_help_audio_title">À quoi sert le son des appels ?</string>
+    <string name="s_ui_help_done">Compris</string>
+    <string name="s_ui_shizuku_inactive_title">Démarrer Shizuku</string>
+    <string name="s_ui_shizuku_unsupported_title">Shizuku n’est pas compatible</string>
+    <string name="s_ui_shizuku_denied_title">Autorisation refusée</string>
+    <string name="s_ui_audio_unavailable">Son des appels indisponible</string>
+    <string name="s_ui_try_audio_again">Réessayer</string>
+    <string name="s_ui_choose_audio_method">Choisir une autre méthode</string>
+</resources>

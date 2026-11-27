@@ -46,7 +46,9 @@ To add the shortcut widget, edit the iPhone Home Screen, tap **Add Widget**, sea
 7. Add the Home Screen widget and tap both shortcuts. Turn Bluetooth off and back on, then check that the widget shows Disconnected until the Android link reconnects. Send a fresh SMS and check that its Lock Screen notification shows the blue EasyCall app icon.
 8. Run both Siri commands on a paired iPhone. Verify that the call uses Android’s SIM and that Siri reports an SMS as sent after Android confirms it. Cancel the SMS confirmation and verify that no message is sent. Repeat with Android Bluetooth off and check that EasyCall reports the connection failure.
 
-The optional support section uses an App Store Connect consumable tip product. Set the Xcode build setting `EZCALL_TIP_PRODUCT_ID` to its product ID to enable the section. Leave it blank for a free build without a tip button.
+## Reviews
+
+When the app has a public App Store listing, set `EZCALL_REVIEW_APP_ID` in the ezcall Xcode target to its numeric Apple ID to show **Rate and Review**. The default build offers **Send Feedback**. Both are available from the toolbar and Settings. [Apple's review-link example](https://developer.apple.com/documentation/storekit/requesting-app-store-reviews)
 
 ## Platform references
 

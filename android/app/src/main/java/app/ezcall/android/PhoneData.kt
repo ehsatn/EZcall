@@ -32,39 +32,80 @@ internal enum class Feature(val title: Int, val permissions: Array<String>) {
 internal fun Context.hasPermission(name: String): Boolean = checkSelfPermission(name) == PackageManager.PERMISSION_GRANTED
 
 internal class PhoneData(private val context: Context) {
-    fun snapshot(id: String): List<JSONObject> {
+    data class SmsCursor(val date: Long, val row: Long) {
+        fun encode() = "$date:$row"
+
+        companion object {
+            fun decode(value: String): SmsCursor {
+                val parts = value.split(':', limit = 2)
+                require(parts.size == 2)
+                return SmsCursor(parts[0].toLong(), parts[1].toLong()).also {
+                    require(it.date >= 0 && it.row >= 0)
+                }
+            }
+        }
+    }
+
+    fun snapshot(id: String, since: SmsCursor? = null, contactsVersion: String? = null): List<JSONObject> {
         val begin = packet("sync_begin", id)
+        val end = packet("sync_end", id)
         val country = context.getSystemService(TelephonyManager::class.java)?.simCountryIso
         if (country?.length == 2) begin.put("country", country)
         val result = mutableListOf(begin)
         if (Feature.SMS.active(context) && context.hasPermission(permission.READ_SMS)) {
-            batch("sms_batch", id, readSms(), result)
+            batch("sms_batch", id, readSms(since, end), result)
         }
         if (Feature.CONTACTS.active(context)) {
-            batch("contacts_batch", id, readContacts(), result)
+            val contacts = readContacts()
+            if (since == null) {
+                batch("contacts_batch", id, contacts, result)
+            } else {
+                val digest = MessageDigest.getInstance("SHA-256")
+                for (contact in contacts) {
+                    digest.update(contact.toString().toByteArray())
+                    digest.update(0.toByte())
+                }
+                val version = digest.digest().joinToString("") { "%02x".format(it) }
+                if (version != contactsVersion) {
+                    end.put("contactsVersion", version)
+                    batch("contacts_batch", id, contacts, result)
+                }
+            }
         }
-        result.add(packet("sync_end", id))
+        result.add(end)
         return result
     }
 
-    private fun readSms(): List<JSONObject> {
+    private fun readSms(since: SmsCursor?, end: JSONObject): List<JSONObject> {
         val result = mutableListOf<JSONObject>()
+        // SMS row IDs can be reused by the provider, so use them only to break timestamp ties.
+        // shortcut: Backdated provider inserts behind the cursor need a provider change log to recover.
+        val afterCursor = if (since == null) "" else " AND (${Sms.DATE} > ? OR (${Sms.DATE} = ? AND ${Sms._ID} > ?))"
+        val types = arrayOf(Sms.MESSAGE_TYPE_INBOX.toString(), Sms.MESSAGE_TYPE_SENT.toString())
+        val args = if (since == null) types else types + arrayOf(since.date.toString(), since.date.toString(), since.row.toString())
+        var cursorAfter = since
         context.contentResolver.query(
             Sms.CONTENT_URI,
-            arrayOf(Sms.ADDRESS, Sms.BODY, Sms.DATE, Sms.DATE_SENT, Sms.TYPE),
-            "${Sms.TYPE} IN (?, ?)",
-            arrayOf(Sms.MESSAGE_TYPE_INBOX.toString(), Sms.MESSAGE_TYPE_SENT.toString()),
-            "${Sms.DATE} DESC"
+            arrayOf(Sms.ADDRESS, Sms.BODY, Sms.DATE, Sms.DATE_SENT, Sms.TYPE, Sms._ID),
+            "${Sms.TYPE} IN (?, ?)$afterCursor",
+            args,
+            if (since == null) "${Sms.DATE} DESC" else "${Sms.DATE} ASC, ${Sms._ID} ASC"
         )?.use { cursor ->
-            while (result.size < 100 && cursor.moveToNext()) {
+            while (cursor.moveToNext()) {
+                if (result.size == 100) {
+                    if (since != null) end.put("moreSMS", true)
+                    break
+                }
                 val address = cursor.getString(0).orEmpty()
                 val body = cursor.getString(1).orEmpty()
                 val date = cursor.getLong(2)
                 val direction = if (cursor.getInt(4) == Sms.MESSAGE_TYPE_INBOX) "in" else "out"
                 val originalTime = if (direction == "in") cursor.getLong(3).takeIf { it > 0 } ?: date else date
                 result.add(message(address, body, date, direction, originalTime))
+                if (since != null) cursorAfter = SmsCursor(date, cursor.getLong(5))
             }
         } ?: error("SMS provider unavailable")
+        cursorAfter?.let { end.put("smsCursor", it.encode()) }
         return result
     }
 
@@ -86,7 +127,7 @@ internal class PhoneData(private val context: Context) {
             }
         } ?: error("Contacts provider unavailable")
         return contacts.map { (id, contact) ->
-            JSONObject().put("id", id).put("name", contact.name).put("numbers", JSONArray(contact.numbers))
+            JSONObject().put("id", id).put("name", contact.name).put("numbers", JSONArray(contact.numbers.sorted()))
         }
     }
 

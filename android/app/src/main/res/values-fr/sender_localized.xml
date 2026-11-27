@@ -68,8 +68,6 @@
     <string name="s_relay">Relay</string>
     <string name="s_notifications_in_status">Permettez ezcall notifications pour afficher son icône de relay dans la barre de statut.</string>
     <string name="s_battery_action">Permettez de relier avec écran</string>
-    <string name="s_donate">Donner</string>
-    <string name="s_no_browser">Aucun navigateur n’est disponible.</string>
     <string name="s_android_battery_setting">Adapter les paramètres de la batterie Android</string>
     <string name="s_battery_already_off">L\'optimisation de la batterie est désormais disponible pour ezcall.</string>
     <string name="s_battery_help">Dans les paramètres de la batterie, sélectionnez Unlimited pour ezcall pour maintenir le relay actif.</string>

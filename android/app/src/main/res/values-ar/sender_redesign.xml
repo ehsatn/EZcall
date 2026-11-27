@@ -1,0 +1,35 @@
+<resources>
+    <string name="s_ui_usb_debugging">تصحيح الأخطاء عبر USB</string>
+    <string name="s_ui_audio_configured_with">طريقة الإعداد: %1$s</string>
+    <string name="s_ui_welcome_title">شريحة SIM واحدة.\nهاتفان.</string>
+    <string name="s_ui_welcome_detail">تلقَّ مكالمات هذا الهاتف ورسائله النصية على هاتف ثانٍ.</string>
+    <string name="s_ui_start_guide">بدء دليل الإعداد</string>
+    <string name="s_ui_skip_setup">تخطي الإعداد</string>
+    <string name="s_ui_connection_intro">أقرن هذا الهاتف بالهاتف الذي سيتلقى مكالماتك ورسائلك.</string>
+    <string name="s_ui_sharing_intro">اختر ما يمكن للهاتف المستقبِل رؤيته أو فعله. قد يطلب Android إذنًا.</string>
+    <string name="s_ui_guide_progress">%1$d من %2$d</string>
+    <string name="s_ui_guide_paired">تم إقران الهاتفين</string>
+    <string name="s_ui_continue_pairing">متابعة إلى الإقران</string>
+    <string name="s_ui_finish_later">يمكنك الإنهاء الآن وإعداد الصوت لاحقًا.</string>
+    <string name="s_ui_pairing_nearby">أبقِ الهاتفين بالقرب من بعضهما</string>
+    <string name="s_ui_pairing_bluetooth">اترك البلوتوث قيد التشغيل أثناء الإقران.</string>
+    <string name="s_ui_contacts_group">جهات الاتصال</string>
+    <string name="s_ui_app_group">التطبيق</string>
+    <string name="s_ui_settings_audio">أعدّ الصوت أو راجع طرق الإعداد أو شغّل اختبارًا.</string>
+    <string name="s_ui_audio_methods_intro">أعدّ صوت المكالمات على هاتف Android الذي يحتوي على شريحة SIM.</string>
+    <string name="s_ui_wireless_method">تصحيح الأخطاء لاسلكيًا</string>
+    <string name="s_ui_wireless_method_detail">استخدم Wi-Fi وخيارات المطوّر على هذا الهاتف.</string>
+    <string name="s_ui_usb_method">USB</string>
+    <string name="s_ui_call_controls_group">التحكم بالمكالمات</string>
+    <string name="s_ui_call_control_detail">اختر ما يمكن للمستقبِل فعله من قسم المشاركة.</string>
+    <string name="s_ui_help_sharing_title">ما الذي يجب مشاركته؟</string>
+    <string name="s_ui_help_pairing_title">أين أمسح الرمز؟</string>
+    <string name="s_ui_help_audio_title">ما فائدة صوت المكالمات؟</string>
+    <string name="s_ui_help_done">فهمت</string>
+    <string name="s_ui_shizuku_inactive_title">تشغيل Shizuku</string>
+    <string name="s_ui_shizuku_unsupported_title">Shizuku غير مدعوم</string>
+    <string name="s_ui_shizuku_denied_title">تم رفض الإذن</string>
+    <string name="s_ui_audio_unavailable">صوت المكالمات غير متاح</string>
+    <string name="s_ui_try_audio_again">حاول مرة أخرى</string>
+    <string name="s_ui_choose_audio_method">اختر طريقة أخرى</string>
+</resources>

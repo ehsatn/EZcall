@@ -1,6 +1,6 @@
 <resources>
-    <string name="r_setup_sender">۱. کد QR را در گوشی فرستنده باز کنید</string>
-    <string name="r_setup_sender_detail">در EasyCall گوشی اندرویدی که سیم‌کارت در آن است، «شروع جفت‌سازی» را بزنید.</string>
+    <string name="r_setup_sender">در گوشی فرستنده</string>
+    <string name="r_setup_sender_detail">فرستندهٔ ezcall را باز کنید و کد QR جفت‌سازی را نشان دهید.</string>
     <string name="r_setup_receiver">۲. کد QR را در این گوشی بخوانید</string>
     <string name="r_setup_receiver_detail">با دوربین کد را بخوانید یا تصویر آن را انتخاب کنید. وقتی اندروید پرسید، دسترسی به دستگاه‌های نزدیک را مجاز کنید.</string>
     <string name="r_setup_optional">راه‌اندازی اختیاری</string>

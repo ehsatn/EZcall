@@ -1,0 +1,15 @@
+<resources>
+    <string name="ez_support_title">Support ezcall</string>
+    <string name="ez_support_optional">Optional contribution</string>
+    <string name="ez_support_copy">Copy Address</string>
+    <string name="ez_support_copied">Address Copied</string>
+    <string name="ez_support_prompt">If you enjoy ezcall, consider supporting it.</string>
+    <string name="ez_support_action">Support</string>
+    <string name="ez_support_development">Help us develop ezcall</string>
+    <string name="ez_support_intro">Contributing is optional. All features stay free.</string>
+    <string name="ez_support_network">Use the network shown for each wallet.</string>
+    <string name="ez_support_feedback">Your feedback helps us improve ezcall, too.</string>
+    <string name="ez_support_feedback_action">Send Feedback</string>
+    <string name="ez_support_no_browser">No browser available</string>
+    <string name="ez_support_star">Star ezcall on GitHub</string>
+</resources>

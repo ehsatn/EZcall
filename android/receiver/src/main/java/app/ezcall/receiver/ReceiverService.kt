@@ -14,6 +14,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioManager
+import android.os.Build
 import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
@@ -40,6 +41,7 @@ internal object ReceiverState {
     var canSendSms = false
     var audioMode = "none"
     var inCall: ReceivedCall? = null
+    var presentedCall: String? = null
     val canControlCurrentCall get() = connected && (canControl || inCall?.simulated == true)
     fun canPresentIncoming(id: String?) =
         id != null && paired && canControlCurrentCall && inCall?.id == id && inCall?.state == "ringing"
@@ -462,6 +464,14 @@ internal class ReceiverService : Service() {
 
     private fun receiveCall(call: ReceivedCall) {
         val previous = state.inCall
+        val existing = state.data.calls.find { it.id == call.id }
+        val action = pendingCall?.takeIf { it.id == call.id }?.command
+        val kind = when {
+            call.state == "ringing" -> CallKind.INCOMING
+            action == "call_dial" -> CallKind.OUTGOING
+            call.state == "ended" && previous?.id == call.id && previous.state == "ringing" && action != "call_end" -> CallKind.MISSED
+            else -> existing?.kind
+        }
         if (call.simulated && call.state != "ended" && state.audioTest?.id != call.id) {
             state.audioTest = ReceiverAudioTest(call.id, this)
             testLog(call.id)?.let { link?.describeTestLink(it) }
@@ -505,7 +515,7 @@ internal class ReceiverService : Service() {
             testStep(step, call.id)
             state.changed()
         }
-        else updateData(state.data.copy(calls = (listOf(call) + state.data.calls.filterNot { it.id == call.id })
+        else updateData(state.data.copy(calls = (listOf(call.copy(kind = kind)) + state.data.calls.filterNot { it.id == call.id })
             .sortedByDescending { it.date }.take(100)))
         if (completedAction != null) show(if (call.state == "ended") "Call ended." else "Call connected.")
     }
@@ -892,22 +902,32 @@ internal class ReceiverService : Service() {
     }
 
     fun ringFallback(callID: String) {
-        if (awaitingSystemCall != callID || state.inCall?.id != callID ||
-            state.inCall?.state != "ringing" || systemCall?.id == callID) return
+        val call = state.inCall
+        if (awaitingSystemCall != callID || call?.id != callID ||
+            call.state != "ringing" || systemCall?.id == callID) return
         awaitingSystemCall = null
         if (!alerts.areNotificationsEnabled()) return
-        val screen = PendingIntent.getActivity(this, 0, Intent(this, IncomingCallActivity::class.java)
-            .setIdentifier(callID).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
-            PendingIntent.FLAG_IMMUTABLE)
+        val screen = PendingIntent.getActivity(this, 0, receiverCallScreen(callID), PendingIntent.FLAG_IMMUTABLE)
         val locale = ezcallContext()
+        val incoming = locale.getString(R.string.r_call_incoming)
+        val description = locale.getString(R.string.r_call_from_sender)
+        val public = Notification.Builder(this, callChannel)
+            .setSmallIcon(R.drawable.ic_ezcall_notification)
+            .setContentTitle(incoming)
+            .setContentText(description)
+            .build()
         val notification = Notification.Builder(this, callChannel)
             .setSmallIcon(R.drawable.ic_ezcall_notification)
-            .setContentTitle(locale.getString(R.string.r_call_incoming))
-            .setContentText(locale.getString(R.string.r_call_from_sender))
+            .setContentTitle(incoming)
+            .setContentText(if (call.address.isBlank()) description else
+                state.data.name(call.address, description).let { if (it == call.address) locale.receiverNumberDisplay(it) else it })
             .setCategory(Notification.CATEGORY_CALL)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(public)
             .setContentIntent(screen)
-            .setFullScreenIntent(screen, true)
+            .apply {
+                if (Build.VERSION.SDK_INT < 34 || alerts.canUseFullScreenIntent()) setFullScreenIntent(screen, true)
+            }
             .setOngoing(true)
             .build()
         notification.flags = notification.flags or Notification.FLAG_INSISTENT

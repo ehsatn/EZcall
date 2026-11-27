@@ -1,3 +1,9 @@
 <resources>
-    <style name="Theme.ezcall.Receiver" parent="Theme.ezcall" />
+    <style name="Theme.ezcall.Receiver" parent="Theme.ezcall">
+        <item name="android:colorBackground">@color/receiver_surface</item>
+        <item name="android:windowBackground">@color/receiver_surface</item>
+        <item name="colorSurface">@color/receiver_surface</item>
+    </style>
+    <color name="receiver_surface">#F5F6FA</color>
+    <color name="receiver_call_surface">#E9EDFC</color>
 </resources>

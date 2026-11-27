@@ -1,0 +1,35 @@
+<resources>
+    <string name="s_ui_usb_debugging">USB hata ayıklama</string>
+    <string name="s_ui_audio_configured_with">Kurulum yöntemi: %1$s</string>
+    <string name="s_ui_welcome_title">Bir SIM.\nİki telefon.</string>
+    <string name="s_ui_welcome_detail">Bu Android telefondaki aramaları ve mesajları ikinci bir telefonda alın.</string>
+    <string name="s_ui_start_guide">Kurulum kılavuzunu başlat</string>
+    <string name="s_ui_skip_setup">Kurulumu atla</string>
+    <string name="s_ui_connection_intro">Bu telefonu aramalarınızı ve mesajlarınızı alacak telefonla eşleştirin.</string>
+    <string name="s_ui_sharing_intro">Alıcı telefonun neleri görebileceğini veya yapabileceğini seçin. Android izin isteyebilir.</string>
+    <string name="s_ui_guide_progress">%1$d / %2$d</string>
+    <string name="s_ui_guide_paired">Telefonlarınız eşleştirildi</string>
+    <string name="s_ui_continue_pairing">Eşleştirmeye devam et</string>
+    <string name="s_ui_finish_later">Şimdi bitirip sesi daha sonra kurabilirsiniz.</string>
+    <string name="s_ui_pairing_nearby">İki telefonu da yakında tutun</string>
+    <string name="s_ui_pairing_bluetooth">Eşleştirme sırasında Bluetooth açık kalsın.</string>
+    <string name="s_ui_contacts_group">Kişiler</string>
+    <string name="s_ui_app_group">Uygulama</string>
+    <string name="s_ui_settings_audio">Sesi kurun, kurulum yöntemlerini inceleyin veya bir test çalıştırın.</string>
+    <string name="s_ui_audio_methods_intro">Arama sesini SIM kartınızın takılı olduğu Android telefonda kurun.</string>
+    <string name="s_ui_wireless_method">Kablosuz hata ayıklama</string>
+    <string name="s_ui_wireless_method_detail">Bu telefonda Wi-Fi ve Geliştirici seçeneklerini kullanın.</string>
+    <string name="s_ui_usb_method">USB</string>
+    <string name="s_ui_call_controls_group">Arama kontrolleri</string>
+    <string name="s_ui_call_control_detail">Alıcının neler yapabileceğini Paylaşım bölümünde seçin.</string>
+    <string name="s_ui_help_sharing_title">Neleri paylaşmalıyım?</string>
+    <string name="s_ui_help_pairing_title">Kodu nerede taramalıyım?</string>
+    <string name="s_ui_help_audio_title">Arama sesi ne işe yarar?</string>
+    <string name="s_ui_help_done">Anladım</string>
+    <string name="s_ui_shizuku_inactive_title">Shizuku’yu başlat</string>
+    <string name="s_ui_shizuku_unsupported_title">Shizuku desteklenmiyor</string>
+    <string name="s_ui_shizuku_denied_title">İzin reddedildi</string>
+    <string name="s_ui_audio_unavailable">Arama sesi kullanılamıyor</string>
+    <string name="s_ui_try_audio_again">Tekrar dene</string>
+    <string name="s_ui_choose_audio_method">Başka yöntem seç</string>
+</resources>

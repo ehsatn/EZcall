@@ -68,8 +68,6 @@
     <string name="s_relay">ريلى</string>
     <string name="s_notifications_in_status">السماح ezcall الإشعارات لعرض أيقونة الإرسال في شريط الحالة.</string>
     <string name="s_battery_action">أضف تعليقًا مع الشاشة</string>
-    <string name="s_donate">التبرع</string>
-    <string name="s_no_browser">لا يوجد متصفح متاح.</string>
     <string name="s_android_battery_setting">إعدادات بطارية أندرويد</string>
     <string name="s_battery_already_off">يتم إلغاء تحسين البطارية بالفعل لـ ezcall.</string>
     <string name="s_battery_help">في إعدادات البطارية، حدد Unrestricted لـ ezcall للحفاظ على النقل النشط.</string>

@@ -36,15 +36,11 @@ enum RelayDates {
 struct Avatar: View {
     let name: String?
     var size: CGFloat = 40
-    var conversationTint = false
 
     var body: some View {
         Circle()
-            .fill(LinearGradient(colors: conversationTint
-                                 ? [Color(red: 0.66, green: 0.76, blue: 0.88),
-                                    Color(red: 0.46, green: 0.49, blue: 0.73)]
-                                 : [Color(red: 0.65, green: 0.67, blue: 0.72),
-                                          Color(red: 0.52, green: 0.54, blue: 0.58)],
+            .fill(LinearGradient(colors: [Color(red: 0.66, green: 0.76, blue: 0.88),
+                                          Color(red: 0.46, green: 0.49, blue: 0.73)],
                                  startPoint: .top, endPoint: .bottom))
             .overlay {
                 if let initials = Self.initials(name) {
@@ -96,7 +92,10 @@ struct ContactCard: View {
         List {
             Section {
                 VStack(spacing: 10) {
-                    Avatar(name: name, size: 88)
+                    Avatar(name: name, size: 176)
+                        .overlay {
+                            Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1)
+                        }
                     Text(title)
                         .font(.title.weight(.semibold))
                         .multilineTextAlignment(.center)
@@ -115,20 +114,24 @@ struct ContactCard: View {
                 }
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                .listRowInsets(EdgeInsets(top: 20, leading: 0, bottom: 16, trailing: 0))
             }
 
-            if let latest = calls.first {
-                Section(RelayDates.day(latest.timestamp)) {
+            if !calls.isEmpty {
+                Section {
+                    Text("Call History")
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                        .listRowBackground(Color.white.opacity(0.10))
                     ForEach(calls) { call in
-                        HStack(spacing: 16) {
-                            Text(call.timestamp, format: .dateTime.hour().minute().locale(EzcallLanguage.current.locale))
-                                .monospacedDigit()
+                        HStack(spacing: 12) {
                             Text(Self.label(call.state))
-                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(RelayDates.list(call.timestamp)).foregroundStyle(.secondary)
                         }
                         .font(.subheadline)
                         .accessibilityElement(children: .combine)
+                        .listRowBackground(Color.white.opacity(0.10))
                     }
                 }
             }
@@ -137,12 +140,18 @@ struct ContactCard: View {
                 Section {
                     ForEach(numbers, id: \.self) { number in
                         Button { relay.dial(number) } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Phone").font(.subheadline).foregroundStyle(.primary)
-                                Text(number).foregroundStyle(.tint)
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Phone").font(.subheadline).foregroundStyle(.secondary)
+                                    Text(number)
+                                }
+                                Spacer()
+                                Image(systemName: "phone.fill").accessibilityHidden(true)
                             }
+                            .foregroundStyle(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .listRowBackground(Color.white.opacity(0.10))
                         .accessibilityLabel(ezText("Call %@", number))
                         .contextMenu {
                             Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = number }
@@ -157,6 +166,15 @@ struct ContactCard: View {
             }
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background {
+            LinearGradient(colors: [Color(red: 0.40, green: 0.43, blue: 0.52),
+                                    Color(red: 0.24, green: 0.19, blue: 0.37),
+                                    Color(red: 0.09, green: 0.07, blue: 0.16)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                .ignoresSafeArea()
+        }
+        .environment(\.colorScheme, .dark)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $conversation) { address in
             ConversationView(relay: relay, address: address)
@@ -174,15 +192,14 @@ struct ContactCard: View {
     private func actionTile(_ title: LocalizedStringKey, systemImage: String,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage).font(.title3)
-                Text(title).font(.caption)
-            }
-            .foregroundStyle(.tint)
-            .frame(maxWidth: .infinity, minHeight: 58)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+            Image(systemName: systemImage).font(.title2)
+                .foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background(.thinMaterial, in: Circle())
+                .overlay { Circle().strokeBorder(.white.opacity(0.22), lineWidth: 1) }
         }
         .buttonStyle(.borderless)
+        .accessibilityLabel(title)
     }
 }
 

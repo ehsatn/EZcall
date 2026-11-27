@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_audio_shizuku">Configurar con Shizuku</string>
+    <string name="s_audio_shizuku_restart">Reiniciar con Shizuku</string>
+    <string name="s_audio_shizuku_detail">Inicia Shizuku en este teléfono y permite que ezcall lo use para el audio de llamadas.</string>
+    <string name="s_audio_shizuku_start">Instala e inicia Shizuku en este teléfono y vuelve a intentarlo.</string>
+    <string name="s_audio_shizuku_unsupported">El audio de llamadas requiere Shizuku 13 o posterior iniciado mediante la depuración de Android.</string>
+    <string name="s_audio_shizuku_denied">Autoriza a ezcall en Aplicaciones autorizadas de Shizuku y vuelve a intentarlo.</string>
+    <string name="s_audio_shizuku_failed">No se pudo iniciar el audio de llamadas con Shizuku. Comprueba que esté activo y que ezcall tenga permiso.</string>
+</resources>

@@ -35,6 +35,8 @@
     <string>Connect to your Android and receive the calls, SMS, and contacts you share.</string>
     <key>NSCameraUsageDescription</key>
     <string>Scan the pairing code on your Android.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Show matching iPhone contacts as you enter a number on the EasyCall keypad.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Talk on calls that you answer or place through your Android.</string>
     <key>NSUserActivityTypes</key>
@@ -51,7 +53,12 @@
     <array>
         <string>audio</string>
         <string>bluetooth-central</string>
+        <string>fetch</string>
         <string>voip</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>app.xcall.relay.refresh</string>
     </array>
     <key>UILaunchScreen</key>
     <dict/>
@@ -61,8 +68,8 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>EzcallTipProductID</key>
-    <string>$(EZCALL_TIP_PRODUCT_ID)</string>
+    <key>EzcallReviewAppID</key>
+    <string>$(EZCALL_REVIEW_APP_ID)</string>
     <key>EzcallWidgetGroup</key>
     <string>group.$(EZCALL_BUNDLE_IDENTIFIER)</string>
 </dict>

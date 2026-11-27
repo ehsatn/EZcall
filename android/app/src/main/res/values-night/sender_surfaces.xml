@@ -1,0 +1,4 @@
+<resources>
+    <color name="sender_surface">@color/ezcall_surface</color>
+    <color name="sender_card">@color/ezcall_surface_container_low</color>
+</resources>

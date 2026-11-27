@@ -1,4 +1,0 @@
-<resources>
-    <!-- Set the production funding URL before enabling the donation button. -->
-    <string name="support_url" translatable="false"></string>
-</resources>

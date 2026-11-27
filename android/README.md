@@ -15,7 +15,7 @@ adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 
 For the second command, install [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools), enable USB debugging on the test phone, and approve that computer from the phone.
 
-1. The sender opens its setup guide on first launch. Choose what to share, continue to Bluetooth, then show the pairing QR. After connecting, the guide offers optional call audio. Previously paired phones can review audio without pairing the receiver again. Reopen any step from **Settings → Setup guide**.
+1. On first launch, choose **Start setup guide** or **Skip setup**. In the guide, choose what to share and continue to pairing. The Sender requests Nearby devices permission if needed and shows the pairing QR when Bluetooth is ready. After pairing, the guide offers optional call audio. Reopen the guide from **Settings → Setup guide**. A saved pairing skips the QR step.
 2. Scan the two-minute QR in ezcall on iPhone or ezcall Receiver on Android. On iPhone, open **Settings** with the gear in **Recents** and tap **Test Connection**. On Android Receiver, open **Settings** and tap **Test connection**.
 3. Open **Status** to check the connection, shared features, call audio, notifications and battery settings. The relay reconnects automatically after pairing.
 4. Use **Connection → Forget receiving phone** to replace the current link with a fresh QR. Audio and sharing settings are kept.
@@ -54,10 +54,18 @@ If automatic discovery fails, enter the **connection port** from the main Wirele
 
 On the Sender phone, enable **USB debugging** in Developer options and approve your computer when you connect the USB cable. Open **Settings → Call audio → Set up with USB** and keep the dialog open. Run the command it shows using Android Platform-Tools. If more than one USB device is attached, run `adb devices` and replace `-d` with `-s SERIAL` for the Sender. When the app reports the audio status, you can unplug the cable. Repeat USB setup if the audio component stops or the phone restarts.
 
+## Shizuku
+
+1. Install and start [Shizuku](https://shizuku.rikka.app/guide/setup/) 13 or later on the Sender phone using USB or Wireless debugging.
+2. In ezcall Sender, open **Settings → Call audio → Audio setup methods → Set up with Shizuku** and allow ezcall in the Shizuku permission prompt.
+3. After a phone restart, start Shizuku again. In ezcall, use **Restart with Shizuku** if call audio is stopped.
+
+Shizuku starts the same local call audio component as the USB and Wireless debugging methods. Receiver pairing continues over Bluetooth.
+
 ## Call audio
 
 1. Enable **Call alerts**, then **Call control** to answer, decline, end and place calls from the receiving phone. Android asks for the phone and answer-calls permissions.
-2. In **Settings → Call audio**, use **Set up with USB**, or pair with Wireless debugging and tap **Set up call audio**. ezcall starts a local audio component as the shell user and reports what this phone allows.
+2. In **Settings → Call audio**, choose Shizuku, USB, or Wireless debugging. ezcall starts a local audio component as the shell user and reports what this phone allows.
 3. **Two-way audio ready** means the receiver can take over both directions. **Audio stays on this phone** means the sender can still relay call controls while the conversation stays on the sender.
 4. Answer or place a call on the receiving phone. Calls answered on Android keep their audio on Android.
 
@@ -65,7 +73,7 @@ On phones that support PSTN call audio access, ezcall streams audio when the rec
 
 Enable **Floating call button** in the sender’s **Settings → Call audio** and allow ezcall to display over other apps. Tap **Use audio on this phone** while the call is ringing or using the receiver. The receiver closes its call screen and the SIM call continues on Android. The same action is available in the sender’s relay notification.
 
-After Android restarts, connect the sender to Wi-Fi, turn on **Developer options → Wireless debugging**, then return to ezcall and tap **Restart call audio**. You can close the settings screen. Only the initial pairing needs the code window. If discovery fails, tap **Enter connection port** and enter the port shown under **IP address and port** on the main Wireless debugging screen. ezcall also tries to restart the component when the relay starts and when a call needs audio, if Wireless debugging is on. Remove ezcall under **Paired devices** in Wireless debugging to stop future restarts.
+If you use Wireless debugging, after Android restarts, connect the sender to Wi-Fi, turn on **Developer options → Wireless debugging**, then return to ezcall and tap **Restart call audio**. You can close the settings screen. Only the initial pairing needs the code window. If discovery fails, tap **Enter connection port** and enter the port shown under **IP address and port** on the main Wireless debugging screen. ezcall also tries to restart the component when the relay starts and when a call needs audio, if Wireless debugging is on. Remove ezcall under **Paired devices** in Wireless debugging to stop future restarts.
 
 Run the test call on Android 12, 12L, 13, 14, 15, 16 and 17 with each phone in the sender and receiver roles. Repeat with the receiver locked and with its microphone permission granted and denied. For real SIM audio, the sender requires Android 13 or later and device support for PSTN call audio access. On supported phones, place a call from the receiver and answer an incoming call there. Verify the caller and receiver can hear each other and that the sender's normal call audio stays available. Receive a multipart SMS on the sender during the call and check that it appears on the receiver without a gap in relayed speech. During a relayed call, stop Bluetooth and verify the SIM call continues on the sender. The component log is `/data/local/tmp/ezcall_audio.log` and is readable with `adb shell cat`.
 

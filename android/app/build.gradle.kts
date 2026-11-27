@@ -7,6 +7,8 @@ android {
     sourceSets["main"].kotlin.srcDir("../shared/src/main/java")
     sourceSets["main"].res.srcDir("../shared/src/main/res")
 
+    buildFeatures { aidl = true }
+
     bundle {
         language { enableSplit = false }
     }
@@ -15,8 +17,8 @@ android {
         applicationId = "app.ezcall.android"
         minSdk = 31
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.1.21"
+        versionCode = 23
+        versionName = "0.1.22"
     }
 
     compileOptions {
@@ -29,6 +31,8 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
     implementation("org.conscrypt:conscrypt-android:2.10.0")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     testImplementation("junit:junit:4.13.2")
     constraints {
         implementation("org.bouncycastle:bcprov-jdk15to18:1.87") {

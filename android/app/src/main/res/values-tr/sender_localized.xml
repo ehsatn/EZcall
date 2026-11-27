@@ -68,8 +68,6 @@
     <string name="s_relay">Relay için</string>
     <string name="s_notifications_in_status">ezcall bildirimleri durum çubuğunda relay simgesini göstermek için izin verin.</string>
     <string name="s_battery_action">Ekranı kapatmak için izin verin</string>
-    <string name="s_donate">donanım</string>
-    <string name="s_no_browser">Hiçbir tarayıcı mevcut değil.</string>
     <string name="s_android_battery_setting">Android bataryayı ayarlayın</string>
     <string name="s_battery_already_off">Batarya optimizasyonu zaten ezcall için kapalıdır.</string>
     <string name="s_battery_help">Batarya ayarlarında, akışın aktif kalmasını sağlamak için Unrestricted ezcall\'i seçin.</string>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_audio_shizuku">الإعداد باستخدام Shizuku</string>
+    <string name="s_audio_shizuku_restart">إعادة التشغيل باستخدام Shizuku</string>
+    <string name="s_audio_shizuku_detail">شغّل Shizuku على هذا الهاتف واسمح لتطبيق ezcall باستخدامه لصوت المكالمات.</string>
+    <string name="s_audio_shizuku_start">ثبّت Shizuku وشغّله على هذا الهاتف ثم حاول مرة أخرى.</string>
+    <string name="s_audio_shizuku_unsupported">يتطلب صوت المكالمات Shizuku 13 أو أحدث مشغّلًا عبر تصحيح أخطاء Android.</string>
+    <string name="s_audio_shizuku_denied">اسمح لتطبيق ezcall ضمن التطبيقات المصرّح لها في Shizuku ثم حاول مرة أخرى.</string>
+    <string name="s_audio_shizuku_failed">تعذّر تشغيل صوت المكالمات عبر Shizuku. تحقق من تشغيله ومن إذن ezcall.</string>
+</resources>

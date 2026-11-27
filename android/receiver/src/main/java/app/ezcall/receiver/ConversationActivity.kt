@@ -1,6 +1,7 @@
 package app.ezcall.receiver
 
 import android.graphics.drawable.GradientDrawable
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.text.InputType
 import android.text.format.DateUtils
@@ -31,6 +32,7 @@ import com.google.android.material.textfield.TextInputLayout
 internal class ConversationActivity : AppCompatActivity() {
     private val state get() = ReceiverState
     private var address: String? = null
+    private var contactName: String? = null
     private var requestedMessage: String? = null
     private lateinit var toolbar: MaterialToolbar
     private lateinit var recipient: AutoCompleteTextView
@@ -56,6 +58,7 @@ internal class ConversationActivity : AppCompatActivity() {
         }
         if (!state.paired) { finish(); return }
         address = savedInstanceState?.getString("address") ?: intent.getStringExtra("address")
+        contactName = savedInstanceState?.getString("contactName") ?: intent.getStringExtra("name")
         requestedMessage = if (savedInstanceState == null) intent.getStringExtra("messageID")
             else savedInstanceState.getString("messageID")
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -87,8 +90,11 @@ internal class ConversationActivity : AppCompatActivity() {
             setPaddingRelative(dp(14), dp(12), dp(14), dp(12))
             setText(savedInstanceState?.getString("recipient"))
             setOnItemClickListener { adapterView, _, position, _ ->
-                val number = (adapterView.getItemAtPosition(position) as ContactNumber).number
-                setText(number, false)
+                val contact = adapterView.getItemAtPosition(position) as ContactNumber
+                address = contact.number
+                contactName = contact.name.takeIf(String::isNotBlank)
+                setText(contact.number, false)
+                render()
                 composer.requestFocus()
                 getSystemService(InputMethodManager::class.java).showSoftInput(composer, InputMethodManager.SHOW_IMPLICIT)
             }
@@ -148,15 +154,15 @@ internal class ConversationActivity : AppCompatActivity() {
             orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             setPaddingRelative(dp(16), dp(8), dp(16), dp(12))
         }
-        messageField = TextInputLayout(this, null, M.attr.textInputOutlinedStyle).apply {
-            hint = getString(R.string.r_message)
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+        messageField = TextInputLayout(this).apply {
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_NONE
         }
         composer = TextInputEditText(messageField.context).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             maxLines = 5
             minHeight = dp(48)
-            background = null
+            background = bubble(M.attr.colorSurfaceContainer)
+            hint = getString(R.string.r_text_message)
             setPaddingRelative(dp(14), dp(12), dp(14), dp(12))
             setText(savedInstanceState?.getString("draft").orEmpty())
             setSelection(length())
@@ -164,12 +170,21 @@ internal class ConversationActivity : AppCompatActivity() {
         messageField.addView(composer)
         bar.addView(messageField, if (stacked) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
         send = MaterialButton(this).apply {
-            text = getString(R.string.r_send)
+            contentDescription = getString(R.string.r_send)
+            tooltipText = contentDescription
+            setIconResource(R.drawable.receiver_send)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            iconPadding = 0
+            setPadding(0, 0, 0, 0)
+            insetTop = 0
+            insetBottom = 0
+            cornerRadius = dp(24)
+            iconTint = ColorStateList.valueOf(tone(M.attr.colorOnPrimary))
             minHeight = dp(48)
             isAllCaps = false
             setOnClickListener { submit() }
         }
-        bar.addView(send, LinearLayout.LayoutParams(-2, -2).apply {
+        bar.addView(send, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
             if (stacked) topMargin = dp(4) else marginStart = dp(8)
         })
         root.addView(bar)
@@ -188,10 +203,16 @@ internal class ConversationActivity : AppCompatActivity() {
 
     override fun onStop() { state.listeners.remove(::render); super.onStop() }
 
+    override fun onPostResume() {
+        super.onPostResume()
+        presentRingingCall()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         if (!::composer.isInitialized) return
         outState.putString("address", address)
+        outState.putString("contactName", contactName)
         outState.putString("recipient", recipient.text.toString())
         outState.putString("draft", composer.text?.toString().orEmpty())
         outState.putString("messageID", requestedMessage)
@@ -225,15 +246,19 @@ internal class ConversationActivity : AppCompatActivity() {
 
     private fun render() {
         if (!state.paired) { finish(); return }
+        presentRingingCall()
         val target = address
         recipientField.visibility = if (target == null) View.VISIBLE else View.GONE
-        val name = target?.let { state.data.name(it, getString(R.string.r_unknown)) }
+        val name = target?.let { contactName ?: state.data.name(it, getString(R.string.r_unknown)) }
         toolbar.title = when {
             name == null -> getString(R.string.r_new_sms)
             name == target -> receiverNumberDisplay(name)
             else -> name
         }
-        toolbar.subtitle = target?.takeIf { it.isNotBlank() && it != name }?.let(::receiverNumberDisplay)
+        toolbar.subtitle = target?.let {
+            if (it == name || it.isBlank()) getString(R.string.r_sms_via_sender)
+            else "${receiverNumberDisplay(it)} · ${getString(R.string.r_sms_via_sender)}"
+        }
         if (target == null && lastContacts !== state.data.contacts) {
             lastContacts = state.data.contacts
             val numbers = state.data.contacts.flatMap { contact -> contact.numbers.map { ContactNumber(contact.name, it) } }
@@ -262,7 +287,19 @@ internal class ConversationActivity : AppCompatActivity() {
         lastRows = rows
         bubbles.removeAllViews()
         var requestedRow: View? = null
+        var previous = 0L
         for ((sms, detail) in rows) {
+            if (sms.date > 0 && (previous <= 0 || sms.date - previous >= 30 * DateUtils.MINUTE_IN_MILLIS)) {
+                bubbles.addView(TextView(this).apply {
+                    setTextAppearance(R.style.TextAppearance_ezcall_LabelMedium)
+                    setTextColor(tone(M.attr.colorOnSurfaceVariant))
+                    gravity = Gravity.CENTER
+                    text = DateUtils.formatDateTime(this@ConversationActivity, sms.date,
+                        DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH)
+                    setPadding(0, dp(8), 0, dp(8))
+                }, LinearLayout.LayoutParams(-1, -2))
+            }
+            previous = sms.date
             val outgoing = sms.direction == "out"
             val side = if (outgoing) Gravity.END else Gravity.START
             val box = column().apply {
@@ -277,13 +314,12 @@ internal class ConversationActivity : AppCompatActivity() {
                 text = sms.body
                 setTextIsSelectable(true)
             }, LinearLayout.LayoutParams(-2, -2))
-            box.addView(TextView(this).apply {
+            if (detail != null) box.addView(TextView(this).apply {
                 setTextAppearance(R.style.TextAppearance_ezcall_LabelSmall)
-                setTextColor(tone(M.attr.colorOnSurfaceVariant))
-                val date = DateUtils.formatDateTime(this@ConversationActivity, sms.date,
-                    DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH)
-                text = if (detail == null) date else "$date · ${receiverNotice(detail)}"
-                contentDescription = getString(if (outgoing) R.string.r_outgoing_sms else R.string.r_incoming_sms, text)
+                val normal = detail == "SMS sent." || detail == "Sending SMS…"
+                setTextColor(tone(if (normal) M.attr.colorOnSurfaceVariant else androidx.appcompat.R.attr.colorError))
+                text = receiverNotice(detail)
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             }, LinearLayout.LayoutParams(-2, -2).apply { gravity = side; topMargin = dp(2) })
             bubbles.addView(box)
             if (sms.id == requestedMessage) requestedRow = box

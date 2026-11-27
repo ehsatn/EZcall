@@ -8,13 +8,21 @@ import org.json.JSONObject
 
 internal data class ReceivedCall(val id: String, val address: String, val date: Long, val state: String,
                                  val simulated: Boolean, val testAudioConfirmation: Boolean = false,
-                                 val testAudioDiagnostics: Boolean = false)
+                                 val testAudioDiagnostics: Boolean = false, val kind: CallKind? = null)
+internal enum class CallKind { INCOMING, OUTGOING, MISSED }
 internal data class ReceivedSms(val id: String, val address: String, val body: String, val date: Long, val direction: String)
 internal data class ReceivedContact(val id: String, val name: String, val numbers: List<String>)
 
 internal fun normalizedNumber(value: String) = value.trim().map {
     it.digitToIntOrNull()?.let { digit -> '0' + digit } ?: it
 }.joinToString("")
+
+private val dialNumber = Regex("[+]?[0-9*#][0-9*#,;]{0,63}")
+
+internal fun receiverDialNumber(value: String): String? = normalizedNumber(value)
+    .filterNot { Character.isSpaceChar(it) || it in "-()." }.takeIf {
+        dialNumber.matches(it) && it.any(Char::isDigit) && (!it.startsWith('+') || it.count(Char::isDigit) >= 7)
+    }
 
 internal fun smsRecipient(address: String): String? = normalizedNumber(address)
     .filterNot { Character.isSpaceChar(it) || it in "-()." }.takeIf { smsNumber.matches(it) }
@@ -69,11 +77,12 @@ internal data class ReceiverData(
     }
 }
 
-internal fun JSONObject.call(): ReceivedCall? {
+internal fun JSONObject.call(saved: Boolean = false): ReceivedCall? {
     val id = optString("id").takeIf { it.length in 1..128 } ?: return null
     val state = optString("state").takeIf { it in setOf("ringing", "active", "ended") } ?: return null
     return ReceivedCall(id, optString("address").take(128), optLong("date"), state, optBoolean("simulated"),
-        optBoolean("test_audio_confirmation"), optBoolean("test_audio_diagnostics"))
+        optBoolean("test_audio_confirmation"), optBoolean("test_audio_diagnostics"),
+        if (saved) CallKind.entries.firstOrNull { it.name == optString("kind") } else null)
 }
 
 internal fun JSONObject.sms(): ReceivedSms? {
@@ -100,7 +109,7 @@ internal class ReceiverVault(context: Context) {
     fun load(): ReceiverData = runCatching {
         val value = JSONObject(file.readFully().toString(Charsets.UTF_8))
         ReceiverData(
-            value.getJSONArray("calls").read(100, JSONObject::call),
+            value.getJSONArray("calls").read(100) { it.call(saved = true) },
             value.getJSONArray("messages").read(100, JSONObject::sms),
             value.getJSONArray("contacts").read(5_000, JSONObject::contact), value.optString("country")
         )
@@ -112,6 +121,7 @@ internal class ReceiverVault(context: Context) {
             .put("calls", JSONArray(data.calls.map {
                 JSONObject().put("id", it.id).put("address", it.address)
                     .put("date", it.date).put("state", "ended")
+                    .put("kind", it.kind?.name)
             }))
             .put("messages", JSONArray(data.messages.map {
                 JSONObject().put("id", it.id).put("address", it.address)

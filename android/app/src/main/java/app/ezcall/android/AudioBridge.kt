@@ -2,6 +2,8 @@ package app.ezcall.android
 
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.math.PI
@@ -10,7 +12,7 @@ import kotlin.math.sin
 // Loopback protocol between the relay and the call audio component that runs as the shell user.
 // Both sides prove the shared token before any audio flows. Messages are type, 16-bit length, payload.
 internal object AudioBridge {
-    const val VERSION = 12
+    const val VERSION = 14
     const val SAMPLE_RATE = Opus.SAMPLE_RATE
     const val FRAME_SAMPLES = Opus.FRAME_SAMPLES
     const val FRAME_BYTES = Opus.FRAME_BYTES
@@ -41,23 +43,67 @@ internal object AudioBridge {
     private const val SERVER_LABEL = "xcall-audio/v1/server"
     private const val CLIENT_LABEL = "xcall-audio/v1/client"
     private const val MAX_PAYLOAD = 8_192
+    private const val DTMF_TONE_SAMPLES = FRAME_SAMPLES * 8
+    private const val DTMF_COMPONENT_PEAK = 1_802
     private val random = SecureRandom()
+
+    private fun dtmfEnvelope(sample: Int) =
+        minOf(1.0, minOf(sample, DTMF_TONE_SAMPLES - 1 - sample) / (SAMPLE_RATE * 0.004))
 
     fun dtmfPcm(digit: Char): ByteArray {
         val index = DTMF_DIGITS.indexOf(digit)
         require(index >= 0)
         val low = intArrayOf(697, 770, 852, 941)[index / 3]
         val high = intArrayOf(1209, 1336, 1477)[index % 3]
-        val toneSamples = FRAME_SAMPLES * 8
         val pcm = ByteArray(FRAME_BYTES * 12)
-        for (sample in 0 until toneSamples) {
+        for (sample in 0 until DTMF_TONE_SAMPLES) {
             val phase = 2 * PI * sample / SAMPLE_RATE
-            val fade = minOf(1.0, minOf(sample, toneSamples - 1 - sample) / (SAMPLE_RATE * 0.004))
-            val value = (7_209 * fade * (sin(low * phase) + sin(high * phase))).toInt()
+            val value = (DTMF_COMPONENT_PEAK * dtmfEnvelope(sample) * (sin(low * phase) + sin(high * phase))).toInt()
             pcm[2 * sample] = value.toByte()
             pcm[2 * sample + 1] = (value shr 8).toByte()
         }
         return pcm
+    }
+
+    fun mixDtmf(pcm: ByteArray, tone: ByteArray, offset: Int) {
+        val voice = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN)
+        val signal = ByteBuffer.wrap(tone).order(ByteOrder.LITTLE_ENDIAN)
+        val end = minOf(offset + pcm.size, DTMF_TONE_SAMPLES * 2)
+        for (position in offset until end step 2) {
+            // Fade in just enough microphone headroom to keep the tone from clipping.
+            val gain = 1 - dtmfEnvelope(position / 2) * (2.0 * DTMF_COMPONENT_PEAK / Short.MAX_VALUE)
+            val index = position - offset
+            val mixed = (voice.getShort(index) * gain).toInt() + signal.getShort(position)
+            voice.putShort(index, mixed.toShort())
+        }
+    }
+
+    class UplinkPcm {
+        private val gap = ByteArray(FRAME_BYTES)
+        private val fade = SAMPLE_RATE / 250
+        private var lastSample = 0
+        private var fadeIn = fade
+
+        fun frame(pcm: ByteArray?): ByteArray {
+            if (pcm == null) {
+                // Keep the track fed and taper the last microphone sample into silence.
+                gap.fill(0)
+                if (lastSample != 0) {
+                    val samples = ByteBuffer.wrap(gap).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                    for (i in 0 until fade) samples.put(i, (lastSample * (fade - i - 1) / fade).toShort())
+                }
+                lastSample = 0
+                fadeIn = 0
+                return gap
+            }
+            val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+            for (i in 0 until minOf(samples.limit(), fade - fadeIn)) {
+                fadeIn++
+                samples.put(i, (samples[i] * fadeIn / fade).toShort())
+            }
+            lastSample = samples[samples.limit() - 1].toInt()
+            return pcm
+        }
     }
 
     fun nonce(): ByteArray = ByteArray(16).also(random::nextBytes)

@@ -1,0 +1,15 @@
+<resources>
+    <string name="ez_support_title">Apoya a ezcall</string>
+    <string name="ez_support_optional">Aporte opcional</string>
+    <string name="ez_support_copy">Copiar dirección</string>
+    <string name="ez_support_copied">Dirección copiada</string>
+    <string name="ez_support_prompt">Si te gusta ezcall, puedes apoyarlo.</string>
+    <string name="ez_support_action">Apoyar</string>
+    <string name="ez_support_development">Ayúdanos a desarrollar ezcall</string>
+    <string name="ez_support_intro">Contribuir es opcional. Todas las funciones siguen siendo gratuitas.</string>
+    <string name="ez_support_network">Usa la red indicada para cada cartera.</string>
+    <string name="ez_support_feedback">Tus comentarios también nos ayudan a mejorar ezcall.</string>
+    <string name="ez_support_feedback_action">Enviar comentarios</string>
+    <string name="ez_support_no_browser">No hay un navegador disponible</string>
+    <string name="ez_support_star">Dale una estrella a ezcall en GitHub</string>
+</resources>

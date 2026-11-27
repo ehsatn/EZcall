@@ -14,10 +14,21 @@ import java.io.DataOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
 class CallAudioTest {
+    @Test fun failedSetupCanRetryOnceOnlyForTheActiveRelayedCall() {
+        val call = RelayService.Call("first", "", 0, "active")
+        assertTrue(call.canRetryAudio("first", "first", null, null))
+        assertFalse(call.canRetryAudio("first", "first", null, "first"))
+        assertFalse(call.canRetryAudio("first", "first", "first", null))
+        assertFalse(call.canRetryAudio("first", null, null, null))
+        assertFalse(call.canRetryAudio("previous", "first", null, null))
+        assertFalse(call.copy(state = "ended").canRetryAudio("first", "first", null, null))
+    }
+
     private val key = hex("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f")
     private val payload = hex("7863616c6c206f707573206672616d65")
     private val first = hex("05000000001eefac86eb7c9242798ae4954850fa8b7c654ca9f52c95227d93f866322808df")
@@ -40,11 +51,13 @@ class CallAudioTest {
         assertArrayEquals(payload, android().open(fromIphone))
     }
 
-    @Test fun dtmfSixHasTheExpectedFrequenciesAndAnInterDigitPause() {
+    @Test fun dtmfSixHasTheExpectedFrequenciesLevelAndInterDigitPause() {
         val pcm = AudioBridge.dtmfPcm('6')
         assertEquals(AudioBridge.FRAME_BYTES * 12, pcm.size)
         val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         val toneSamples = AudioBridge.FRAME_SAMPLES * 8
+        val peak = (0 until toneSamples).maxOf { abs(samples[it].toInt()) }
+        assertTrue("DTMF peak was $peak", peak in 3_500..3_605)
         val bins = listOf(697, 770, 852, 941, 1209, 1336, 1477)
         val peaks = bins.sortedByDescending { frequency ->
             var real = 0.0
@@ -59,6 +72,52 @@ class CallAudioTest {
         assertEquals(setOf(770, 1477), peaks.take(2).toSet())
         assertTrue((toneSamples until samples.limit()).all { samples[it] == 0.toShort() })
         assertThrows(IllegalArgumentException::class.java) { AudioBridge.dtmfPcm('A') }
+    }
+
+    @Test fun dtmfMixPreservesMicrophoneFramesAndKeepsHeadroom() {
+        val tone = AudioBridge.dtmfPcm('6')
+        val mixed = ByteArray(tone.size)
+        val voice = ByteBuffer.wrap(mixed).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        for (index in 0 until voice.limit()) {
+            voice.put(index, if (index % 2 == 0) Short.MAX_VALUE else Short.MIN_VALUE)
+        }
+        val original = mixed.copyOf()
+        for (offset in mixed.indices step AudioBridge.FRAME_BYTES) {
+            val end = offset + AudioBridge.FRAME_BYTES
+            val silentFrame = ByteArray(AudioBridge.FRAME_BYTES)
+            AudioBridge.mixDtmf(silentFrame, tone, offset)
+            assertArrayEquals(tone.copyOfRange(offset, end), silentFrame)
+            val voiceFrame = mixed.copyOfRange(offset, end)
+            AudioBridge.mixDtmf(voiceFrame, tone, offset)
+            voiceFrame.copyInto(mixed, offset)
+        }
+        assertEquals(Short.MAX_VALUE, voice[0])
+        assertEquals(Short.MIN_VALUE, voice[AudioBridge.FRAME_SAMPLES * 8 - 1])
+        assertTrue((0 until voice.limit()).all { (voice[it] >= 0) == (it % 2 == 0) })
+        assertFalse(original.contentEquals(mixed))
+        val pause = AudioBridge.FRAME_BYTES * 8
+        assertArrayEquals(original.copyOfRange(pause, original.size), mixed.copyOfRange(pause, mixed.size))
+    }
+
+    @Test fun uplinkFillsMissingFramesAndFadesVoiceBackIn() {
+        fun voicedFrame() = ByteArray(AudioBridge.FRAME_BYTES).also { pcm ->
+            val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+            for (i in 0 until samples.limit()) samples.put(i, -9_600)
+        }
+        fun sample(pcm: ByteArray, index: Int) =
+            ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).getShort(index * 2).toInt()
+
+        val uplink = AudioBridge.UplinkPcm()
+        assertArrayEquals(voicedFrame(), uplink.frame(voicedFrame()))
+        val gap = uplink.frame(null)
+        assertEquals(AudioBridge.FRAME_BYTES, gap.size)
+        assertTrue(sample(gap, 0) in -9_599..-1)
+        assertEquals(0, sample(gap, AudioBridge.FRAME_SAMPLES - 1))
+        assertTrue(uplink.frame(null).all { it == 0.toByte() })
+        val resumed = uplink.frame(voicedFrame())
+        assertTrue(sample(resumed, 0) in -9_599..-1)
+        assertEquals(-9_600, sample(resumed, AudioBridge.FRAME_SAMPLES - 1))
+        assertArrayEquals(voicedFrame(), uplink.frame(voicedFrame()))
     }
 
     @Test fun audioAndSmsFragmentsAlternateWithoutDelayingCallControl() {

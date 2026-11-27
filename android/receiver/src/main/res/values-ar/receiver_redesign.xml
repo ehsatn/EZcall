@@ -1,0 +1,26 @@
+<resources>
+    <string name="r_pair_intro">استقبل المكالمات والرسائل النصية من هاتف أندرويد الذي يحمل شريحة SIM.</string>
+    <string name="r_call_brand">مستقبل ezcall</string>
+    <string name="r_calling">جارٍ الاتصال…</string>
+    <string name="r_history_outgoing">صادرة</string>
+    <string name="r_history_incoming">واردة</string>
+    <string name="r_history_missed">فائتة</string>
+    <string name="r_calling_settings">الاتصال</string>
+    <string name="r_calls_and_alerts">المكالمات والتنبيهات</string>
+    <string name="r_calls_and_alerts_detail">الإشعارات وشاشة القفل والميكروفون</string>
+    <string name="r_check_call_audio">تحقق من السماعة والميكروفون</string>
+    <string name="r_app_settings">التطبيق</string>
+    <string name="r_keypad">لوحة الاتصال</string>
+    <string name="r_incomplete_number">أدخل رقم هاتف كاملًا.</string>
+    <string name="r_sms_via_sender">رسالة نصية عبر الهاتف المرسل</string>
+    <string name="r_text_message">رسالة نصية</string>
+    <string name="r_community_support">دعم المجتمع</string>
+    <string name="r_financial_support">الدعم المالي</string>
+    <string name="r_recommend">أوصِ بتطبيق ezcall</string>
+    <string name="r_recommend_detail">شارك التطبيق مع شخص قد يستفيد منه.</string>
+    <string name="r_rate">قيّم ezcall</string>
+    <string name="r_rate_detail">اترك تقييمًا في App Store أو Google Play.</string>
+    <string name="r_rate_stores_unavailable">صفحات المتاجر العامة غير متاحة. يمكنك إرسال ملاحظات أو عرض النسخة التجريبية.</string>
+    <string name="r_open_beta">عرض نسخة آيفون التجريبية</string>
+    <string name="r_support_intro">ساعد الآخرين في العثور على ezcall أو ادعم تطويره.</string>
+</resources>

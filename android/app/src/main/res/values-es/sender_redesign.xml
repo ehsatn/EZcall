@@ -1,0 +1,35 @@
+<resources>
+    <string name="s_ui_usb_debugging">Depuración USB</string>
+    <string name="s_ui_audio_configured_with">Configurado con %1$s</string>
+    <string name="s_ui_welcome_title">Una SIM.\nDos teléfonos.</string>
+    <string name="s_ui_welcome_detail">Recibe llamadas y mensajes de este Android en un segundo teléfono.</string>
+    <string name="s_ui_start_guide">Iniciar guía de configuración</string>
+    <string name="s_ui_skip_setup">Omitir configuración</string>
+    <string name="s_ui_connection_intro">Vincula este teléfono con el que recibirá tus llamadas y mensajes.</string>
+    <string name="s_ui_sharing_intro">Elige qué puede ver o hacer el teléfono receptor. Android puede pedir permiso.</string>
+    <string name="s_ui_guide_progress">%1$d de %2$d</string>
+    <string name="s_ui_guide_paired">Tus teléfonos están vinculados</string>
+    <string name="s_ui_continue_pairing">Continuar a la vinculación</string>
+    <string name="s_ui_finish_later">Puedes terminar ahora y configurar el audio más tarde.</string>
+    <string name="s_ui_pairing_nearby">Mantén ambos teléfonos cerca</string>
+    <string name="s_ui_pairing_bluetooth">Deja Bluetooth activado durante la vinculación.</string>
+    <string name="s_ui_contacts_group">Contactos</string>
+    <string name="s_ui_app_group">Aplicación</string>
+    <string name="s_ui_settings_audio">Configura el audio, revisa los métodos o realiza una prueba.</string>
+    <string name="s_ui_audio_methods_intro">Configura el audio en el Android que tiene la SIM.</string>
+    <string name="s_ui_wireless_method">Depuración inalámbrica</string>
+    <string name="s_ui_wireless_method_detail">Usa Wi-Fi y las opciones de desarrollador en este teléfono.</string>
+    <string name="s_ui_usb_method">USB</string>
+    <string name="s_ui_call_controls_group">Controles de llamada</string>
+    <string name="s_ui_call_control_detail">Elige lo que puede hacer el receptor en Compartir.</string>
+    <string name="s_ui_help_sharing_title">¿Qué debo compartir?</string>
+    <string name="s_ui_help_pairing_title">¿Dónde escaneo el código?</string>
+    <string name="s_ui_help_audio_title">¿Para qué sirve el audio de llamadas?</string>
+    <string name="s_ui_help_done">Entendido</string>
+    <string name="s_ui_shizuku_inactive_title">Iniciar Shizuku</string>
+    <string name="s_ui_shizuku_unsupported_title">Shizuku no es compatible</string>
+    <string name="s_ui_shizuku_denied_title">Permiso denegado</string>
+    <string name="s_ui_audio_unavailable">Audio de llamadas no disponible</string>
+    <string name="s_ui_try_audio_again">Volver a intentar</string>
+    <string name="s_ui_choose_audio_method">Elegir otro método</string>
+</resources>

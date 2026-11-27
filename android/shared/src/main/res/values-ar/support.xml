@@ -1,0 +1,15 @@
+<resources>
+    <string name="ez_support_title">دعم ezcall</string>
+    <string name="ez_support_optional">مساهمة اختيارية</string>
+    <string name="ez_support_copy">نسخ العنوان</string>
+    <string name="ez_support_copied">تم نسخ العنوان</string>
+    <string name="ez_support_prompt">إذا أعجبك ezcall، يمكنك دعمه.</string>
+    <string name="ez_support_action">دعم</string>
+    <string name="ez_support_development">ساعدنا على تطوير ezcall</string>
+    <string name="ez_support_intro">المساهمة اختيارية، وتظل جميع الميزات مجانية.</string>
+    <string name="ez_support_network">استخدم الشبكة المحددة لكل محفظة.</string>
+    <string name="ez_support_feedback">تساعدنا ملاحظاتك أيضًا على تحسين ezcall.</string>
+    <string name="ez_support_feedback_action">إرسال ملاحظات</string>
+    <string name="ez_support_no_browser">لا يوجد متصفح متاح</string>
+    <string name="ez_support_star">امنح ezcall نجمة على GitHub</string>
+</resources>

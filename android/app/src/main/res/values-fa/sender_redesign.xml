@@ -1,0 +1,35 @@
+<resources>
+    <string name="s_ui_usb_debugging">اشکال‌زدایی USB</string>
+    <string name="s_ui_audio_configured_with">روش راه‌اندازی: %1$s</string>
+    <string name="s_ui_welcome_title">یک سیم‌کارت.\nدو گوشی.</string>
+    <string name="s_ui_welcome_detail">تماس‌ها و پیامک‌های این گوشی اندرویدی را روی گوشی دوم دریافت کنید.</string>
+    <string name="s_ui_start_guide">شروع راهنمای راه‌اندازی</string>
+    <string name="s_ui_skip_setup">رد کردن راه‌اندازی</string>
+    <string name="s_ui_connection_intro">این گوشی را با گوشی دریافت‌کنندهٔ تماس‌ها و پیامک‌ها جفت کنید.</string>
+    <string name="s_ui_sharing_intro">انتخاب کنید گوشی گیرنده چه چیزهایی را ببیند یا چه کارهایی انجام دهد. اندروید ممکن است مجوز بخواهد.</string>
+    <string name="s_ui_guide_progress">%1$d از %2$d</string>
+    <string name="s_ui_guide_paired">گوشی‌ها جفت شدند</string>
+    <string name="s_ui_continue_pairing">ادامه به جفت‌سازی</string>
+    <string name="s_ui_finish_later">می‌توانید حالا تمام کنید و بعداً صدا را راه‌اندازی کنید.</string>
+    <string name="s_ui_pairing_nearby">هر دو گوشی را نزدیک نگه دارید</string>
+    <string name="s_ui_pairing_bluetooth">بلوتوث را هنگام جفت‌سازی روشن نگه دارید.</string>
+    <string name="s_ui_contacts_group">مخاطبان</string>
+    <string name="s_ui_app_group">برنامه</string>
+    <string name="s_ui_settings_audio">صدا را راه‌اندازی کنید، روش‌ها را ببینید یا آزمایش کنید.</string>
+    <string name="s_ui_audio_methods_intro">صدای تماس را روی گوشی اندرویدی دارای سیم‌کارت راه‌اندازی کنید.</string>
+    <string name="s_ui_wireless_method">اشکال‌زدایی بی‌سیم</string>
+    <string name="s_ui_wireless_method_detail">از وای‌فای و گزینه‌های توسعه‌دهندهٔ همین گوشی استفاده کنید.</string>
+    <string name="s_ui_usb_method">USB</string>
+    <string name="s_ui_call_controls_group">کنترل تماس</string>
+    <string name="s_ui_call_control_detail">در بخش اشتراک‌گذاری مشخص کنید گیرنده چه کارهایی می‌تواند انجام دهد.</string>
+    <string name="s_ui_help_sharing_title">چه چیزهایی را به اشتراک بگذارم؟</string>
+    <string name="s_ui_help_pairing_title">کد را کجا اسکن کنم؟</string>
+    <string name="s_ui_help_audio_title">صدای تماس چه کاری انجام می‌دهد؟</string>
+    <string name="s_ui_help_done">متوجه شدم</string>
+    <string name="s_ui_shizuku_inactive_title">اجرای Shizuku</string>
+    <string name="s_ui_shizuku_unsupported_title">Shizuku پشتیبانی نمی‌شود</string>
+    <string name="s_ui_shizuku_denied_title">مجوز رد شد</string>
+    <string name="s_ui_audio_unavailable">صدای تماس در دسترس نیست</string>
+    <string name="s_ui_try_audio_again">تلاش دوباره</string>
+    <string name="s_ui_choose_audio_method">انتخاب روش دیگر</string>
+</resources>

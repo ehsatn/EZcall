@@ -1,6 +1,498 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Check for Updates": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بررسی به‌روزرسانی‌ها"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحقق من التحديثات"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar actualizaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher les mises à jour"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Güncellemeleri kontrol et"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controlla aggiornamenti"
+          }
+        }
+      }
+    },
+    "Last Synced": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آخرین همگام‌سازی"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آخر مزامنة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última sincronización"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dernière synchronisation"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son eşzamanlama"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultima sincronizzazione"
+          }
+        }
+      }
+    },
+    "Never": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هنوز انجام نشده"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تتم بعد"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nunca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jamais"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Henüz yapılmadı"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mai"
+          }
+        }
+      }
+    },
+    "Messages and Contacts": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیام‌ها و مخاطبین"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرسائل وجهات الاتصال"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensajes y contactos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messages et contacts"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesajlar ve kişiler"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggi e contatti"
+          }
+        }
+      }
+    },
+    "Importing SMS History…": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "در حال وارد کردن تاریخچهٔ پیامک‌ها…"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ استيراد سجل الرسائل النصية…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importando el historial de SMS…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importation de l’historique des SMS…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SMS geçmişi içe aktarılıyor…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importazione della cronologia SMS…"
+          }
+        }
+      }
+    },
+    "Manage Notifications": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدیریت اعلان‌ها"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إدارة الإشعارات"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestionar notificaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gérer les notifications"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildirimleri yönet"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestisci notifiche"
+          }
+        }
+      }
+    },
+    "Update ezcall on Android to enable automatic checks for missed messages and contact changes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "برای بررسی خودکار پیام‌های ازدست‌رفته و تغییرات مخاطبین، ezcall را در اندروید به‌روزرسانی کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حدّث ezcall على أندرويد لتفعيل التحقق التلقائي من الرسائل الفائتة وتغييرات جهات الاتصال."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiza ezcall en Android para comprobar automáticamente si hay mensajes pendientes o cambios en los contactos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettez ezcall à jour sur Android pour vérifier automatiquement les messages manqués et les modifications des contacts."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kaçırılan mesajları ve kişi değişikliklerini otomatik olarak kontrol etmek için Android’de ezcall’ı güncelleyin."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiorna ezcall su Android per controllare automaticamente i messaggi persi e le modifiche ai contatti."
+          }
+        }
+      }
+    },
+    "SMS history is imported once and stays on this iPhone. ezcall automatically checks for missed messages and contact changes when Android is nearby.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تاریخچهٔ پیامک‌ها یک‌بار وارد می‌شود و روی این آیفون می‌ماند. وقتی اندروید نزدیک باشد، ezcall پیام‌های ازدست‌رفته و تغییرات مخاطبین را خودکار بررسی می‌کند."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُستورد سجل الرسائل النصية مرة واحدة ويبقى على هذا الآيفون. يتحقق ezcall تلقائيًا من الرسائل الفائتة وتغييرات جهات الاتصال عندما يكون جهاز أندرويد قريبًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El historial de SMS se importa una vez y se queda en este iPhone. ezcall comprueba automáticamente si hay mensajes pendientes o cambios en los contactos cuando Android está cerca."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’historique des SMS est importé une seule fois et reste sur cet iPhone. ezcall vérifie automatiquement les messages manqués et les modifications des contacts lorsque l’appareil Android est à proximité."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SMS geçmişi bir kez içe aktarılır ve bu iPhone’da kalır. Android cihaz yakındayken ezcall, kaçırılan mesajları ve kişi değişikliklerini otomatik olarak kontrol eder."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La cronologia degli SMS viene importata una sola volta e rimane su questo iPhone. ezcall controlla automaticamente i messaggi persi e le modifiche ai contatti quando Android è nelle vicinanze."
+          }
+        }
+      }
+    },
+    "iPhone Contacts for Keypad": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مخاطبین آیفون برای شماره‌گیری"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهات اتصال iPhone للوحة الأرقام"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contactos del iPhone en el teclado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contacts iPhone sur le clavier"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tuş takımı için iPhone kişileri"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contatti iPhone per il tastierino"
+          }
+        }
+      }
+    },
+    "Call History": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تاریخچه تماس‌ها"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سجل المكالمات"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial de llamadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique des appels"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arama geçmişi"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cronologia chiamate"
+          }
+        }
+      }
+    },
+    "Send Feedback": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ارسال بازخورد"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال ملاحظات"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar comentarios"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer un commentaire"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geri bildirim gönder"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia un commento"
+          }
+        }
+      }
+    },
+    "Rate and Review": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امتیاز و ثبت نظر"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقييم وكتابة مراجعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valorar y escribir una reseña"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noter et laisser un avis"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puan ver ve yorum yaz"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valuta e scrivi una recensione"
+          }
+        }
+      }
+    },
     "Saved Data": {
       "extractionState": "manual",
       "localizations": {

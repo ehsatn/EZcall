@@ -1,6 +1,53 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "NSContactsUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show matching iPhone contacts as you enter a number on the EasyCall keypad."
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هنگام وارد کردن شماره در صفحه‌کلید ایزی‌کال، مخاطبین منطبق آیفون را نمایش می‌دهد."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض جهات اتصال iPhone المطابقة عند إدخال رقم على لوحة أرقام EasyCall."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra los contactos del iPhone que coinciden al introducir un número en el teclado de EasyCall."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche les contacts iPhone correspondants lorsque vous saisissez un numéro sur le clavier d’EasyCall."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EasyCall tuş takımına numara girerken eşleşen iPhone kişilerini gösterir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra i contatti iPhone corrispondenti mentre digiti un numero sul tastierino di EasyCall."
+          }
+        }
+      }
+    },
     "NSBluetoothAlwaysUsageDescription": {
       "extractionState": "manual",
       "localizations": {

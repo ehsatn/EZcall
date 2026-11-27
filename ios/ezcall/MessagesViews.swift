@@ -76,21 +76,31 @@ struct MessagesView: View {
                 .messageBarGlass()
                 Button {
                     searching = false
-                    showCalls()
+                    composing = true
                 } label: {
-                    Image(systemName: "phone.fill")
-                        .font(.title3)
-                        .frame(width: 48, height: 48)
+                    Image(systemName: "square.and.pencil")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 54, height: 54)
                         .messageBarGlass()
                 }
-                .accessibilityLabel("Back to Calls")
+                .accessibilityLabel("New Message")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("New Message", systemImage: "square.and.pencil") { composing = true }
+                Button {
+                    searching = false
+                    showCalls()
+                } label: {
+                    Image(systemName: "phone.fill")
+                        .font(.title3.weight(.semibold))
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .accessibilityLabel("Back to Calls")
+                .tint(Color.primary)
             }
         }
         .sheet(isPresented: $composing) {
@@ -231,7 +241,7 @@ struct ConversationView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Button { showContact = true } label: {
-                    Avatar(name: contactName, size: 44, conversationTint: true)
+                    Avatar(name: contactName, size: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(relay.name(for: address))
@@ -239,6 +249,7 @@ struct ConversationView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Call", systemImage: "phone") { relay.dial(address) }
+                    .tint(Color.primary)
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {

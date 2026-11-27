@@ -68,8 +68,6 @@
     <string name="s_relay">Il rilascio</string>
     <string name="s_notifications_in_status">Permettere ezcall notifiche per visualizzare la sua icona di rilascio nella barra dello stato.</string>
     <string name="s_battery_action">Permettere il rilascio con lo schermo</string>
-    <string name="s_donate">Donare</string>
-    <string name="s_no_browser">Nessun browser è disponibile.</string>
     <string name="s_android_battery_setting">Adattare la configurazione della batteria Android</string>
     <string name="s_battery_already_off">L\'ottimizzazione della batteria è già aperta per ezcall.</string>
     <string name="s_battery_help">Nelle impostazioni della batteria, selezionare Unlimited per ezcall per mantenere il relay attivo.</string>

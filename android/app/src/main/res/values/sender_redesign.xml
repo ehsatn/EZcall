@@ -1,0 +1,36 @@
+<resources>
+    <string name="s_ui_usb_debugging">USB debugging</string>
+    <string name="s_ui_shizuku_name" translatable="false">Shizuku</string>
+    <string name="s_ui_audio_configured_with">Set up with %1$s</string>
+    <string name="s_ui_welcome_title">One SIM.\nTwo phones.</string>
+    <string name="s_ui_welcome_detail">Get calls and texts from this Android phone on a second phone.</string>
+    <string name="s_ui_start_guide">Start setup guide</string>
+    <string name="s_ui_skip_setup">Skip setup</string>
+    <string name="s_ui_connection_intro">Pair this phone with the phone that will receive your calls and texts.</string>
+    <string name="s_ui_sharing_intro">Choose what the receiving phone can see or do. Android may ask for permission.</string>
+    <string name="s_ui_guide_progress">%1$d of %2$d</string>
+    <string name="s_ui_guide_paired">Your phones are paired</string>
+    <string name="s_ui_continue_pairing">Continue to pairing</string>
+    <string name="s_ui_finish_later">You can finish now and set up audio later.</string>
+    <string name="s_ui_pairing_nearby">Keep both phones nearby</string>
+    <string name="s_ui_pairing_bluetooth">Leave Bluetooth on while pairing.</string>
+    <string name="s_ui_contacts_group">Contacts</string>
+    <string name="s_ui_app_group">App</string>
+    <string name="s_ui_settings_audio">Set up audio, review setup methods or run a test.</string>
+    <string name="s_ui_audio_methods_intro">Set up call audio on the Android phone with your SIM.</string>
+    <string name="s_ui_wireless_method">Wireless debugging</string>
+    <string name="s_ui_wireless_method_detail">Use Wi-Fi and Developer options on this phone.</string>
+    <string name="s_ui_usb_method">USB</string>
+    <string name="s_ui_call_controls_group">Call controls</string>
+    <string name="s_ui_call_control_detail">Choose what the receiver can do under Sharing.</string>
+    <string name="s_ui_help_sharing_title">What should I share?</string>
+    <string name="s_ui_help_pairing_title">Where do I scan the code?</string>
+    <string name="s_ui_help_audio_title">What does call audio do?</string>
+    <string name="s_ui_help_done">Got it</string>
+    <string name="s_ui_shizuku_inactive_title">Start Shizuku</string>
+    <string name="s_ui_shizuku_unsupported_title">Shizuku isn’t supported</string>
+    <string name="s_ui_shizuku_denied_title">Permission denied</string>
+    <string name="s_ui_audio_unavailable">Call audio unavailable</string>
+    <string name="s_ui_try_audio_again">Try again</string>
+    <string name="s_ui_choose_audio_method">Choose another method</string>
+</resources>

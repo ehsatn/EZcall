@@ -68,8 +68,6 @@
     <string name="s_relay">Religión</string>
     <string name="s_notifications_in_status">Permite que ezcall notificaciones muestren su icono de relay en la barra de estado.</string>
     <string name="s_battery_action">Permite relajar con la pantalla</string>
-    <string name="s_donate">Donar</string>
-    <string name="s_no_browser">No hay navegador disponible.</string>
     <string name="s_android_battery_setting">Adaptación de la batería de Android</string>
     <string name="s_battery_already_off">La optimización de la batería ya está abierta para ezcall.</string>
     <string name="s_battery_help">En las configuraciones de la batería, seleccione Unrestricted para ezcall para mantener el relay activo.</string>
