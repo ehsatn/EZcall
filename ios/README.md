@@ -19,6 +19,8 @@ xcrun --sdk macosx swiftc ios/ezcall/RelayWire.swift ios/ezcall/LocalData.swift 
 "$check_dir/wire-check" tests/protocol-v1.json
 ```
 
+Run the call-routing source checks from the repository root with `swift ios/Checks/CallRoutingCheck.swift`.
+
 1. Complete the setup guide in ezcall on Android and show the Bluetooth pairing QR. On iPhone, scan the code in ezcall and finish the notification and call-audio permission screens.
 2. Tap the gear at the top left of **Calls** and use **Test Connection**. Use the bottom tabs to switch between **Calls**, **Contacts**, **Keypad** and **Messages**. If the link stays down, Calls shows its status at the top of the list.
 3. In **Messages**, search conversations, compose an SMS or reply inside a thread. A sent SMS shows **Sending…**, then **Sent** or **Not Delivered** with a retry option. Tap the name at the top of a thread for the contact card, or the phone button to call. Enable **Send SMS from the receiving phone** on Android to use its SIM. SMS alerts use the iPhone’s Show Previews setting for the sender and message text.

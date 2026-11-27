@@ -25,6 +25,9 @@ jobs:
           xcrun --sdk macosx swiftc ios/ezcall/RelayWire.swift ios/ezcall/CallAudio.swift ios/Checks/AudioJitterCheck.swift -o "$RUNNER_TEMP/ezcall-audio-check"
           "$RUNNER_TEMP/ezcall-audio-check"
 
+      - name: Verify CallKit routing
+        run: xcrun swift ios/Checks/CallRoutingCheck.swift
+
       - name: Build for a physical iPhone
         run: |
           xcodebuild -project ios/ezcall.xcodeproj -scheme ezcall -configuration Release \
