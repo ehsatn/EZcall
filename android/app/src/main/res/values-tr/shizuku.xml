@@ -2,9 +2,12 @@
 <resources>
     <string name="s_audio_shizuku">Shizuku ile kur</string>
     <string name="s_audio_shizuku_restart">Shizuku ile yeniden başlat</string>
-    <string name="s_audio_shizuku_detail">Bu telefonda Shizuku’yu başlatın ve arama sesi için ezcall’a izin verin.</string>
+    <string name="s_audio_shizuku_detail">Shizuku 13 veya üstünü root ya da Android hata ayıklama modunda kullan.</string>
     <string name="s_audio_shizuku_start">Bu telefona Shizuku’yu yükleyip çalıştırın ve tekrar deneyin.</string>
-    <string name="s_audio_shizuku_unsupported">Arama sesi için Android hata ayıklama ile başlatılmış Shizuku 13 veya üzeri gerekir.</string>
+    <string name="s_audio_shizuku_unsupported">Arama sesi, root veya Android hata ayıklama modunda çalışan Shizuku 13 veya üzerini gerektirir.</string>
     <string name="s_audio_shizuku_denied">Shizuku’nun İzin verilen uygulamalar bölümünde ezcall’a izin verip tekrar deneyin.</string>
     <string name="s_audio_shizuku_failed">Arama sesi Shizuku ile başlatılamadı. Shizuku’nun çalıştığını ve ezcall’ın izinli olduğunu kontrol edin.</string>
+    <string name="s_audio_root_name">Doğrudan root</string>
+    <string name="s_audio_root_detail">Shizuku veya Android hata ayıklama olmadan arama sesini başlatmak için root yöneticisinde ezcall’a izin verin.</string>
+    <string name="s_audio_root_failed">Arama sesi root ile başlatılamadı. İzni kontrol edin veya Shizuku, kablosuz hata ayıklama ya da USB yöntemini seçin.</string>
 </resources>

@@ -1,11 +1,8 @@
 package app.ezcall.android
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.json.JSONObject
 import java.util.BitSet
 
@@ -148,15 +145,4 @@ internal class AudioTestLog(private val role: String, val testID: String? = null
         }
     }
 
-    fun show(context: Context, title: Int, copy: Int) {
-        MaterialAlertDialogBuilder(context)
-            .setTitle(title)
-            .setMessage(text())
-            .setPositiveButton(copy) { _, _ ->
-                context.getSystemService(ClipboardManager::class.java)
-                    .setPrimaryClip(ClipData.newPlainText(context.getString(title), text()))
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
 }

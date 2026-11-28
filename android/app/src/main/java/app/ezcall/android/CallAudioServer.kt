@@ -11,6 +11,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Looper
 import android.os.Process
@@ -32,16 +33,17 @@ import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 /**
- * Call audio component. ezcall starts it through this phone's own Wireless debugging connection, so it runs as the
- * shell user, which may capture call audio. It only exchanges call audio with an authenticated ezcall relay on the
- * loopback interface.
+ * Call audio component started as shell or root. It exchanges call audio with an authenticated ezcall relay on loopback.
  */
 @SuppressLint("MissingPermission")
 class CallAudioServer private constructor(private val token: ByteArray) {
-    private val audio: AudioManager? by lazy(::shellAudioManager)
+    private val audio: AudioManager? by lazy(::audioManager)
     private val clients = AtomicInteger()
     private val handset = HandsetAudio()
     private var media: Media? = null
+    // Learned during this component's lifetime: the HAL only carries injected audio outside call redirect mode.
+    @Volatile private var skipRedirect = false
+    @Volatile private var lastCheck = "none"
 
     private fun serve(socket: Socket) {
         var owner: Media? = null
@@ -82,6 +84,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         val digit = payload.singleOrNull()?.toInt()?.toChar()
                         if (digit != null && digit in AudioBridge.DTMF_DIGITS) owner?.queueDtmf(digit)
                     }
+                    AudioBridge.DIAGNOSE -> AudioBridge.write(output, AudioBridge.DIAGNOSTICS, diagnostics())
                     AudioBridge.SHUTDOWN -> {
                         log("Shutdown requested")
                         synchronized(this) { media?.close() }
@@ -143,6 +146,9 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         @Volatile private var uplinkGeneration = 0
         @Volatile private var failed = false
         @Volatile private var lastDownlinkAt = 0L
+        @Volatile private var check: UplinkCheck? = null
+        @Volatile private var monitor: Thread? = null
+        @Volatile private var checkDone = false
 
         fun open() {
             if (!canIntercept()) return
@@ -191,7 +197,10 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 receiverReady = true
                 log("Call audio relay active")
             }.onFailure { mediaFailed("Android couldn't relay call audio to the receiving phone.", it) }
-            if (receiverReady) handset.silence(this)
+            if (receiverReady) {
+                handset.silence(this)
+                startCheck()
+            }
         }
 
         fun relaying() = running && receiverReady && !failed
@@ -214,6 +223,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             pauseRelay(preserveGrace)
             runCatching { record?.stop() }
             workers.forEach { it.join(500) }
+            monitor?.join(500)
             runCatching { record?.release() }
             runCatching { track?.stop() }
             runCatching { track?.release() }
@@ -307,6 +317,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         toneOffset += pcm.size
                         if (toneOffset >= signal.size) tone = null
                     }
+                    check?.injected(SystemClock.elapsedRealtime(), UplinkCheck.rms(pcm))
                     var offset = 0
                     while (running && receiverReady && generation == uplinkGeneration && offset < pcm.size) {
                         checkTelephonyOutput(sink)
@@ -319,6 +330,112 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             } catch (error: Exception) {
                 mediaFailed("Android stopped receiving call audio.", error)
             }
+        }
+
+        /**
+         * Confirms in the live call that the receiver's voice reaches the modem, since a HAL can accept the injection
+         * track and still drop its audio. Tries the other audio mode once before reporting failure.
+         */
+        private fun startCheck() {
+            if (checkDone || monitor != null || !running) return
+            val worker = thread(start = false, name = "xcall-uplink-check", isDaemon = true) {
+                try {
+                    watchUplink()
+                } finally {
+                    check = null
+                    monitor = null
+                }
+            }
+            monitor = worker
+            worker.start()
+        }
+
+        private fun watchUplink() {
+            // Let the handset redirect settle first, so the check measures the mode the call stays in.
+            if (!settle()) return
+            val probe = openUplinkMonitor()
+            if (probe == null) {
+                finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture unavailable")
+                return
+            }
+            try {
+                val frame = ByteArray(probe.sampleRate / 50 * 2)
+                var current = UplinkCheck().also { check = it }
+                var deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
+                var nextVerdict = SystemClock.elapsedRealtime() + 1_000
+                var nextConflictCheck = 0L
+                while (running && receiverReady && !failed) {
+                    val count = probe.read(frame, 0, frame.size)
+                    if (count <= 0) return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture read $count")
+                    val now = SystemClock.elapsedRealtime()
+                    current.captured(now, UplinkCheck.rms(frame, count))
+                    if (now >= nextConflictCheck) {
+                        nextConflictCheck = now + 100
+                        // Never let the check take call audio away from the receiver.
+                        if (record?.activeRecordingConfiguration?.isClientSilenced == true ||
+                            probe.activeRecordingConfiguration?.isClientSilenced == true) {
+                            return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture conflicts with call capture")
+                        }
+                    }
+                    if (now < nextVerdict) continue
+                    nextVerdict = now + 1_000
+                    when (current.evaluate(now)) {
+                        UplinkCheck.Verdict.REACHED -> return finishCheck(AudioBridge.CHECK_REACHED, "receiver voice reached the call")
+                        UplinkCheck.Verdict.NOT_REACHED -> {
+                            if (!handset.leaveRedirect()) {
+                                return finishCheck(AudioBridge.CHECK_NOT_REACHED, "receiver voice missing from the call")
+                            }
+                            log("Receiver voice missing in call redirect mode; checking normal call mode")
+                            if (!settle()) return
+                            current = UplinkCheck().also { check = it }
+                            deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
+                            nextVerdict = SystemClock.elapsedRealtime() + 1_000
+                        }
+                        UplinkCheck.Verdict.PENDING -> if (now > deadline) {
+                            return finishCheck(AudioBridge.CHECK_UNKNOWN, "not enough receiver speech to decide")
+                        }
+                    }
+                }
+            } catch (error: Exception) {
+                finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink check failed: ${error.javaClass.simpleName}")
+            } finally {
+                runCatching { probe.stop() }
+                probe.release()
+            }
+        }
+
+        private fun settle(): Boolean {
+            val until = SystemClock.elapsedRealtime() + CHECK_SETTLE_MS
+            while (running && receiverReady && SystemClock.elapsedRealtime() < until) Thread.sleep(50)
+            return running && receiverReady
+        }
+
+        private fun finishCheck(result: Int, detail: String) {
+            if (checkDone) return
+            checkDone = true
+            val redirect = handset.isRedirected()
+            if (result == AudioBridge.CHECK_NOT_REACHED) skipRedirect = false // Neither mode worked; keep the default.
+            val mode = if (redirect) AudioBridge.MODE_REDIRECT else AudioBridge.MODE_IN_CALL
+            lastCheck = "$detail (${if (redirect) "redirect" else "in-call"} mode)"
+            log("Uplink check: $lastCheck")
+            runCatching { AudioBridge.write(output, AudioBridge.UPLINK_CHECK, byteArrayOf(result.toByte(), mode.toByte())) }
+        }
+
+        private fun openUplinkMonitor(): AudioRecord? {
+            if (Build.VERSION.SDK_INT < 33) return null
+            for (rate in intArrayOf(AudioBridge.SAMPLE_RATE, 16_000, 8_000)) {
+                val minimum = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                if (minimum <= 0) continue
+                val format = AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
+                val probe = runCatching {
+                    AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_UPLINK).setAudioFormat(format)
+                        .setBufferSizeInBytes(maxOf(minimum, rate / 50 * 2 * 4)).setContext(AudioProcessContext.context)
+                        .build()
+                }.getOrNull() ?: continue
+                if (started(probe)) return probe
+            }
+            return null
         }
 
         private fun checkTelephonyOutput(sink: AudioTrack) {
@@ -372,8 +489,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
     @SuppressLint("InlinedApi")
     private inner class HandsetAudio {
         private val control = Executors.newSingleThreadScheduledExecutor()
-        // Only touched on the control thread.
-        private var redirected = false
+        // Written only on the control thread.
+        @Volatile private var redirected = false
         private var reapplied = 0
         private var savedVolume: Int? = null
         private var mutedByRelay = false
@@ -387,9 +504,27 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 restoreTask?.cancel(false)
                 restoreTask = null
                 mutePlayback()
-                if (!redirected) redirect(owner)
+                if (!redirected && !skipRedirect) redirect(owner)
             }
         }
+
+        fun isRedirected() = redirected
+
+        /** Returns the call to Telecom's own call mode for this component's lifetime. False if it wasn't redirected. */
+        fun leaveRedirect(): Boolean = runCatching {
+            control.submit<Boolean> {
+                val manager = audio ?: return@submit false
+                if (!redirected) return@submit false
+                skipRedirect = true
+                watch?.cancel(false)
+                watch = null
+                redirected = false
+                restoreMicrophone(manager)
+                releaseMode(manager)
+                log("Left call redirect mode")
+                true
+            }.get(2, TimeUnit.SECONDS)
+        }.getOrDefault(false)
 
         fun restore(wait: Boolean = false, delayed: Boolean = false) {
             val task = control.submit(Runnable {
@@ -540,13 +675,35 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         AudioManager::class.java.getMethod("isPstnCallAudioInterceptable").invoke(audio) == true
     }.getOrDefault(false)
 
+    private fun diagnostics(): ByteArray {
+        val manager = audio
+        val telephony = listOf(AudioManager.GET_DEVICES_OUTPUTS to "tx", AudioManager.GET_DEVICES_INPUTS to "rx")
+            .joinToString(" ") { (flag, name) ->
+                val present = runCatching {
+                    manager?.getDevices(flag)?.any { it.type == AudioDeviceInfo.TYPE_TELEPHONY }
+                }.getOrNull()
+                "$name=$present"
+            }
+        val soc = "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL} (${Build.HARDWARE})"
+        val header = buildString {
+            appendLine("Component: uid=${Process.myUid()} sdk=${Build.VERSION.SDK_INT} android=${Build.VERSION.RELEASE}")
+            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE}) soc=$soc")
+            appendLine("Build: ${Build.FINGERPRINT}")
+            appendLine("Interceptable: ${canIntercept()} mode=${runCatching { manager?.mode }.getOrNull()} telephony $telephony")
+            appendLine("Redirect: active=${handset.isRedirected()} skipped=$skipRedirect")
+            appendLine("Last uplink check: $lastCheck")
+            appendLine("Log:")
+        }
+        return fitText(header, synchronized(history) { history.toList() })
+    }
+
     private fun hidden(name: String, format: AudioFormat): Any? =
         AudioManager::class.java.getMethod(name, AudioFormat::class.java).invoke(audio, format)
 
-    private fun shellAudioManager(): AudioManager? = runCatching {
+    private fun audioManager(): AudioManager? = runCatching {
         AudioManager::class.java.getDeclaredConstructor(Context::class.java).apply { isAccessible = true }
-            .newInstance(ShellContext.context)
-    }.recoverCatching { ShellContext.context.getSystemService(AudioManager::class.java) }.getOrNull()
+            .newInstance(AudioProcessContext.context)
+    }.recoverCatching { AudioProcessContext.context.getSystemService(AudioManager::class.java) }.getOrNull()
 
     companion object {
         const val TOKEN_ENV = "XCALL_AUDIO_TOKEN"
@@ -555,6 +712,10 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         private const val REDIRECT_SETTLE_MS = 400L
         private const val HANDSET_RECOVERY_MS = 5_000L
         private const val MAX_REDIRECT_RETRIES = 2
+        private const val CHECK_SETTLE_MS = 1_500L
+        private const val CHECK_TIMEOUT_MS = 45_000L
+        private const val LOG_LINES = 150
+        private val history = ArrayDeque<String>()
 
         // shortcut: modem mute is verified on this model and Android version, expand after testing other builds.
         internal fun supportsHandsetMicMute(model: String, sdk: Int) = model == "SM-A175F" && sdk == 37
@@ -568,14 +729,15 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 exitProcess(2)
             }
             Looper.prepareMainLooper()
-            ShellContext.install()
+            AudioProcessContext.install()
+            val server = CallAudioServer(token)
+            if (Process.myUid() == 0 && !server.canIntercept()) exitProcess(4)
             val listener = try {
                 ServerSocket(port, 4, InetAddress.getLoopbackAddress())
             } catch (_: IOException) {
                 log("Port $port is busy")
                 exitProcess(3)
             }
-            val server = CallAudioServer(token)
             log("Ready, sdk=${Build.VERSION.SDK_INT}, intercept=${server.canIntercept()}")
             while (true) {
                 val socket = try {
@@ -599,14 +761,31 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             }
         }
 
-        private fun log(message: String) = System.err.println("$PROCESS_NAME: $message")
+        private fun log(message: String) {
+            System.err.println("$PROCESS_NAME: $message")
+            synchronized(history) {
+                history.addLast("${SystemClock.elapsedRealtime() / 1000}s $message")
+                while (history.size > LOG_LINES) history.removeFirst()
+            }
+        }
+
+        internal fun fitText(header: String, lines: List<String>, limit: Int = AudioBridge.MAX_TEXT): ByteArray {
+            var kept = lines
+            while (true) {
+                val text = (header + kept.joinToString(separator = System.lineSeparator())).toByteArray(Charsets.UTF_8)
+                if (text.size <= limit) return text
+                if (kept.isEmpty()) return text.copyOf(limit)
+                kept = kept.drop(maxOf(1, kept.size / 8))
+            }
+        }
     }
 }
 
-// app_process starts without an application. Audio clients need a context that identifies the shell package.
+// app_process starts without an application. Audio clients still need attribution for the process identity.
 @SuppressLint("PrivateApi", "DiscouragedPrivateApi", "SoonBlockedPrivateApi", "StaticFieldLeak")
-private object ShellContext {
-    private const val SHELL_PACKAGE = "com.android.shell"
+private object AudioProcessContext {
+    private val uid = Process.myUid()
+    private val identityPackage = if (uid == 0) "root" else "com.android.shell"
     lateinit var context: Context
         private set
 
@@ -624,11 +803,11 @@ private object ShellContext {
         runCatching {
             val bindingClass = Class.forName("android.app.ActivityThread\$AppBindData")
             val binding = bindingClass.getDeclaredConstructor().apply { isAccessible = true }.newInstance()
-            bindingClass.field("appInfo").set(binding, ApplicationInfo().apply { packageName = SHELL_PACKAGE })
+            bindingClass.field("appInfo").set(binding, ApplicationInfo().apply { packageName = identityPackage })
             threadClass.field("mBoundApplication").set(activityThread, binding)
         }
         val system = threadClass.getDeclaredMethod("getSystemContext").invoke(activityThread) as Context
-        context = ShellIdentity(system)
+        context = ProcessIdentity(system)
         runCatching {
             val application = Application()
             ContextWrapper::class.java.field("mBase").set(application, context)
@@ -638,11 +817,11 @@ private object ShellContext {
 
     private fun Class<*>.field(name: String) = getDeclaredField(name).apply { isAccessible = true }
 
-    private class ShellIdentity(base: Context) : ContextWrapper(base) {
-        override fun getPackageName() = SHELL_PACKAGE
-        override fun getOpPackageName() = SHELL_PACKAGE
+    private class ProcessIdentity(base: Context) : ContextWrapper(base) {
+        override fun getPackageName() = identityPackage
+        override fun getOpPackageName() = identityPackage
         override fun getAttributionSource(): AttributionSource =
-            AttributionSource.Builder(Process.SHELL_UID).setPackageName(SHELL_PACKAGE).build()
+            AttributionSource.Builder(uid).setPackageName(identityPackage).build()
         override fun getApplicationContext(): Context = this
     }
 }

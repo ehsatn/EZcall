@@ -1,0 +1,9 @@
+<resources>
+    <string name="s_audio_root_request">Permite el acceso a ezcall en el gestor de root para continuar.</string>
+    <string name="s_audio_root_starting">Configurando el audio de llamadas con root directo.</string>
+    <string name="s_ui_test_ready">Comprueba la reproducción y el micrófono antes de la primera llamada.</string>
+    <string name="s_ui_ready_methods">Métodos de configuración</string>
+    <string name="s_ui_ready_methods_detail">Consulta los métodos disponibles.</string>
+    <string name="s_test_waiting_receiver">Esperando al receptor</string>
+    <string name="s_test_report_detail">Comprueba la reproducción, el micrófono y el retorno de voz.</string>
+</resources>

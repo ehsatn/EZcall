@@ -64,6 +64,12 @@ internal class ReceiverAudioTest(val id: String, context: Context) {
     }, SystemClock::elapsedRealtime).apply { describeDevice(context) }
 }
 
+internal fun AudioTestLog.audioChecks() = listOf(
+    ReceiverTestStep.CUE_PLAYED in this,
+    ReceiverTestStep.MIC_SIGNAL in this,
+    ReceiverTestStep.ECHO_PLAYED in this
+)
+
 internal class CallAction(val id: String, val command: String, val startedAt: Long) {
     fun accepts(callID: String, state: String) = id == callID &&
         (state == "ended" || (command != "call_end" && state == "active"))
@@ -210,6 +216,7 @@ internal class ReceiverService : Service() {
         RelayConnectionService.unregister(this)
         enrolling = false
         state.paired = false
+        state.audioTest = null
         state.data = ReceiverData()
         state.attempts = emptyList()
         alerts.cancel(SMS_ALERT)
@@ -450,6 +457,7 @@ internal class ReceiverService : Service() {
                 leaving = true
                 RelayConnectionService.unregister(this)
                 state.paired = false
+                state.audioTest = null
                 state.data = ReceiverData()
                 state.attempts = emptyList()
                 stopAudio()

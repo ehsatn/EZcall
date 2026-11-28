@@ -1,0 +1,9 @@
+<resources>
+    <string name="s_audio_root_request">Allow ezcall in your root manager to continue.</string>
+    <string name="s_audio_root_starting">Setting up call audio with Direct root.</string>
+    <string name="s_ui_test_ready">Check playback and microphone before your first call.</string>
+    <string name="s_ui_ready_methods">Setup methods</string>
+    <string name="s_ui_ready_methods_detail">Review available setup methods</string>
+    <string name="s_test_waiting_receiver">Waiting for the receiver</string>
+    <string name="s_test_report_detail">Check playback, microphone and echo signals.</string>
+</resources>

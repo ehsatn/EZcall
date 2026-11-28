@@ -6,4 +6,8 @@
     </style>
     <color name="receiver_surface">#F5F6FA</color>
     <color name="receiver_call_surface">#E9EDFC</color>
+    <color name="receiver_call_end">#B3261E</color>
+    <color name="receiver_pairing_body">#EDF2FF</color>
+    <color name="receiver_pairing_settings">#EDF2FF</color>
+    <color name="receiver_pairing_settings_ink">@color/ezcall_on_surface</color>
 </resources>

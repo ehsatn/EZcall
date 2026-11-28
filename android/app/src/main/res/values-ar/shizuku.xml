@@ -2,9 +2,12 @@
 <resources>
     <string name="s_audio_shizuku">الإعداد باستخدام Shizuku</string>
     <string name="s_audio_shizuku_restart">إعادة التشغيل باستخدام Shizuku</string>
-    <string name="s_audio_shizuku_detail">شغّل Shizuku على هذا الهاتف واسمح لتطبيق ezcall باستخدامه لصوت المكالمات.</string>
+    <string name="s_audio_shizuku_detail">استخدم Shizuku 13 أو أحدث في وضع الجذر أو تصحيح أخطاء Android.</string>
     <string name="s_audio_shizuku_start">ثبّت Shizuku وشغّله على هذا الهاتف ثم حاول مرة أخرى.</string>
-    <string name="s_audio_shizuku_unsupported">يتطلب صوت المكالمات Shizuku 13 أو أحدث مشغّلًا عبر تصحيح أخطاء Android.</string>
+    <string name="s_audio_shizuku_unsupported">يتطلب صوت المكالمات Shizuku 13 أو أحدث يعمل بوضع الجذر أو تصحيح أخطاء Android.</string>
     <string name="s_audio_shizuku_denied">اسمح لتطبيق ezcall ضمن التطبيقات المصرّح لها في Shizuku ثم حاول مرة أخرى.</string>
     <string name="s_audio_shizuku_failed">تعذّر تشغيل صوت المكالمات عبر Shizuku. تحقق من تشغيله ومن إذن ezcall.</string>
+    <string name="s_audio_root_name">صلاحية الجذر مباشرة</string>
+    <string name="s_audio_root_detail">اسمح لـ ezcall في مدير صلاحيات الجذر لتشغيل صوت المكالمات دون Shizuku أو تصحيح أخطاء Android.</string>
+    <string name="s_audio_root_failed">تعذّر تشغيل صوت المكالمات بصلاحية الجذر. تحقّق من الإذن أو اختر Shizuku أو تصحيح الأخطاء اللاسلكي أو USB.</string>
 </resources>

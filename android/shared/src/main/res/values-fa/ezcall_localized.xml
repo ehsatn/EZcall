@@ -10,8 +10,6 @@
     <string name="ez_continue">ادامه</string>
     <string name="ez_contacts">مخاطبان</string>
     <string name="ez_brand">ایزی کال</string>
-    <string name="ez_test_log">لاگ آزمایش صدا</string>
-    <string name="ez_test_copy">کپی لاگ</string>
     <string name="ez_test_echo_heard">صدای خودم را شنیدم</string>
     <string name="ez_test_echo_confirmed">شنیدن صدای برگشتی تأیید شد</string>
     <string name="ez_test_speak_after_tones">بعد از بوق‌های آزمایشی حرف بزنید. ایزی‌کال صدا را خودکار بررسی می‌کند.</string>

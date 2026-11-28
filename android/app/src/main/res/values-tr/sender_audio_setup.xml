@@ -1,0 +1,9 @@
+<resources>
+    <string name="s_audio_root_request">Devam etmek için root yöneticisinde ezcall’a izin ver.</string>
+    <string name="s_audio_root_starting">Arama sesi doğrudan root ile kuruluyor.</string>
+    <string name="s_ui_test_ready">İlk aramadan önce oynatmayı ve mikrofonu kontrol et.</string>
+    <string name="s_ui_ready_methods">Kurulum yöntemleri</string>
+    <string name="s_ui_ready_methods_detail">Kullanılabilir kurulum yöntemlerini gör.</string>
+    <string name="s_test_waiting_receiver">Alıcı bekleniyor</string>
+    <string name="s_test_report_detail">Oynatmayı, mikrofonu ve geri dönen sesi kontrol et.</string>
+</resources>

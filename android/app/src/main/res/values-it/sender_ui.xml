@@ -16,7 +16,7 @@
     <string name="s_ui_back_to_audio">Torna ad Audio</string>
     <string name="s_ui_audio_setup_choices">Shizuku, debug wireless o USB</string>
     <string name="s_audio_usb">Configura tramite USB</string>
-    <string name="s_audio_usb_detail">Avvia l’audio delle chiamate da un computer con Android Platform-Tools.</string>
+    <string name="s_audio_usb_detail">Usa un cavo e un computer con Android Platform-Tools.</string>
     <string name="s_audio_usb_steps">Attiva il debug USB in Opzioni sviluppatore. Collega il telefono al computer e accetta la richiesta di debug. Lascia aperta questa finestra ed esegui il comando seguente entro due minuti:\n\n%1$s</string>
     <string name="s_audio_usb_copy">Copia comando</string>
     <string name="s_audio_usb_failed">La configurazione USB non ha avviato l’audio delle chiamate. Controlla la richiesta di debug USB ed esegui di nuovo il comando da una nuova finestra di configurazione.</string>

@@ -56,10 +56,12 @@ internal class AudioWaveformView(context: Context, private val waveform: AudioWa
 
     override fun onDraw(canvas: Canvas) {
         val samples = waveform.snapshot()
-        val stride = width.toFloat() / samples.size
+        val bars = samples.size / 2
+        val stride = width.toFloat() / bars
         val center = height * 0.5f
         paint.strokeWidth = (stride * 0.58f).coerceAtLeast(1f)
-        samples.forEachIndexed { index, peak ->
+        for (index in 0 until bars) {
+            val peak = maxOf(samples[index * 2], samples[index * 2 + 1])
             val x = (index + 0.5f) * stride
             val level = sqrt(peak / 32_768f)
             val amplitude = maxOf(paint.strokeWidth / 2, center * 0.85f * level)

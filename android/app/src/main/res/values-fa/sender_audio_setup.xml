@@ -1,0 +1,9 @@
+<resources>
+    <string name="s_audio_root_request">برای ادامه، در برنامهٔ مدیریت روت به ezcall اجازه بدهید.</string>
+    <string name="s_audio_root_starting">در حال راه‌اندازی صدای تماس با روت مستقیم.</string>
+    <string name="s_ui_test_ready">پیش از اولین تماس، پخش صدا و میکروفون را بررسی کنید.</string>
+    <string name="s_ui_ready_methods">روش‌های راه‌اندازی</string>
+    <string name="s_ui_ready_methods_detail">روش‌های راه‌اندازی موجود را ببینید.</string>
+    <string name="s_test_waiting_receiver">در انتظار گیرنده</string>
+    <string name="s_test_report_detail">پخش، میکروفون و برگشت صدا را بررسی کنید.</string>
+</resources>

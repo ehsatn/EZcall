@@ -8,7 +8,6 @@ import android.os.Binder
 import android.os.IBinder
 import android.os.Process
 import androidx.annotation.Keep
-import java.io.File
 import java.io.IOException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
@@ -19,15 +18,12 @@ import rikka.shizuku.Shizuku
 class ShizukuAudioLauncher(private val context: Context) : IShizukuAudioLauncher.Stub() {
     override fun start(port: Int, token: ByteArray) {
         check(Binder.getCallingUid() == context.applicationInfo.uid)
-        check(Process.myUid() == Process.SHELL_UID)
-        val command = CallAudio.Setup.launchCommand(context.applicationInfo.sourceDir, port, token)
-        val launcher = ProcessBuilder("/system/bin/sh", "-c", command)
-            .redirectErrorStream(true).redirectOutput(File("/dev/null")).start()
-        try {
-            check(launcher.waitFor(3, TimeUnit.SECONDS) && launcher.exitValue() == 0)
-        } finally {
-            launcher.destroy()
-        }
+        val uid = Process.myUid()
+        check(supportsUid(uid))
+        val apk = context.applicationInfo.sourceDir
+        val command = if (uid == 0) CallAudio.Setup.rootLaunchCommand(apk, port, token)
+            else CallAudio.Setup.launchCommand(apk, port, token)
+        CallAudio.Setup.runLauncher("/system/bin/sh", command, 3)
     }
 
     override fun destroy() {
@@ -36,8 +32,10 @@ class ShizukuAudioLauncher(private val context: Context) : IShizukuAudioLauncher
     }
 
     internal companion object {
+        fun supportsUid(uid: Int) = uid == 0 || uid == Process.SHELL_UID
+
         fun supported() = !Shizuku.isPreV11() && Shizuku.getVersion() >= 13 &&
-            Shizuku.getUid() == Process.SHELL_UID
+            supportsUid(Shizuku.getUid())
 
         fun launch(context: Context, port: Int, token: ByteArray) {
             check(Shizuku.pingBinder() && supported() &&

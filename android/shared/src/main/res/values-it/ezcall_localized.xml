@@ -10,8 +10,6 @@
     <string name="ez_continue">Continua</string>
     <string name="ez_contacts">Contatti</string>
     <string name="ez_brand">ezcall</string>
-    <string name="ez_test_log">Registro del test audio</string>
-    <string name="ez_test_copy">Copia registro</string>
     <string name="ez_test_echo_heard">Ho sentito il ritorno della mia voce</string>
     <string name="ez_test_echo_confirmed">Eco della voce confermato</string>
     <string name="ez_test_speak_after_tones">Parla dopo i toni di prova. ezcall verifica automaticamente l’audio.</string>

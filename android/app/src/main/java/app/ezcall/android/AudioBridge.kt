@@ -12,7 +12,7 @@ import kotlin.math.sin
 // Loopback protocol between the relay and the call audio component that runs as the shell user.
 // Both sides prove the shared token before any audio flows. Messages are type, 16-bit length, payload.
 internal object AudioBridge {
-    const val VERSION = 14
+    const val VERSION = 15
     const val SAMPLE_RATE = Opus.SAMPLE_RATE
     const val FRAME_SAMPLES = Opus.FRAME_SAMPLES
     const val FRAME_BYTES = Opus.FRAME_BYTES
@@ -32,13 +32,23 @@ internal object AudioBridge {
     const val DTMF = 0x21
     const val DTMF_DIGITS = "123456789*0#"
     const val ERROR = 0x30
+    const val UPLINK_CHECK = 0x31
     const val SHUTDOWN = 0x40
+    const val DIAGNOSE = 0x50
+    const val DIAGNOSTICS = 0x51
 
     // SERVER_HELLO capability bits.
     const val CAN_INJECT = 1
     // STARTED bits.
     const val DOWNLINK = 1
     const val UPLINK = 2
+    // UPLINK_CHECK payload: result, then the audio mode the check ran in.
+    const val CHECK_REACHED = 1
+    const val CHECK_NOT_REACHED = 2
+    const val CHECK_UNKNOWN = 3
+    const val MODE_REDIRECT = 1
+    const val MODE_IN_CALL = 2
+    const val MAX_TEXT = 8_000
 
     private const val SERVER_LABEL = "xcall-audio/v1/server"
     private const val CLIENT_LABEL = "xcall-audio/v1/client"

@@ -16,7 +16,7 @@
     <string name="s_ui_back_to_audio">Volver a Audio</string>
     <string name="s_ui_audio_setup_choices">Shizuku, depuración inalámbrica o USB</string>
     <string name="s_audio_usb">Configurar por USB</string>
-    <string name="s_audio_usb_detail">Inicia el audio de las llamadas desde un ordenador con Android Platform-Tools.</string>
+    <string name="s_audio_usb_detail">Usa un cable y un ordenador con Android Platform-Tools.</string>
     <string name="s_audio_usb_steps">Activa la depuración USB en las opciones de desarrollador. Conecta el teléfono al ordenador y acepta la solicitud de depuración. Deja este cuadro abierto y ejecuta el siguiente comando en un plazo de dos minutos:\n\n%1$s</string>
     <string name="s_audio_usb_copy">Copiar comando</string>
     <string name="s_audio_usb_failed">La configuración por USB no inició el audio de las llamadas. Revisa la solicitud de depuración USB y vuelve a ejecutar el comando desde un cuadro de configuración nuevo.</string>

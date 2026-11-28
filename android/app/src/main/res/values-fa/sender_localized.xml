@@ -38,12 +38,12 @@
     <string name="s_forget_receiver_detail">اتصال فعلی حذف و کد QR تازه نمایش داده می‌شود. تنظیمات صدا و اشتراک‌گذاری حفظ می‌شوند.</string>
     <string name="s_old_link">اگر اتصال قبلی هنوز در گیرنده نمایش داده می‌شود، پیش از اسکن آن را از گیرنده حذف کنید.</string>
     <string name="s_erase_failed">حذف جفت‌سازی انجام نشد.</string>
-    <string name="s_incoming_call_alert">هشدار تماس ورودی سیم‌کارت</string>
-    <string name="s_incoming_number">شمارهٔ تماس‌گیرنده در تماس‌های ورودی</string>
-    <string name="s_control_description">پاسخ، رد تماس و شماره‌گیری از گوشی گیرنده</string>
-    <string name="s_sms_description">پیامک‌های جدید و تاریخچهٔ پیامک‌های اخیر</string>
-    <string name="s_send_description">ارسال پیامک با سیم‌کارت این گوشی</string>
-    <string name="s_contacts_description">نام و شمارهٔ تلفن</string>
+    <string name="s_incoming_call_alert">تماس‌های ورودی را ببینید</string>
+    <string name="s_incoming_number">ببینید چه کسی تماس گرفته</string>
+    <string name="s_control_description">پاسخ، رد و شماره‌گیری</string>
+    <string name="s_sms_description">پیامک‌های جدید و اخیر را ببینید</string>
+    <string name="s_send_description">ارسال با سیم‌کارت این گوشی</string>
+    <string name="s_contacts_description">اشتراک نام‌ها و شماره‌ها</string>
     <string name="s_feature_summary">%1$s. %2$s</string>
     <string name="s_step">مرحلهٔ %1$d از %2$d</string>
     <string name="s_choose_sharing">انتخاب موارد اشتراک‌گذاری</string>
@@ -88,7 +88,7 @@
     <string name="s_audio_listen_info">اگر انتقال هم‌زمان میکروفون و بلندگو ممکن نباشد، صدای تماس روی این گوشی می‌ماند.</string>
     <string name="s_audio_restart_info">به وای‌فای وصل شوید و در «گزینه‌های توسعه‌دهنده»، «اشکال‌زدایی بی‌سیم» را روشن کنید. سپس به ایزی‌کال برگردید و «راه‌اندازی دوبارهٔ صدای تماس» را بزنید. می‌توانید صفحهٔ تنظیمات را ببندید.</string>
     <string name="s_audio_resume_info">برای استفاده از صدای تماس، انتقال را ادامه دهید.</string>
-    <string name="s_audio_setup_info">برای شنیدن تماس‌ها روی گوشی گیرنده، صدای تماس را راه‌اندازی کنید.</string>
+    <string name="s_audio_setup_info">صدای تماس را روی این گوشی تنظیم کنید تا صدای شما و صدای ورودی منتقل شوند.</string>
     <string name="s_restart_audio">راه‌اندازی دوبارهٔ صدای تماس</string>
     <string name="s_setup_audio">راه‌اندازی صدای تماس</string>
     <string name="s_wireless_paired">اشکال‌زدایی محلی جفت شده است</string>
@@ -107,7 +107,7 @@
     <string name="s_audio_port">پورت اتصال</string>
     <string name="s_audio_port_invalid">یک عدد بین ۱۰۲۴ تا ۶۵۵۳۵ وارد کنید.</string>
     <string name="s_audio_usb">راه‌اندازی با USB</string>
-    <string name="s_audio_usb_detail">صدای تماس را با ابزارهای Android Platform-Tools از کامپیوتر راه‌اندازی کنید.</string>
+    <string name="s_audio_usb_detail">از کابل و رایانه‌ای با Android Platform-Tools استفاده کنید.</string>
     <string name="s_audio_usb_steps">اشکال‌زدایی USB را در گزینه‌های توسعه‌دهنده روشن کنید. گوشی را به کامپیوتر وصل کنید و درخواست اشکال‌زدایی آن را تأیید کنید. این پنجره را باز نگه دارید و تا دو دقیقه فرمان زیر را اجرا کنید:\n\n%1$s</string>
     <string name="s_audio_usb_copy">کپی فرمان</string>
     <string name="s_audio_usb_failed">راه‌اندازی USB صدای تماس را فعال نکرد. درخواست اشکال‌زدایی گوشی را بررسی کنید، پنجرهٔ راه‌اندازی تازه‌ای باز کنید و فرمان را دوباره اجرا کنید.</string>
@@ -163,7 +163,7 @@
     </plurals>
     <string name="s_simulate_heard">شنیدن بوق‌ها در گوشی گیرنده تأیید شد.</string>
     <string name="s_test_report">گزارش تست تماس</string>
-    <string name="s_test_starting">تماس آزمایشی تا ۵ ثانیهٔ دیگر شروع می‌شود.</string>
+    <string name="s_test_starting">در حال شروع تماس آزمایشی…</string>
     <string name="s_test_ringing">در انتظار پاسخ گوشی گیرنده.</string>
     <string name="s_test_audio_started">تماس پاسخ داده شد. در حال آزمایش صدا از طریق بلوتوث.</string>
     <string name="s_test_reconnecting">بلوتوث قطع شد. در انتظار اتصال دوباره.</string>
@@ -180,4 +180,11 @@
     <string name="s_test_mic_missing">در مرحلهٔ بازگشت صدا، بسته‌ای از میکروفون نرسید. وضعیت قطع صدا و مجوز میکروفون گوشی گیرنده را بررسی کنید.</string>
     <string name="s_test_echo_queued">بسته‌های بازگشت صدا برای گوشی گیرنده در صف ارسال قرار گرفتند.</string>
     <string name="s_test_echo_missing">بسته‌های بازگشت صدا در صف ارسال قرار نگرفته‌اند.</string>
+    <string name="s_audio_report">ارسال گزارش صدا</string>
+    <string name="s_audio_report_detail">جزئیات صدای تماس این گوشی را بفرستید تا تماس‌هایی که صدای شما به طرف مقابل نمی‌رسد بررسی شوند. شماره، مخاطب یا پیامی در آن نیست.</string>
+    <string name="s_uplink_failed_title">صدای شما به تماس نرسید</string>
+    <string name="s_uplink_failed_info">در آخرین تماس منتقل‌شده، ezcall تماس سیم‌کارت را بررسی کرد و صدای گوشی گیرنده را در آن پیدا نکرد. ممکن است سخت‌افزار صوتی این گوشی آن را منتقل نکند. گزارش صدا را بفرستید تا بررسی شود.</string>
+    <string name="s_uplink_failed_notice">ممکن است طرف مقابل صدای گوشی گیرنده را نشنود. برای صحبت روی همین گوشی، «صدا روی این گوشی» را بزنید و از تنظیمات ← صدای تماس، گزارش صدا را بفرستید.</string>
+    <string name="s_uplink_reached_info">در یک تماس واقعی بررسی شد: صدای گوشی گیرنده به تماس سیم‌کارت رسید.</string>
+    <string name="s_uplink_channel">بررسی صدای تماس</string>
 </resources>

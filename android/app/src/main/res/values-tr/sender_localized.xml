@@ -38,12 +38,12 @@
     <string name="s_forget_receiver_detail">Mevcut bağlantıyı kaldırın ve yeni bir QR kodu gösterin. ses ve paylaşım ayarları saklanır.</string>
     <string name="s_old_link">Eğer alıcı telefon hala eski bağlantıyı gösteriyorsa, taramadan önce bu telefonu unutun.</string>
     <string name="s_erase_failed">Çiftleri ortadan kaldıramazdı.</string>
-    <string name="s_incoming_call_alert">Gelen mobil arama bildirimleri</string>
-    <string name="s_incoming_number">Gelen aramalarda arayan numarası</string>
-    <string name="s_control_description">Cevap, düşüş ve telefon alıcısından konuşma</string>
-    <string name="s_sms_description">Yeni Yazılar ve Son SMS Tarihi</string>
-    <string name="s_send_description">Bu Android SIM kullanarak yeni metinler gönderin</string>
-    <string name="s_contacts_description">İsimler ve telefon numaraları</string>
+    <string name="s_incoming_call_alert">Gelen aramaları gör</string>
+    <string name="s_incoming_number">Kimin aradığını gör</string>
+    <string name="s_control_description">Yanıtla, reddet ve ara</string>
+    <string name="s_sms_description">Yeni ve son mesajları gör</string>
+    <string name="s_send_description">Bu telefonun SIM kartından gönder</string>
+    <string name="s_contacts_description">Adları ve numaraları paylaş</string>
     <string name="s_feature_summary">%1$s. %2$s</string>
     <string name="s_step">Adım %1$d / %2$d</string>
     <string name="s_choose_sharing">Paylaşılacak verileri seç</string>
@@ -88,7 +88,7 @@
     <string name="s_audio_listen_info">Mikrofon ve hoparlör birlikte aktarılamazsa arama sesi bu Android telefonda kalır.</string>
     <string name="s_audio_restart_info">Wi-Fi ağına bağlanın ve geliştirici seçeneklerinden «Kablosuz hata ayıklama»yı etkinleştirin. ezcall’a dönün ve «Arama sesini yeniden başlat»a dokunun. Ayarlar ekranını kapatabilirsiniz.</string>
     <string name="s_audio_resume_info">Çağrı sesini kullanmak için resim yapın.</string>
-    <string name="s_audio_setup_info">Telefonunuzdaki aramaları dinlemek için bunu ayarlayın.</string>
+    <string name="s_audio_setup_info">Sesini ve gelen sesi iletmek için arama sesini bu telefonda kur.</string>
     <string name="s_restart_audio">Arama sesini yeniden başlat</string>
     <string name="s_setup_audio">Arama sesini ayarla</string>
     <string name="s_wireless_paired">Yerel hata ayıklama eşleştirildi</string>
@@ -157,7 +157,7 @@
     </plurals>
     <string name="s_simulate_heard">Alıcı bip seslerini duyduğunu doğruladı.</string>
     <string name="s_test_report">Arama testi raporu</string>
-    <string name="s_test_starting">Test araması 5 saniye içinde başlayacak.</string>
+    <string name="s_test_starting">Test araması başlatılıyor…</string>
     <string name="s_test_ringing">Alıcı telefonun yanıtlaması bekleniyor.</string>
     <string name="s_test_audio_started">Arama yanıtlandı. Bluetooth üzerinden ses sınanıyor.</string>
     <string name="s_test_reconnecting">Bluetooth bağlantısı kesildi. Yeniden bağlantı bekleniyor.</string>
@@ -174,4 +174,11 @@
     <string name="s_test_mic_missing">Yankı testi sırasında mikrofon paketi alınmadı. Alıcı telefonda sessize alma durumunu ve mikrofon iznini kontrol edin.</string>
     <string name="s_test_echo_queued">Yankı paketleri alıcı telefon için sıraya alındı.</string>
     <string name="s_test_echo_missing">Yankı paketleri sıraya alınmadı.</string>
+    <string name="s_audio_report">Ses raporu gönder</string>
+    <string name="s_audio_report_detail">Sesinizin karşı tarafa ulaşmadığı aramaları düzeltmeye yardımcı olmak için bu telefonun arama sesi ayrıntılarını paylaşın. Numara, kişi veya mesaj içermez.</string>
+    <string name="s_uplink_failed_title">Sesiniz aramaya ulaşmadı</string>
+    <string name="s_uplink_failed_info">Son aktarılan aramada ezcall SIM aramasını dinledi ve alıcı telefonun sesini bulamadı. Bu telefonun ses donanımı sesi iletmiyor olabilir. İncelenmesi için ses raporu gönderin.</string>
+    <string name="s_uplink_failed_notice">Karşı taraf alıcı telefonu duymuyor olabilir. Burada konuşmak için Sesi bu telefonda kullan’a dokunun ve Ayarlar → Arama sesi bölümünden ses raporu gönderin.</string>
+    <string name="s_uplink_reached_info">Gerçek bir aramada doğrulandı: alıcı telefonun sesi SIM aramasına ulaştı.</string>
+    <string name="s_uplink_channel">Arama sesi kontrolleri</string>
 </resources>

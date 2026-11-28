@@ -10,8 +10,6 @@
     <string name="ez_continue">Devam et</string>
     <string name="ez_contacts">Kişiler</string>
     <string name="ez_brand">ezcall</string>
-    <string name="ez_test_log">Ses testi günlüğü</string>
-    <string name="ez_test_copy">Günlüğü kopyala</string>
     <string name="ez_test_echo_heard">Kendi sesimi geri duydum</string>
     <string name="ez_test_echo_confirmed">Ses yankısı doğrulandı</string>
     <string name="ez_test_speak_after_tones">Test seslerinden sonra konuş. ezcall sesi otomatik olarak kontrol eder.</string>

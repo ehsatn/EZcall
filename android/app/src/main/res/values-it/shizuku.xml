@@ -2,9 +2,12 @@
 <resources>
     <string name="s_audio_shizuku">Configura con Shizuku</string>
     <string name="s_audio_shizuku_restart">Riavvia con Shizuku</string>
-    <string name="s_audio_shizuku_detail">Avvia Shizuku su questo telefono e consenti a ezcall di usarlo per l’audio delle chiamate.</string>
+    <string name="s_audio_shizuku_detail">Usa Shizuku 13 o successivo in modalità root o debug Android.</string>
     <string name="s_audio_shizuku_start">Installa e avvia Shizuku su questo telefono e riprova.</string>
-    <string name="s_audio_shizuku_unsupported">L’audio delle chiamate richiede Shizuku 13 o versioni successive avviato tramite il debug di Android.</string>
+    <string name="s_audio_shizuku_unsupported">L’audio delle chiamate richiede Shizuku 13 o versioni successive in modalità root o debug Android.</string>
     <string name="s_audio_shizuku_denied">Autorizza ezcall nelle applicazioni autorizzate di Shizuku e riprova.</string>
     <string name="s_audio_shizuku_failed">Impossibile avviare l’audio delle chiamate tramite Shizuku. Verifica che Shizuku sia attivo e che ezcall sia autorizzato.</string>
+    <string name="s_audio_root_name">Root diretto</string>
+    <string name="s_audio_root_detail">Autorizza ezcall nel gestore root per avviare l’audio delle chiamate senza Shizuku o debug Android.</string>
+    <string name="s_audio_root_failed">Impossibile avviare l’audio con root. Controlla il permesso o scegli Shizuku, il debug wireless o USB.</string>
 </resources>

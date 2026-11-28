@@ -2,9 +2,12 @@
 <resources>
     <string name="s_audio_shizuku">Configurer avec Shizuku</string>
     <string name="s_audio_shizuku_restart">Redémarrer avec Shizuku</string>
-    <string name="s_audio_shizuku_detail">Démarrez Shizuku sur ce téléphone et autorisez ezcall à l’utiliser pour le son des appels.</string>
+    <string name="s_audio_shizuku_detail">Utilisez Shizuku 13 ou ultérieur en mode root ou débogage Android.</string>
     <string name="s_audio_shizuku_start">Installez et démarrez Shizuku sur ce téléphone, puis réessayez.</string>
-    <string name="s_audio_shizuku_unsupported">Le son des appels nécessite Shizuku 13 ou ultérieur démarré via le débogage Android.</string>
+    <string name="s_audio_shizuku_unsupported">Le son des appels nécessite Shizuku 13 ou ultérieur en mode root ou débogage Android.</string>
     <string name="s_audio_shizuku_denied">Autorisez ezcall dans les applications autorisées de Shizuku, puis réessayez.</string>
     <string name="s_audio_shizuku_failed">Impossible de démarrer le son des appels via Shizuku. Vérifiez que Shizuku est actif et qu’ezcall est autorisé.</string>
+    <string name="s_audio_root_name">Accès root direct</string>
+    <string name="s_audio_root_detail">Autorisez ezcall dans le gestionnaire root pour démarrer le son des appels sans Shizuku ni débogage Android.</string>
+    <string name="s_audio_root_failed">Impossible de démarrer le son des appels avec root. Vérifiez l’autorisation ou choisissez Shizuku, le débogage sans fil ou USB.</string>
 </resources>

@@ -16,7 +16,7 @@
     <string name="s_ui_back_to_audio">Ses ekranına dön</string>
     <string name="s_ui_audio_setup_choices">Shizuku, kablosuz hata ayıklama veya USB</string>
     <string name="s_audio_usb">USB ile kur</string>
-    <string name="s_audio_usb_detail">Arama sesini Android Platform-Tools yüklü bir bilgisayardan başlat.</string>
+    <string name="s_audio_usb_detail">Android Platform-Tools yüklü bir bilgisayar ve kablo kullan.</string>
     <string name="s_audio_usb_steps">Geliştirici seçeneklerinde USB hata ayıklamayı aç. Telefonu bilgisayara bağla ve hata ayıklama isteğini onayla. Bu pencereyi açık bırak ve aşağıdaki komutu iki dakika içinde çalıştır:\n\n%1$s</string>
     <string name="s_audio_usb_copy">Komutu kopyala</string>
     <string name="s_audio_usb_failed">USB kurulumu arama sesini başlatamadı. USB hata ayıklama isteğini kontrol et ve komutu yeni bir kurulum penceresinden tekrar çalıştır.</string>

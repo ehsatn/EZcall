@@ -16,7 +16,7 @@
     <string name="s_ui_back_to_audio">Retour à Audio</string>
     <string name="s_ui_audio_setup_choices">Shizuku, débogage sans fil ou USB</string>
     <string name="s_audio_usb">Configurer via USB</string>
-    <string name="s_audio_usb_detail">Activez l’audio des appels depuis un ordinateur équipé d’Android Platform-Tools.</string>
+    <string name="s_audio_usb_detail">Utilisez un câble et un ordinateur avec Android Platform-Tools.</string>
     <string name="s_audio_usb_steps">Activez le débogage USB dans les options pour les développeurs. Connectez ce téléphone à votre ordinateur et acceptez la demande de débogage. Laissez cette boîte de dialogue ouverte et exécutez la commande suivante dans les deux minutes :\n\n%1$s</string>
     <string name="s_audio_usb_copy">Copier la commande</string>
     <string name="s_audio_usb_failed">La configuration USB n’a pas lancé l’audio des appels. Vérifiez la demande de débogage USB, puis relancez la commande depuis une nouvelle boîte de dialogue.</string>

@@ -1,0 +1,9 @@
+<resources>
+    <string name="s_audio_root_request">اسمح لـ ezcall في مدير صلاحيات الجذر للمتابعة.</string>
+    <string name="s_audio_root_starting">جارٍ إعداد صوت المكالمة بصلاحية الجذر مباشرة.</string>
+    <string name="s_ui_test_ready">تحقّق من التشغيل والميكروفون قبل أول مكالمة.</string>
+    <string name="s_ui_ready_methods">طرق الإعداد</string>
+    <string name="s_ui_ready_methods_detail">راجع طرق الإعداد المتاحة.</string>
+    <string name="s_test_waiting_receiver">بانتظار المستلِم</string>
+    <string name="s_test_report_detail">تحقّق من التشغيل وإشارة الميكروفون والصوت المرتد.</string>
+</resources>

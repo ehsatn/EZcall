@@ -38,12 +38,12 @@
     <string name="s_forget_receiver_detail">Remove the current link and show a new QR code. Your audio and sharing settings are kept.</string>
     <string name="s_old_link">If the receiving phone still shows the old link, forget this phone there before scanning.</string>
     <string name="s_erase_failed">Could not erase the pairing.</string>
-    <string name="s_incoming_call_alert">Incoming cellular call alerts</string>
-    <string name="s_incoming_number">Number on incoming calls</string>
-    <string name="s_control_description">Answer, decline and dial from the receiving phone</string>
-    <string name="s_sms_description">New texts and recent SMS history</string>
-    <string name="s_send_description">Send new texts using this Android SIM</string>
-    <string name="s_contacts_description">Names and phone numbers</string>
+    <string name="s_incoming_call_alert">See incoming calls</string>
+    <string name="s_incoming_number">See who’s calling</string>
+    <string name="s_control_description">Answer, decline and dial</string>
+    <string name="s_sms_description">See new and recent texts</string>
+    <string name="s_send_description">Send from this phone’s SIM</string>
+    <string name="s_contacts_description">Share names and numbers</string>
     <string name="s_feature_summary">%1$s. %2$s</string>
     <string name="s_step">Step %1$d of %2$d</string>
     <string name="s_choose_sharing">Choose what to share</string>
@@ -88,7 +88,7 @@
     <string name="s_audio_listen_info">This Android phone keeps call audio when it cannot transfer both the microphone and speaker.</string>
     <string name="s_audio_restart_info">Connect to Wi-Fi and turn on Wireless debugging in Developer options. Then return to ezcall and tap Restart call audio. You can close the settings screen.</string>
     <string name="s_audio_resume_info">Resume the relay to use call audio.</string>
-    <string name="s_audio_setup_info">Set this up to hear calls on your receiving phone.</string>
+    <string name="s_audio_setup_info">Set up call audio on this phone to forward your voice and incoming audio.</string>
     <string name="s_restart_audio">Restart call audio</string>
     <string name="s_setup_audio">Set up call audio</string>
     <string name="s_wireless_paired">Local debugging is paired</string>
@@ -107,7 +107,7 @@
     <string name="s_audio_port">Connection port</string>
     <string name="s_audio_port_invalid">Enter a port from 1024 to 65535.</string>
     <string name="s_audio_usb">Set up with USB</string>
-    <string name="s_audio_usb_detail">Start call audio from a computer with Android Platform-Tools.</string>
+    <string name="s_audio_usb_detail">Use a cable and a computer with Android Platform-Tools.</string>
     <string name="s_audio_usb_steps">Turn on USB debugging in Developer options. Connect this phone to your computer and approve its debugging request. Keep this dialog open and run this command within two minutes:\n\n%1$s</string>
     <string name="s_audio_usb_copy">Copy command</string>
     <string name="s_audio_usb_failed">USB setup did not start call audio. Check the USB debugging prompt and run the command again from a fresh setup dialog.</string>
@@ -163,7 +163,7 @@
     </plurals>
     <string name="s_simulate_heard">The receiving phone confirmed it heard the beeps.</string>
     <string name="s_test_report">Test report</string>
-    <string name="s_test_starting">Starting the test call in 5 seconds.</string>
+    <string name="s_test_starting">Starting the test call…</string>
     <string name="s_test_ringing">Waiting for the receiving phone to answer.</string>
     <string name="s_test_audio_started">Answered. Testing audio over Bluetooth.</string>
     <string name="s_test_reconnecting">Bluetooth dropped. Waiting to reconnect.</string>
@@ -180,4 +180,11 @@
     <string name="s_test_mic_missing">No microphone packets received during the echo test. Check mute and microphone permission on the receiving phone.</string>
     <string name="s_test_echo_queued">Echo packets queued for the receiving phone.</string>
     <string name="s_test_echo_missing">Echo packets have not been queued.</string>
+    <string name="s_audio_report">Send audio report</string>
+    <string name="s_audio_report_detail">Share this phone’s call audio details to help fix calls where your voice doesn’t reach the other person. No numbers, contacts or messages are included.</string>
+    <string name="s_uplink_failed_title">Your voice didn’t reach the call</string>
+    <string name="s_uplink_failed_info">In the last relayed call, ezcall listened to the SIM call and couldn’t find the receiving phone’s voice in it. This phone’s audio hardware may not pass it on. Send an audio report so it can be checked.</string>
+    <string name="s_uplink_failed_notice">The other person may not hear the receiving phone. Tap Use audio on this phone to talk here, and send an audio report from Settings → Call audio.</string>
+    <string name="s_uplink_reached_info">Checked in a real call: the receiving phone’s voice reached the SIM call.</string>
+    <string name="s_uplink_channel">Call audio checks</string>
 </resources>

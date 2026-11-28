@@ -38,12 +38,12 @@
     <string name="s_forget_receiver_detail">إزالة الرابط الحالي وإظهار رمز QR جديد. يتم حفظ إعدادات الصوت والمشاركة الخاصة بك.</string>
     <string name="s_old_link">إذا كان الهاتف المستلم لا يزال يعرض الرابط القديم ، فنسى هذا الهاتف هناك قبل الفحص.</string>
     <string name="s_erase_failed">لا يمكن إلغاء الزوجين.</string>
-    <string name="s_incoming_call_alert">تنبيهات المكالمات الخلوية الواردة</string>
-    <string name="s_incoming_number">رقم المتصل في المكالمات الواردة</string>
-    <string name="s_control_description">الرد والانخفاض والاتصال من الهاتف المستلم</string>
-    <string name="s_sms_description">النصوص الجديدة وتاريخ الرسائل القصيرة</string>
-    <string name="s_send_description">إرسال نص جديد باستخدام هذا الـ Android SIM</string>
-    <string name="s_contacts_description">أسماء وأرقام الهاتف</string>
+    <string name="s_incoming_call_alert">عرض المكالمات الواردة</string>
+    <string name="s_incoming_number">معرفة المتصل</string>
+    <string name="s_control_description">الردّ والرفض والاتصال</string>
+    <string name="s_sms_description">عرض الرسائل الجديدة والأخيرة</string>
+    <string name="s_send_description">الإرسال من شريحة هذا الهاتف</string>
+    <string name="s_contacts_description">مشاركة الأسماء والأرقام</string>
     <string name="s_feature_summary">%1$s. %2$s</string>
     <string name="s_step">الخطوة %1$d من %2$d</string>
     <string name="s_choose_sharing">اختر ما تريد مشاركته</string>
@@ -88,7 +88,7 @@
     <string name="s_audio_listen_info">يبقى صوت المكالمة على هاتف Android هذا إذا تعذّر نقل الميكروفون ومكبر الصوت معًا.</string>
     <string name="s_audio_restart_info">اتصل بشبكة Wi-Fi وفعّل «تصحيح الأخطاء اللاسلكي» في «خيارات المطوّر». ارجع إلى ezcall واضغط على «إعادة تشغيل صوت المكالمات». يمكنك إغلاق شاشة الإعدادات.</string>
     <string name="s_audio_resume_info">إعادة إرسال الرسالة لاستخدام مكالمة الصوت.</string>
-    <string name="s_audio_setup_info">قم بتعيين هذا للاستماع إلى المكالمات على هاتفك المستلم.</string>
+    <string name="s_audio_setup_info">أعِدّ صوت المكالمات على هذا الهاتف لنقل صوتك والصوت الوارد.</string>
     <string name="s_restart_audio">إعادة تشغيل صوت المكالمات</string>
     <string name="s_setup_audio">إعداد صوت المكالمات</string>
     <string name="s_wireless_paired">تم اقتران خدمة تصحيح الأخطاء المحلية</string>
@@ -161,7 +161,7 @@
     </plurals>
     <string name="s_simulate_heard">أكّد الهاتف المستقبِل سماع الصفارات.</string>
     <string name="s_test_report">تقرير اختبار المكالمة</string>
-    <string name="s_test_starting">ستبدأ مكالمة الاختبار خلال 5 ثوانٍ.</string>
+    <string name="s_test_starting">جارٍ بدء مكالمة الاختبار…</string>
     <string name="s_test_ringing">في انتظار رد الهاتف المستقبِل.</string>
     <string name="s_test_audio_started">تم الرد. جارٍ اختبار الصوت عبر البلوتوث.</string>
     <string name="s_test_reconnecting">انقطع البلوتوث. في انتظار إعادة الاتصال.</string>
@@ -178,4 +178,11 @@
     <string name="s_test_mic_missing">لم تصل حزم الميكروفون أثناء اختبار الصدى. تحقّق من الكتم وإذن الميكروفون على الهاتف المستقبِل.</string>
     <string name="s_test_echo_queued">أُدرجت حزم الصدى لإرسالها إلى الهاتف المستقبِل.</string>
     <string name="s_test_echo_missing">لم تُدرج حزم الصدى في قائمة الإرسال.</string>
+    <string name="s_audio_report">إرسال تقرير الصوت</string>
+    <string name="s_audio_report_detail">شارك تفاصيل صوت المكالمات في هذا الهاتف للمساعدة في إصلاح المكالمات التي لا يصل فيها صوتك إلى الطرف الآخر. لا يتضمن أرقامًا أو جهات اتصال أو رسائل.</string>
+    <string name="s_uplink_failed_title">لم يصل صوتك إلى المكالمة</string>
+    <string name="s_uplink_failed_info">في آخر مكالمة مرحّلة، استمع ezcall إلى مكالمة الشريحة ولم يجد فيها صوت هاتف الاستقبال. قد لا تنقله أجهزة الصوت في هذا الهاتف. أرسل تقرير الصوت لفحصه.</string>
+    <string name="s_uplink_failed_notice">قد لا يسمع الطرف الآخر هاتف الاستقبال. اضغط استخدام الصوت على هذا الهاتف للتحدث هنا، وأرسل تقرير الصوت من الإعدادات ← صوت المكالمة.</string>
+    <string name="s_uplink_reached_info">تم التحقق في مكالمة حقيقية: وصل صوت هاتف الاستقبال إلى مكالمة الشريحة.</string>
+    <string name="s_uplink_channel">فحوصات صوت المكالمة</string>
 </resources>

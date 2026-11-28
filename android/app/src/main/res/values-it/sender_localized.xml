@@ -38,12 +38,12 @@
     <string name="s_forget_receiver_detail">Rimuovere il link attuale e visualizzare un nuovo codice QR. Le impostazioni audio e condivisione sono mantenute.</string>
     <string name="s_old_link">Se il telefono ricevente mostra ancora il vecchio collegamento, dimenticare questo telefono lì prima di scansionare.</string>
     <string name="s_erase_failed">Non poteva eliminare la coppia.</string>
-    <string name="s_incoming_call_alert">Avvisi di chiamate mobili in arrivo</string>
-    <string name="s_incoming_number">Numero nelle chiamate in arrivo</string>
-    <string name="s_control_description">Rispondi, declini e dial dal telefono ricevente</string>
-    <string name="s_sms_description">Nuovi articoli e recenti SMS</string>
-    <string name="s_send_description">Invia nuovi testi utilizzando questo Android SIM</string>
-    <string name="s_contacts_description">Nomi e numeri di telefono</string>
+    <string name="s_incoming_call_alert">Vedi le chiamate in arrivo</string>
+    <string name="s_incoming_number">Vedi chi chiama</string>
+    <string name="s_control_description">Rispondi, rifiuta e componi</string>
+    <string name="s_sms_description">Vedi gli SMS nuovi e recenti</string>
+    <string name="s_send_description">Invia dalla SIM di questo telefono</string>
+    <string name="s_contacts_description">Condividi nomi e numeri</string>
     <string name="s_feature_summary">%1$s. %2$s</string>
     <string name="s_step">Passaggio %1$d di %2$d</string>
     <string name="s_choose_sharing">Scegli cosa condividere</string>
@@ -88,7 +88,7 @@
     <string name="s_audio_listen_info">L’audio della chiamata rimane su questo Android se non è possibile trasferire insieme il microfono e l’altoparlante.</string>
     <string name="s_audio_restart_info">Connettiti al Wi-Fi e attiva «Debug wireless» nelle opzioni sviluppatore. Poi torna in ezcall e tocca «Riavvia audio delle chiamate». Puoi chiudere la schermata delle impostazioni.</string>
     <string name="s_audio_resume_info">Riprendi il relay per utilizzare l\'audio di chiamata.</string>
-    <string name="s_audio_setup_info">Inserisci questo per ascoltare le chiamate sul tuo telefono ricevente.</string>
+    <string name="s_audio_setup_info">Configura l’audio su questo telefono per inoltrare la tua voce e l’audio in entrata.</string>
     <string name="s_restart_audio">Riavvia audio delle chiamate</string>
     <string name="s_setup_audio">Configura l’audio delle chiamate</string>
     <string name="s_wireless_paired">Debug locale abbinato</string>
@@ -158,7 +158,7 @@
     </plurals>
     <string name="s_simulate_heard">Il ricevitore ha confermato di aver sentito i segnali.</string>
     <string name="s_test_report">Rapporto del test</string>
-    <string name="s_test_starting">La chiamata di prova inizierà tra 5 secondi.</string>
+    <string name="s_test_starting">Avvio della chiamata di prova…</string>
     <string name="s_test_ringing">In attesa di risposta dal telefono ricevente.</string>
     <string name="s_test_audio_started">Chiamata risposta. Verifica audio via Bluetooth.</string>
     <string name="s_test_reconnecting">Bluetooth disconnesso. In attesa di riconnessione.</string>
@@ -175,4 +175,11 @@
     <string name="s_test_mic_missing">Nessun pacchetto del microfono ricevuto durante il test dell’eco. Verifica che il microfono sia attivo e autorizzato sul telefono ricevente.</string>
     <string name="s_test_echo_queued">Pacchetti di eco accodati per il telefono ricevente.</string>
     <string name="s_test_echo_missing">Nessun pacchetto di eco accodato.</string>
+    <string name="s_audio_report">Invia report audio</string>
+    <string name="s_audio_report_detail">Condividi i dettagli audio delle chiamate di questo telefono per aiutare a correggere le chiamate in cui la tua voce non arriva all’altra persona. Non include numeri, contatti o messaggi.</string>
+    <string name="s_uplink_failed_title">La tua voce non è arrivata alla chiamata</string>
+    <string name="s_uplink_failed_info">Nell’ultima chiamata inoltrata, ezcall ha ascoltato la chiamata SIM e non ha trovato la voce del telefono ricevente. L’hardware audio di questo telefono potrebbe non trasmetterla. Invia un report audio per farla verificare.</string>
+    <string name="s_uplink_failed_notice">L’altra persona potrebbe non sentire il telefono ricevente. Tocca Usa l’audio su questo telefono per parlare qui e invia un report audio da Impostazioni → Audio chiamate.</string>
+    <string name="s_uplink_reached_info">Verificato in una chiamata reale: la voce del telefono ricevente è arrivata alla chiamata SIM.</string>
+    <string name="s_uplink_channel">Controlli audio delle chiamate</string>
 </resources>

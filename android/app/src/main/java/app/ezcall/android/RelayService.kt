@@ -114,15 +114,9 @@ internal class RelayService : Service() {
     private var failure: String? = null
     private var call: Call? = null
     private var anonymousRing: Runnable? = null
-    private var simulationPending = false
     private val callSetupWakeLock by lazy {
         getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:call-setup")
-            .apply { setReferenceCounted(false) }
-    }
-    private val simulationWakeLock by lazy {
-        getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:simulation")
             .apply { setReferenceCounted(false) }
     }
     private var simulatedCall: Call? = null
@@ -232,6 +226,31 @@ internal class RelayService : Service() {
                 }
             }
         }
+
+        override fun onUplinkCheck(result: Int, mode: Int) {
+            handler.post {
+                if (stopped) return@post
+                val saved = UplinkHealth.save(this@RelayService, result, mode)
+                Log.i("EzcallRelay", "Uplink check: $saved")
+                if (saved == UplinkHealth.Result.NOT_REACHED) showUplinkWarning()
+                RelayState.setAudio(RelayState.audio)
+            }
+        }
+    }
+
+    private fun showUplinkWarning() {
+        val localized = ezcallContext()
+        val notifications = getSystemService(NotificationManager::class.java)
+        val channel = NotificationChannel("audio_check", localized.getString(R.string.s_uplink_channel),
+            NotificationManager.IMPORTANCE_DEFAULT)
+        notifications.createNotificationChannel(channel)
+        val main = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val text = localized.getString(R.string.s_uplink_failed_notice)
+        notifications.notify(UPLINK_NOTIFICATION, Notification.Builder(this, channel.id)
+            .setSmallIcon(R.drawable.ic_ezcall_notification)
+            .setContentTitle(localized.getString(R.string.s_uplink_failed_title))
+            .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text))
+            .setContentIntent(main).setAutoCancel(true).build())
     }
 
     private val events = object : BroadcastReceiver() {
@@ -279,7 +298,7 @@ internal class RelayService : Service() {
             RelayState.refreshAudio = { callAudio?.connect(launch = false) }
             RelayState.refreshSharing = ::refreshSharing
             snapshotSharing = readableData()
-            RelayState.simulateCall = ::scheduleSimulatedCall
+            RelayState.simulateCall = ::startAudioTest
             openTransport()
             if (enrolling) handler.postDelayed({
                 if (enrolling) stopWith("Pairing code expired. Start pairing again.")
@@ -328,7 +347,7 @@ internal class RelayService : Service() {
                     RelayState.set(RelayState(running = true, qr = if (enrolling) PairKey.qr(key) else null))
                 },
                 onError = ::recoverTransport,
-                testLog = { RelayState.testLog.takeIf { simulationPending || simulatedCall != null } }
+                testLog = { RelayState.testLog.takeIf { simulatedCall != null } }
             )
             transport = peripheral
             peripheral.start(this)
@@ -503,10 +522,6 @@ internal class RelayService : Service() {
         activeGeneration++
         busySync = false
         snapshotID = null
-        if (simulationPending) {
-            simulationPending = false
-            RelayState.testStage(TestCallReport.Stage.LINK_LOST)
-        }
         val active = simulatedCall?.takeIf { it.state == "active" }
             ?: call?.takeIf { it.id == relayedCall && (it.state == "active" || it.id == answeringCall) }
         if (!stopped && forgetID == null && active != null) {
@@ -677,6 +692,8 @@ internal class RelayService : Service() {
                     ReceiverTestStep.ECHO_PLAYED, ReceiverTestStep.ECHO_HEARD -> RelayState.reportTest(report.copy(echoConfirmed = true))
                     else -> Unit
                 }
+                if (step in setOf(ReceiverTestStep.CUE_PLAYED, ReceiverTestStep.MIC_SIGNAL, ReceiverTestStep.ECHO_PLAYED) &&
+                    RelayState.testCall?.verified == true) stopSimulation()
             }
             "audio_ready", "audio_paused" -> {
                 if (call?.id == id && relayedCall == id && audioCall == id && audioPublished && handsetAudioCall != id) {
@@ -1006,39 +1023,22 @@ internal class RelayService : Service() {
         startVisible(RelayState.current.connected)
     }
 
-    private fun scheduleSimulatedCall(): Boolean {
-        if (simulationPending || simulatedCall != null || call != null || !RelayState.current.connected) return false
-        simulationPending = true
+    private fun startAudioTest(): Boolean {
+        if (stopped || simulatedCall != null || call != null || !RelayState.current.connected) return false
         val id = UUID.randomUUID().toString()
         RelayState.startTest(id, this)
         val log = RelayState.testLog
-        log?.add("Test requested: 5000ms countdown before ringing")
         if (log != null) transport?.describeTestLink(log)
-        // The countdown must still run if the phone is locked immediately after tapping.
-        simulationWakeLock.acquire(8_000)
-        val generation = activeGeneration
+        val test = Call(id, "ezcall test call", System.currentTimeMillis(), "ringing")
+        if (transport?.send(test.packet(simulated = true), log) != true) {
+            RelayState.testStage(TestCallReport.Stage.SIGNAL_FAILED)
+            return true
+        }
+        simulatedCall = test
+        RelayState.testStage(TestCallReport.Stage.RINGING)
         handler.postDelayed({
-            if (generation != activeGeneration) return@postDelayed
-            simulationPending = false
-            if (stopped) return@postDelayed
-            if (call != null) {
-                RelayState.testStage(TestCallReport.Stage.PHONE_BUSY)
-                return@postDelayed
-            }
-            val test = Call(id, "ezcall test call", System.currentTimeMillis(), "ringing")
-            if (transport?.send(test.packet(simulated = true), log) != true) {
-                RelayState.testStage(TestCallReport.Stage.SIGNAL_FAILED)
-                return@postDelayed
-            }
-            simulatedCall = test
-            RelayState.testStage(TestCallReport.Stage.RINGING)
-            handler.postDelayed({
-                if (simulatedCall === test) {
-                    log?.add("Sender ringing timer expired (25000ms)")
-                    stopSimulation(TestCallReport.Stage.NO_ANSWER)
-                }
-            }, 25_000)
-        }, 5_000)
+            if (simulatedCall === test) stopSimulation(TestCallReport.Stage.NO_ANSWER)
+        }, 25_000)
         return true
     }
 
@@ -1279,6 +1279,7 @@ internal class RelayService : Service() {
         private const val ACTION_HANDSET_AUDIO = "app.ezcall.android.HANDSET_AUDIO"
         private const val HANDSET_AUDIO_MESSAGE = "Call audio is on the sending phone."
         private const val INITIAL_RETRY_MS = 1_000L
+        private const val UPLINK_NOTIFICATION = 18
         private const val DIAL_TIMEOUT_MS = 15_000L
         private const val AUDIO_SETUP_TIMEOUT_MS = 30_000L
         private val DIALABLE = Regex("[+]?[0-9*#][0-9*#,;]{0,63}")

@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothManager
 import android.app.NotificationManager
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -75,11 +76,17 @@ class MainActivity : AppCompatActivity() {
     private var detail: Detail? = null
     private var guideFromSettings = false
     private var audioSetupParent: Detail? = null
+    private val offersRoot by lazy(CallAudio.Setup::offersRoot)
+    private var offeredRoot = false
+    private var startingRoot = false
+    private var rootGranted = false
     private var reportParent: Detail? = null
     private val audioSetupFromGuide get() = audioSetupParent == Detail.GUIDE
     private var connectionPanel: LinearLayout? = null
     private var sharingPanel: LinearLayout? = null
     private var audioPanel: LinearLayout? = null
+    private var audioIntro: View? = null
+    private var audioMethodsLink: LinearLayout? = null
     private var testPanel: LinearLayout? = null
     private var reportPanel: LinearLayout? = null
     private var settingsNotifications: SettingsRow? = null
@@ -88,6 +95,7 @@ class MainActivity : AppCompatActivity() {
     private var shownTest: TestDisplay? = null
     private var shownReport: TestCallReport? = null
     private var testRequestFailed = false
+    private var showTestRun = false
     private var connectionIssue: Int? = null
     private var relayStarting = false
     private var relayBeforeStart: RelayState? = null
@@ -100,6 +108,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private var audioBusy = false
+    private var audioReporting = false
+    private var cancelUsbSetup: (() -> Unit)? = null
     private val shizukuPermission = Shizuku.OnRequestPermissionResultListener { code, result ->
         if (code == SHIZUKU_AUDIO && !isDestroyed) {
             if (result == PackageManager.PERMISSION_GRANTED) setupShizukuAudio()
@@ -150,6 +160,7 @@ class MainActivity : AppCompatActivity() {
         connectionIssue = savedInstanceState?.getInt("connectionIssue")?.takeIf { it != 0 }
         pairingAgain = savedInstanceState?.getBoolean("pairingAgain") == true
         pairingHint = savedInstanceState?.getString("pairingHint")
+        showTestRun = savedInstanceState?.getBoolean("showTestRun") == true
         page = Page.entries.getOrElse(savedInstanceState?.getInt("page") ?: 0) { Page.CONNECTION }
         detail = savedInstanceState?.getString("detail")?.let(Detail::valueOf)
             ?: Detail.SETTINGS.takeIf { savedInstanceState?.getBoolean("settingsOpen") == true }
@@ -261,6 +272,7 @@ class MainActivity : AppCompatActivity() {
                 showDetail(parent)
             }
             detail == Detail.REPORT -> showDetail(reportParent)
+            showTestRun && (detail == Detail.SETTINGS_AUDIO || detail == null && page == Page.AUDIO) -> closeTestRun()
             detail == Detail.OVERLAY -> showDetail(Detail.AUDIO_SETUP)
             detail in setOf(Detail.SETTINGS_AUDIO, Detail.NOTIFICATIONS, Detail.BATTERY) -> showDetail(Detail.SETTINGS)
             detail == Detail.GUIDE && step == Step.LINK -> cancelGuidePairing()
@@ -279,6 +291,10 @@ class MainActivity : AppCompatActivity() {
     private fun openAudioSetup() {
         audioSetupParent = detail
         showDetail(Detail.AUDIO_SETUP)
+        if (offersRoot && !offeredRoot && !CallAudio.Setup.enabled(this)) {
+            offeredRoot = true
+            setupAudio(method = CallAudio.Setup.Method.ROOT)
+        }
     }
 
     private fun openReport() {
@@ -319,15 +335,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderAudioPage() {
-        screenHeading(R.string.s_call_audio, R.string.s_ui_audio_intro)
+        if (showTestRun && RelayState.testCall != null) {
+            screenHeading(R.string.s_simulate)
+            testPanel = stack().also { content.addView(it, space(top = 12)) }
+            return
+        }
+        screenHeading(R.string.s_call_audio)
+        audioIntro = body(getString(R.string.s_ui_audio_intro)).also { content.addView(it, space(top = 6)) }
         audioPanel = stack().also { content.addView(it, space(top = 12)) }
         testPanel = stack().also { content.addView(it, space(top = 12)) }
+        audioMethodsLink = stack().also { content.addView(it, space(top = 12)) }
     }
 
     private fun renderPage() {
         connectionPanel = null
         sharingPanel = null
         audioPanel = null
+        audioIntro = null
+        audioMethodsLink = null
         testPanel = null
         reportPanel = null
         settingsNotifications = null
@@ -349,6 +374,7 @@ class MainActivity : AppCompatActivity() {
             isAppearanceLightNavigationBars = lightBars
         }
         toolbar.visibility = if (welcome) View.GONE else View.VISIBLE
+        toolbar.setPaddingRelative(0, 0, if (guide) 0 else dp(20), 0)
         content.clipToPadding = !welcome
         brand.visibility = if (guide) View.GONE else View.VISIBLE
         guideProgress.visibility = if (guide) View.VISIBLE else View.GONE
@@ -409,6 +435,7 @@ class MainActivity : AppCompatActivity() {
         connectionIssue?.let { outState.putInt("connectionIssue", it) }
         outState.putBoolean("pairingAgain", pairingAgain)
         pairingHint?.let { outState.putString("pairingHint", it) }
+        outState.putBoolean("showTestRun", showTestRun)
         outState.putInt("page", page.ordinal)
         detail?.let { outState.putString("detail", it.name) }
         outState.putBoolean("guideFromSettings", guideFromSettings)
@@ -445,6 +472,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        cancelUsbSetup?.invoke()
         Shizuku.removeRequestPermissionResultListener(shizukuPermission)
         toolbar.removeCallbacks(startTimeout)
         super.onDestroy()
@@ -697,8 +725,7 @@ class MainActivity : AppCompatActivity() {
                 isFocusable = false
             }
             if (!largeText) {
-                val image = if (feature == Feature.SEND_SMS) artwork(icon) else iconTile(icon, size = 34)
-                addView(image, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(10) })
+                addView(iconTile(icon, size = 34), LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(10) })
             }
             addView(stack().apply {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -779,16 +806,22 @@ class MainActivity : AppCompatActivity() {
             }
             Step.LINK -> connectionPanel = stack().also { content.addView(it, space(top = 20)) }
             Step.AUDIO -> {
-                content.addView(body(getString(R.string.s_ui_finish_later)), space(top = 8))
+                val configured = CallAudio.Setup.enabled(this) || liveAudio() != null
+                if (!configured) content.addView(body(getString(R.string.s_ui_finish_later)), space(top = 8))
                 content.addView(AudioGuideArtwork(this, color(androidx.appcompat.R.attr.colorPrimary),
                     color(MaterialR.attr.colorOutlineVariant), color(MaterialR.attr.colorOnSurface)),
                     space(top = 24).apply { height = dp(174) })
-                setGuideAction(if (liveAudio() == null) R.string.s_setup_audio else R.string.s_ui_audio_setup_methods,
-                    action = ::openAudioSetup)
-                guideAction.addView(textButton(getString(R.string.s_ui_finish_guide)) {
+                val finishSetup = {
                     saveStep(null)
                     closeGuide()
-                }, space(top = 8))
+                }
+                if (configured) {
+                    setGuideAction(R.string.s_ui_finish_guide, action = finishSetup)
+                    guideAction.addView(textButton(getString(R.string.s_ui_audio_setup_methods), ::openAudioSetup), space(top = 8))
+                } else {
+                    setGuideAction(R.string.s_setup_audio, action = ::openAudioSetup)
+                    guideAction.addView(textButton(getString(R.string.s_ui_finish_guide), finishSetup), space(top = 8))
+                }
             }
         }
     }
@@ -828,6 +861,11 @@ class MainActivity : AppCompatActivity() {
 
     private data class TestDisplay(val report: TestCallReport?, val canTest: Boolean, val requestFailed: Boolean)
 
+    private fun closeTestRun() {
+        showTestRun = false
+        renderPage()
+    }
+
     private fun renderTest() {
         val test = RelayState.testCall
         testPanel?.let { panel ->
@@ -836,26 +874,45 @@ class MainActivity : AppCompatActivity() {
                 shownTest = display
                 panel.removeAllViews()
                 val card = stack().apply { setPaddingRelative(dp(16), dp(16), dp(16), dp(16)) }
+                if (showTestRun && test != null) {
+                    val waiting = test.stage == TestCallReport.Stage.STARTING || test.stage == TestCallReport.Stage.RINGING
+                    card.addView(iconTile(R.drawable.ic_headset), LinearLayout.LayoutParams(dp(44), dp(44)))
+                    val heading = when {
+                        waiting -> R.string.s_test_waiting_receiver
+                        test.verified -> R.string.ez_test_auto_passed
+                        else -> test.stage.label
+                    }
+                    card.addView(sectionTitle(getString(heading), R.style.TextAppearance_ezcall_TitleLarge).apply {
+                        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    }, space(top = 12))
+                    if (test.inProgress) card.addView(body(getString(R.string.s_simulate_wait)), space(top = 8))
+                    panel.addView(surfaceCard(card, accent = test.verified), space())
+                    panel.addView(surfaceCard(settingsRow(R.drawable.ic_sender_check, getString(R.string.s_test_report),
+                        getString(R.string.s_test_report_detail), action = ::openReport).view), space(top = 12))
+                    panel.addView(textButton(getString(R.string.s_ui_back_to_audio), ::closeTestRun), space(top = 12))
+                    return
+                }
                 card.addView(sectionTitle(getString(R.string.s_simulate), R.style.TextAppearance_ezcall_TitleLarge))
                 val state = when {
                     display.requestFailed -> R.string.s_simulate_retry
                     test?.inProgress == true -> test.stage.label
-                    display.canTest -> R.string.s_simulate_wait
+                    display.canTest -> R.string.s_ui_test_ready
                     else -> R.string.s_ui_test_connect
                 }
                 card.addView(body(getString(state)).apply {
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                     if (display.requestFailed) setTextColor(color(androidx.appcompat.R.attr.colorError))
                 }, space(top = 6))
-                if (display.canTest && test?.inProgress != true) card.addView(actionButton(getString(R.string.s_ui_start_test)) {
+                card.addView(actionButton(getString(R.string.s_ui_start_test)) {
                     if (RelayState.simulateCall?.invoke() == true) {
                         testRequestFailed = false
-                        openReport()
+                        showTestRun = true
+                        renderPage()
                     } else {
                         testRequestFailed = true
                         renderTest()
                     }
-                }, space(top = 12))
+                }.apply { isEnabled = display.canTest && test?.inProgress != true }, space(top = 12))
                 if (test != null) card.addView(outlineButton(getString(R.string.s_test_report), ::openReport), space(top = 4))
                 panel.addView(surfaceCard(card), space())
             }
@@ -872,55 +929,45 @@ class MainActivity : AppCompatActivity() {
             panel.addView(actionButton(getString(R.string.s_ui_back_to_audio), ::navigateBack), space(top = 16))
             return
         }
-        val report = stack().apply {
-            setPaddingRelative(dp(16), dp(16), dp(16), dp(12))
-            if (test.inProgress) addView(spinner(), LinearLayout.LayoutParams(-2, -2))
-            val outcome = when {
-                test.verified -> R.string.ez_test_auto_passed
-                test.stage == TestCallReport.Stage.FINISHED -> R.string.ez_test_auto_incomplete
-                else -> test.stage.label
-            }
-            addView(sectionTitle(getString(outcome), R.style.TextAppearance_ezcall_TitleLarge).apply {
-                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-                if (!test.inProgress && test.stage != TestCallReport.Stage.FINISHED && !test.verified) {
-                    setTextColor(color(androidx.appcompat.R.attr.colorError))
+        val outcome = when {
+            test.verified -> R.string.ez_test_auto_passed
+            test.stage == TestCallReport.Stage.FINISHED -> R.string.ez_test_auto_incomplete
+            else -> test.stage.label
+        }
+        val report = row().apply {
+            setPaddingRelative(dp(16), dp(16), dp(16), dp(16))
+            addView(iconTile(R.drawable.ic_bluetooth), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(10) })
+            addView(stack().apply {
+                val titleInk = if (test.verified) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurface
+                addView(sectionTitle(getString(outcome), R.style.TextAppearance_ezcall_TitleMedium).apply {
+                    setTextColor(color(titleInk))
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                })
+                val detail = when {
+                    test.playbackConfirmed -> R.string.ez_test_tone_played
+                    test.inProgress -> R.string.s_simulate_wait
+                    test.audioStarted -> R.string.s_test_playback_unconfirmed
+                    else -> null
                 }
-            }, space(top = if (test.inProgress) 12 else 0))
-            if (test.stage in setOf(TestCallReport.Stage.STARTING, TestCallReport.Stage.RINGING, TestCallReport.Stage.AUDIO)) {
-                addView(body(getString(R.string.s_simulate_wait)), space(top = 6))
-            }
-            if (test.audioStarted) {
-                val live = test.stage == TestCallReport.Stage.AUDIO
-                RelayState.testLog?.let { log ->
-                    val ink = color(androidx.appcompat.R.attr.colorPrimary)
-                    addView(body(getString(R.string.ez_test_sent_tone_wave)), space(top = 16))
-                    addView(AudioWaveformView(this@MainActivity, log.localWaveform, ink, live).apply {
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    }, space().apply { height = dp(38) })
-                    addView(body(getString(R.string.ez_test_remote_mic_wave)), space(top = 8))
-                    addView(AudioWaveformView(this@MainActivity, log.remoteWaveform, ink, live).apply {
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    }, space().apply { height = dp(38) })
-                }
-                val checks = listOf(
-                    when {
-                        test.playbackConfirmed -> R.string.ez_test_tone_played
-                        test.cue == TestCallReport.Cue.FAILED -> test.cue.label
-                        else -> R.string.ez_test_wait_tone
-                    },
-                    if (test.microphoneSignal) R.string.ez_test_mic_detected else R.string.ez_test_wait_mic,
-                    if (test.echoConfirmed) R.string.ez_test_echo_played else R.string.ez_test_wait_echo
-                )
-                addView(divider(), space(top = 12))
-                for (check in checks) addView(body(getString(check)), space(top = 8))
-            }
+                detail?.let { addView(body(getString(it)), space(top = 4)) }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         panel.addView(surfaceCard(report, accent = test.verified), space())
+        if (!test.audioStarted) return
+        val live = test.stage == TestCallReport.Stage.AUDIO
         RelayState.testLog?.let { log ->
-            panel.addView(outlineButton(getString(R.string.ez_test_log)) {
-                log.show(this, R.string.ez_test_log, R.string.ez_test_copy)
-            }, space(top = 12))
+            val ink = color(androidx.appcompat.R.attr.colorPrimary)
+            panel.addView(body(getString(R.string.ez_test_sent_tone_wave)), space(top = 12))
+            panel.addView(AudioWaveformView(this, log.localWaveform, ink, live).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, space().apply { height = dp(38) })
+            panel.addView(body(getString(R.string.ez_test_remote_mic_wave)), space(top = 8))
+            panel.addView(AudioWaveformView(this, log.remoteWaveform, ink, live).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, space().apply { height = dp(38) })
         }
+        panel.addView(body(getString(if (test.microphoneReceived) R.string.s_test_mic_received else R.string.s_test_mic_missing)), space(top = 8))
+        panel.addView(body(getString(if (test.echoQueued) R.string.s_test_echo_queued else R.string.s_test_echo_missing)), space(top = 8))
     }
 
     private fun renderSettings() {
@@ -987,12 +1034,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun audioTitle(): String = when {
         audioBusy -> getString(R.string.s_starting_audio)
+        liveAudio() == CallAudio.Status.TWO_WAY && uplinkResult() == UplinkHealth.Result.NOT_REACHED ->
+            getString(R.string.s_uplink_failed_title)
         liveAudio() == CallAudio.Status.TWO_WAY -> getString(R.string.s_two_way)
         liveAudio() == CallAudio.Status.LISTEN -> getString(R.string.s_listen_only)
         CallAudio.Setup.enabled(this) && RelayState.current.running -> getString(R.string.s_audio_stopped)
         CallAudio.Setup.enabled(this) -> getString(R.string.s_audio_relay_start)
         else -> getString(R.string.s_audio_not_setup)
     }
+
+    private fun uplinkResult(): UplinkHealth.Result? = UplinkHealth.load(this)?.result
 
     private data class AudioDisplay(
         val title: String,
@@ -1004,7 +1055,10 @@ class MainActivity : AppCompatActivity() {
         val canStart: Boolean,
         val method: CallAudio.Setup.Method?,
         val overlayEnabled: Boolean,
-        val error: Int?
+        val error: Int?,
+        val rootGranted: Boolean,
+        val uplink: UplinkHealth.Result?,
+        val reporting: Boolean
     ) {
         val shizuku get() = method == CallAudio.Setup.Method.SHIZUKU
     }
@@ -1017,20 +1071,35 @@ class MainActivity : AppCompatActivity() {
         val display = AudioDisplay(audioTitle(), active, configured, audioBusy, RelayState.current.running, paired,
             paired || (configured && LocalAdb.hasKey()),
             CallAudio.Setup.method(this), Settings.canDrawOverlays(this),
-            setupAudioError)
+            setupAudioError, rootGranted, uplinkResult(), audioReporting)
         if (shownAudio == display) return
         shownAudio = display
         val info = when {
+            display.busy && startingRoot -> if (display.rootGranted) R.string.s_audio_root_starting else R.string.s_audio_root_request
             display.busy -> R.string.s_audio_keep_wireless
+            display.active == CallAudio.Status.TWO_WAY && display.uplink == UplinkHealth.Result.NOT_REACHED ->
+                R.string.s_uplink_failed_info
+            display.active == CallAudio.Status.TWO_WAY && display.uplink == UplinkHealth.Result.REACHED ->
+                R.string.s_uplink_reached_info
             display.active == CallAudio.Status.TWO_WAY -> R.string.s_audio_two_way_info
             display.active == CallAudio.Status.LISTEN -> R.string.s_audio_listen_info
             display.configured && display.shizuku && display.relayRunning -> R.string.s_audio_shizuku_detail
+            display.configured && display.method == CallAudio.Setup.Method.ROOT && display.relayRunning ->
+                R.string.s_audio_root_detail
             display.configured && display.relayRunning -> R.string.s_audio_restart_info
             display.configured -> R.string.s_audio_resume_info
             else -> R.string.s_audio_setup_info
         }
         panel.removeAllViews()
         val methods = detail == Detail.AUDIO_SETUP
+        val ready = display.active != null && !display.busy && display.error == null
+        audioIntro?.visibility = if (ready) View.GONE else View.VISIBLE
+        audioMethodsLink?.apply {
+            removeAllViews()
+            visibility = if (ready) View.VISIBLE else View.GONE
+            if (ready) addView(surfaceCard(settingsRow(R.drawable.ic_headset, getString(R.string.s_ui_ready_methods),
+                getString(R.string.s_ui_ready_methods_detail), action = ::openAudioSetup).view), space())
+        }
         val state = stack().apply {
             setPaddingRelative(dp(16), dp(16), dp(16), dp(16))
             if (display.busy) addView(LinearProgressIndicator(this@MainActivity).apply {
@@ -1043,6 +1112,7 @@ class MainActivity : AppCompatActivity() {
                 addView(iconTile(R.drawable.ic_headset), LinearLayout.LayoutParams(dp(44), dp(44)))
                 if (display.active != null && display.error == null) {
                     val methodName = when (display.method) {
+                        CallAudio.Setup.Method.ROOT -> R.string.s_audio_root_name
                         CallAudio.Setup.Method.SHIZUKU -> R.string.s_ui_shizuku_name
                         CallAudio.Setup.Method.WIRELESS -> R.string.s_ui_wireless_method
                         CallAudio.Setup.Method.USB -> R.string.s_ui_usb_debugging
@@ -1060,28 +1130,30 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }, space())
-            val title = if (display.error == R.string.s_audio_shizuku_failed) getString(R.string.s_ui_audio_unavailable)
+            val title = if (display.error == R.string.s_audio_shizuku_failed || display.error == R.string.s_audio_root_failed)
+                getString(R.string.s_ui_audio_unavailable)
                 else display.title
             addView(sectionTitle(title, R.style.TextAppearance_ezcall_TitleLarge),
                 space(top = 10))
             addView(body(getString(display.error ?: info)).apply {
                 if (display.error != null) setTextColor(color(androidx.appcompat.R.attr.colorError))
             }, space(top = 4))
-            if (!methods) addView(actionButton(getString(R.string.s_ui_audio_setup_methods), ::openAudioSetup), space(top = 12))
+            if (!methods && !ready) addView(actionButton(getString(R.string.s_ui_audio_setup_methods), ::openAudioSetup), space(top = 12))
         }
         if (!methods || display.active != null || display.busy || display.error != null) {
-            panel.addView(surfaceCard(state, accent = display.active != null).apply {
+            panel.addView(surfaceCard(state, accent = ready).apply {
                 accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             }, space())
         }
-        if (!methods) return
-        if (display.error == R.string.s_audio_shizuku_failed && !display.busy) {
-            panel.addView(actionButton(getString(R.string.s_ui_try_audio_again), ::setupShizukuAudio), space(top = 12))
-            panel.addView(textButton(getString(R.string.s_ui_choose_audio_method)) {
-                setupAudioError = null
-                renderAudio()
-            }, space(top = 8))
+        if (!methods) {
+            if (display.configured) addAudioReport(panel, display)
             return
+        }
+        if (offersRoot) {
+            panel.addView(surfaceCard(settingsRow(R.drawable.ic_link, getString(R.string.s_audio_root_name),
+                getString(R.string.s_audio_root_detail), enabled = !display.busy) {
+                setupAudio(method = CallAudio.Setup.Method.ROOT)
+            }.view), space(top = if (panel.childCount == 0) 0 else 12))
         }
 
         panel.addView(surfaceCard(settingsRow(R.drawable.ic_link, getString(if (display.shizuku) R.string.s_audio_shizuku_restart
@@ -1102,6 +1174,7 @@ class MainActivity : AppCompatActivity() {
         }
         panel.addView(surfaceCard(settingsRow(R.drawable.ic_devices, getString(R.string.s_ui_usb_method),
             getString(R.string.s_audio_usb_detail), enabled = !display.busy, action = ::setupUsbAudio).view), space(top = 12))
+        addAudioReport(panel, display)
         panel.addView(groupLabel(R.string.s_ui_call_controls_group), space(top = 12))
         panel.addView(surfaceCard(settingsRow(R.drawable.ic_answer, getString(R.string.s_call_control),
             getString(R.string.s_ui_call_control_detail)) {
@@ -1120,6 +1193,49 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.s_call_overlay_info)) {
             showDetail(Detail.OVERLAY)
         }.view, accent = display.overlayEnabled), space(top = 12))
+    }
+
+    private fun addAudioReport(panel: LinearLayout, display: AudioDisplay) {
+        panel.addView(surfaceCard(settingsRow(R.drawable.ic_sender_help, getString(R.string.s_audio_report),
+            getString(R.string.s_audio_report_detail), enabled = !display.busy && !display.reporting,
+            action = ::sendAudioReport).view), space(top = if (panel.childCount == 0) 0 else 12))
+    }
+
+    private fun sendAudioReport() {
+        if (audioReporting) return
+        audioReporting = true
+        renderAudio()
+        val context = applicationContext
+        Thread {
+            val report = audioReport(context)
+            runOnUiThread {
+                audioReporting = false
+                if (isDestroyed) return@runOnUiThread
+                renderAudio()
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, "ezcall audio report")
+                    .putExtra(Intent.EXTRA_TEXT, report)
+                runCatching { startActivity(Intent.createChooser(send, getString(R.string.s_audio_report))) }
+            }
+        }.start()
+    }
+
+    /** Device and call audio details for support. Holds no phone numbers, contacts or messages. */
+    private fun audioReport(context: Context): String {
+        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull()
+        val uplink = UplinkHealth.load(context)
+        val component = runCatching { CallAudio.Setup.diagnostics(context) }.getOrNull()
+        return buildString {
+            appendLine("ezcall Sender $version audio report")
+            appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+            appendLine("Setup: method=${CallAudio.Setup.method(context)} enabled=${CallAudio.Setup.enabled(context)} " +
+                "status=${RelayState.audio} relay=${RelayState.current.running} connected=${RelayState.current.connected}")
+            appendLine("Last real-call check: " + (uplink?.let {
+                "${it.result} in ${if (it.redirect) "redirect" else "in-call"} mode at ${java.util.Date(it.at)}"
+            } ?: "none on this Android build"))
+            appendLine()
+            append(component ?: "Call audio component isn't running. Start call audio, then send the report again.")
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -1192,7 +1308,7 @@ class MainActivity : AppCompatActivity() {
                 !Shizuku.pingBinder() -> R.string.s_audio_shizuku_start
                 !ShizukuAudioLauncher.supported() -> R.string.s_audio_shizuku_unsupported
                 Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED -> {
-                    setupAudio(shizuku = true)
+                    setupAudio(method = CallAudio.Setup.Method.SHIZUKU)
                     null
                 }
                 Shizuku.shouldShowRequestPermissionRationale() -> R.string.s_audio_shizuku_denied
@@ -1219,32 +1335,45 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun setupAudio(connectPort: Int? = null, shizuku: Boolean = false) {
+    private fun setupAudio(connectPort: Int? = null, method: CallAudio.Setup.Method = CallAudio.Setup.Method.WIRELESS) {
         if (audioBusy) return
-        if (!shizuku && !LocalAdb.hasKey()) {
+        if (method == CallAudio.Setup.Method.WIRELESS && !LocalAdb.hasKey()) {
             alert(getString(R.string.s_wireless_first))
             return
         }
         audioBusy = true
+        startingRoot = method == CallAudio.Setup.Method.ROOT
+        rootGranted = false
         setupAudioError = null
         renderAudio()
         val context = applicationContext
         Thread {
-            val result = runCatching { CallAudio.Setup.start(context, connectPort, shizuku) }
+            val onRootGranted: (() -> Unit)? = if (method != CallAudio.Setup.Method.ROOT) null else ({
+                runOnUiThread {
+                    if (!isDestroyed && startingRoot) {
+                        rootGranted = true
+                        renderAudio()
+                    }
+                }
+            })
+            val result = runCatching { CallAudio.Setup.start(context, connectPort, method, onRootGranted) }
             runOnUiThread {
                 audioBusy = false
+                startingRoot = false
+                rootGranted = false
                 if (result.isSuccess) RelayState.refreshAudio?.invoke()
                 if (isDestroyed) return@runOnUiThread
                 result.onSuccess { status ->
                     setupAudioReady = status
                 }.onFailure {
                     setupAudioReady = null
-                    setupAudioError = when (it) {
-                        is LocalAdb.PortNotFound -> R.string.s_audio_port_missing
-                        is AdbIdentity.Unverified -> R.string.s_audio_unverified
-                        is CallAudio.Setup.ComponentNotReady -> if (shizuku) R.string.s_audio_shizuku_failed
-                            else R.string.s_audio_component_failed
-                        else -> if (shizuku) R.string.s_audio_shizuku_failed else R.string.s_audio_failure
+                    setupAudioError = when {
+                        method == CallAudio.Setup.Method.ROOT -> R.string.s_audio_root_failed
+                        method == CallAudio.Setup.Method.SHIZUKU -> R.string.s_audio_shizuku_failed
+                        it is LocalAdb.PortNotFound -> R.string.s_audio_port_missing
+                        it is AdbIdentity.Unverified -> R.string.s_audio_unverified
+                        it is CallAudio.Setup.ComponentNotReady -> R.string.s_audio_component_failed
+                        else -> R.string.s_audio_failure
                     }
                 }
                 renderAudio()
@@ -1269,7 +1398,14 @@ class MainActivity : AppCompatActivity() {
         dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("ADB", command))
         }
-        dialog.setOnDismissListener { CallAudio.Setup.cancelUsb(request) }
+        cancelUsbSetup = {
+            CallAudio.Setup.cancelUsb(request)
+            dialog.dismiss()
+        }
+        dialog.setOnDismissListener {
+            CallAudio.Setup.cancelUsb(request)
+            cancelUsbSetup = null
+        }
         audioBusy = true
         setupAudioError = null
         renderAudio()

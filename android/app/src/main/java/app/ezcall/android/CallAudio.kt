@@ -1,11 +1,13 @@
 package app.ezcall.android
 
 import android.content.Context
+import android.os.Build
 import android.os.SystemClock
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.File
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -19,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * Relay side of live call audio. The shell-user component captures the far end of the SIM call and injects the
+ * Relay side of live call audio. The privileged component captures the far end of the SIM call and injects the
  * receiving phone microphone into it. This class encodes and decodes Opus and seals each packet for the BLE audio channel.
  */
 internal class CallAudio(private val context: Context, private val events: Events) {
@@ -28,6 +30,7 @@ internal class CallAudio(private val context: Context, private val events: Event
         fun onAudioStarted(callId: String, key: ByteArray, uplink: Boolean, pairFrames: Boolean)
         fun onAudioStopped(callId: String, reason: String?)
         fun onAudioPacket(packet: ByteArray)
+        fun onUplinkCheck(result: Int, mode: Int)
     }
 
     enum class Status(val wire: String) { NONE("none"), LISTEN("listen"), TWO_WAY("two_way") }
@@ -124,6 +127,9 @@ internal class CallAudio(private val context: Context, private val events: Event
                 when (type) {
                     AudioBridge.STARTED -> post { if (link === current) started(payload) }
                     AudioBridge.PCM -> if (link === current) encode(payload)
+                    AudioBridge.UPLINK_CHECK -> if (link === current && payload.size == 2) {
+                        events.onUplinkCheck(payload[0].toInt(), payload[1].toInt())
+                    }
                     AudioBridge.ERROR -> post {
                         if (link === current) endStream(String(payload, Charsets.UTF_8).take(160))
                     }
@@ -232,7 +238,7 @@ internal class CallAudio(private val context: Context, private val events: Event
         fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
 
         enum class Method {
-            SHIZUKU, WIRELESS, USB;
+            ROOT, SHIZUKU, WIRELESS, USB;
 
             companion object {
                 fun restore(saved: String?, legacyShizuku: Boolean): Method? =
@@ -248,6 +254,10 @@ internal class CallAudio(private val context: Context, private val events: Event
             prefs(context).edit().putBoolean("enabled", true).putString("method", method.name).remove("shizuku").apply()
         }
 
+        private fun su() = listOf("/system/bin/su", "/system/xbin/su").firstOrNull { File(it).canExecute() }
+
+        fun offersRoot() = Build.VERSION.SDK_INT >= 33 && su() != null
+
         fun disable(context: Context) {
             prefs(context).edit().putBoolean("enabled", false).apply()
         }
@@ -259,8 +269,8 @@ internal class CallAudio(private val context: Context, private val events: Event
         @Synchronized
         fun claimUsb(context: Context, uid: Int): String? {
             if (!usb.claim(uid)) return null
-            open(context)?.let {
-                runCatching { it.socket.close() }
+            reuseOrStop(context, Method.USB)?.let {
+                it.socket.close()
                 return "true\n"
             }
             val (port, token) = credentials(context)
@@ -287,46 +297,108 @@ internal class CallAudio(private val context: Context, private val events: Event
 
         /** Starts or restarts the component for the setup screen and reports what this phone allows. */
         @Synchronized
-        fun start(context: Context, connectPort: Int? = null, shizuku: Boolean = false): Status {
-            val probe = launch(context, connectPort, shizuku)
-            rememberMethod(context, if (shizuku) Method.SHIZUKU else Method.WIRELESS)
-            runCatching { probe.socket.close() }
-            return probe.status
+        fun start(context: Context, connectPort: Int?, method: Method, onRootGranted: (() -> Unit)? = null): Status {
+            return launch(context, connectPort, method, interactive = true, onRootGranted = onRootGranted).let {
+                it.socket.use { _ -> it.status }
+            }
         }
 
         /** Starts the component using the selected method and waits for its authenticated response. */
         @Synchronized
-        fun launch(context: Context, connectPort: Int? = null,
-                   shizuku: Boolean = method(context) == Method.SHIZUKU): Link {
-            open(context)?.let {
-                if (!enabled(context)) prefs(context).edit().putBoolean("enabled", true).apply()
+        fun launch(context: Context): Link {
+            val selected = method(context)
+            if (selected == Method.USB) open(context)?.let { return it }
+            val restartMethod = selected?.takeUnless { it == Method.USB } ?: Method.WIRELESS
+            return launch(context, null, restartMethod)
+        }
+
+        private fun launch(context: Context, connectPort: Int?, method: Method, interactive: Boolean = false,
+                           onRootGranted: (() -> Unit)? = null): Link {
+            if (usb.hasRequest(STARTUP_MS)) {
+                if (!interactive) open(context)?.let { return it }
+                throw ComponentNotReady()
+            }
+            reuseOrStop(context, method, restart = interactive && method == Method.SHIZUKU)?.let {
+                rememberMethod(context, method)
                 return it
             }
-            if (usb.hasRequest(STARTUP_MS)) throw ComponentNotReady()
             val port = credentials(context).first
             val token = ByteArray(32).also(SecureRandom()::nextBytes)
-            if (shizuku) ShizukuAudioLauncher.launch(context, port, token)
-            else LocalAdb.shell(context, launchCommand(context.applicationInfo.sourceDir, port, token), connectPort)
+            val apk = context.applicationInfo.sourceDir
+            when (method) {
+                Method.ROOT -> runLauncher(
+                    su() ?: throw ComponentNotReady(), rootLaunchCommand(apk, port, token),
+                    if (interactive) 45 else 5, onRootGranted
+                )
+                Method.SHIZUKU -> ShizukuAudioLauncher.launch(context, port, token)
+                Method.WIRELESS -> LocalAdb.shell(context, launchCommand(apk, port, token), connectPort)
+                Method.USB -> error("USB requires external setup")
+            }
             // Keep the previous token if the launcher rejects the request.
             check(prefs(context).edit().putString("token", hex(token)).commit())
             repeat(24) {
                 Thread.sleep(250)
                 open(context)?.let {
-                    rememberMethod(context, if (shizuku) Method.SHIZUKU else Method.WIRELESS)
+                    rememberMethod(context, method)
                     return it
                 }
             }
             throw ComponentNotReady()
         }
 
+        private fun reuseOrStop(context: Context, requested: Method, restart: Boolean = false): Link? {
+            val current = open(context) ?: return null
+            if (!restart && (method(context) ?: Method.WIRELESS) == requested) return current
+            current.socket.use {
+                it.soTimeout = STARTUP_MS.toInt()
+                AudioBridge.write(current.output, AudioBridge.SHUTDOWN)
+                if (current.input.read() != -1) throw ComponentNotReady()
+            }
+            return null
+        }
+
+        private const val ROOT_GRANTED = "ezcall-root-granted"
+
+        internal fun runLauncher(executable: String, command: String, timeoutSeconds: Long, onRootGranted: (() -> Unit)? = null) {
+            val launcher = ProcessBuilder(executable, "-c", command).redirectError(File("/dev/null")).apply {
+                if (onRootGranted == null) redirectOutput(File("/dev/null"))
+            }.start()
+            if (onRootGranted != null) thread(name = "ezcall-root-permission", isDaemon = true) {
+                runCatching {
+                    launcher.inputStream.bufferedReader().useLines { lines ->
+                        if (lines.any { it == ROOT_GRANTED }) onRootGranted()
+                    }
+                }
+            }
+            try {
+                if (!launcher.waitFor(timeoutSeconds, TimeUnit.SECONDS) || launcher.exitValue() != 0) {
+                    throw ComponentNotReady()
+                }
+            } finally {
+                launcher.destroyForcibly()
+            }
+        }
+
+        internal fun rootLaunchCommand(apk: String, port: Int, token: ByteArray): String {
+            require(apk.matches(Regex("/data/app/(?:~~[A-Za-z0-9_=+-]+/)?app\\.ezcall\\.android-[A-Za-z0-9_=+-]+/base\\.apk")))
+            return "export PATH=/system/bin; [ \"\$(id -u)\" = 0 ] || exit 1; echo $ROOT_GRANTED; " +
+                launchCommand(apk, port, token, root = true)
+        }
+
         internal fun launchCommand(apk: String, port: Int, token: ByteArray): String {
+            return launchCommand(apk, port, token, root = false)
+        }
+
+        private fun launchCommand(apk: String, port: Int, token: ByteArray, root: Boolean): String {
             require(port in 20_000..59_999 && token.size == 32)
             require(apk.matches(Regex("[A-Za-z0-9/._=~+-]+")))
             val name = CallAudioServer.PROCESS_NAME
             // Give app_process time to detach before the launcher shell exits.
-            return "trap '' HUP; pkill -x $name; ${CallAudioServer.TOKEN_ENV}=${hex(token)} CLASSPATH='$apk' " +
+            val cleanup = if (root) "" else "pkill -x $name; "
+            val log = if (root) "/dev/null" else "/data/local/tmp/$name.log"
+            return "trap '' HUP; ${cleanup}${CallAudioServer.TOKEN_ENV}=${hex(token)} CLASSPATH='$apk' " +
                 "setsid app_process /system/bin --nice-name=$name ${CallAudioServer::class.java.name} $port " +
-                "</dev/null >/data/local/tmp/$name.log 2>&1 & sleep 0.4"
+                "</dev/null >$log 2>&1 & sleep 0.4"
         }
 
         class ComponentNotReady : IOException("The call audio component didn't start")
@@ -360,6 +432,23 @@ internal class CallAudio(private val context: Context, private val events: Event
             } catch (_: Exception) {
                 runCatching { socket.close() }
                 null
+            }
+        }
+
+        /** Reads the running component's device details and recent log, or null when it isn't running. */
+        fun diagnostics(context: Context): String? {
+            val current = open(context) ?: return null
+            return current.socket.use { socket ->
+                runCatching {
+                    socket.soTimeout = 3_000
+                    AudioBridge.write(current.output, AudioBridge.DIAGNOSE)
+                    var text: String? = null
+                    while (text == null) {
+                        val (type, payload) = AudioBridge.read(current.input)
+                        if (type == AudioBridge.DIAGNOSTICS) text = String(payload, Charsets.UTF_8)
+                    }
+                    text
+                }.getOrNull()
             }
         }
 

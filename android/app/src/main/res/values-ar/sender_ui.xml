@@ -16,7 +16,7 @@
     <string name="s_ui_back_to_audio">العودة إلى الصوت</string>
     <string name="s_ui_audio_setup_choices">Shizuku أو تصحيح الأخطاء لاسلكيًا أو عبر USB</string>
     <string name="s_audio_usb">الإعداد عبر USB</string>
-    <string name="s_audio_usb_detail">شغّل صوت المكالمات من كمبيوتر عليه Android Platform-Tools.</string>
+    <string name="s_audio_usb_detail">استخدم كبلًا وحاسوبًا عليه Android Platform-Tools.</string>
     <string name="s_audio_usb_steps">فعّل تصحيح أخطاء USB في خيارات المطوّر. صِل الهاتف بالكمبيوتر ووافق على طلب تصحيح الأخطاء. اترك هذه النافذة مفتوحة ونفّذ الأمر التالي خلال دقيقتين:\n\n%1$s</string>
     <string name="s_audio_usb_copy">نسخ الأمر</string>
     <string name="s_audio_usb_failed">تعذّر تشغيل صوت المكالمات عبر USB. تحقّق من طلب تصحيح الأخطاء ثم أعد تنفيذ الأمر من نافذة إعداد جديدة.</string>

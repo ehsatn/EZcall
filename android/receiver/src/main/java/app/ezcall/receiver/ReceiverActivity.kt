@@ -12,6 +12,7 @@ import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.net.Uri
@@ -52,10 +53,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import app.ezcall.android.PairKey
-import app.ezcall.android.PairingArtwork
 import app.ezcall.android.Support
-import app.ezcall.android.ReceiverTestStep
-import app.ezcall.android.AudioTestLog
 import app.ezcall.android.AudioWaveformView
 import app.ezcall.android.languageName
 import app.ezcall.android.showEzcallLanguage
@@ -112,11 +110,15 @@ open class ReceiverActivity : AppCompatActivity() {
     private lateinit var support: Support
     private lateinit var pairKey: PairKey
     private lateinit var dashboard: LinearLayout
+    private lateinit var dashboardScreen: LinearLayout
     private lateinit var toolbar: MaterialToolbar
+    private lateinit var toolbarSettings: ImageButton
     private lateinit var settingsScreen: ScrollView
     private lateinit var settingsContent: LinearLayout
     private lateinit var alertsContent: LinearLayout
+    private lateinit var audioTestInstructions: LinearLayout
     private var alertsOpen = false
+    private var audioTestOpen = false
     private lateinit var settingsBack: OnBackPressedCallback
     private lateinit var settingsLinkTitle: TextView
     private lateinit var settingsLinkDetail: TextView
@@ -131,7 +133,6 @@ open class ReceiverActivity : AppCompatActivity() {
     private lateinit var microphoneSetting: SettingRow
     private lateinit var audioTestSetting: SettingRow
     private lateinit var pairingScreen: ScrollView
-    private lateinit var pairingFeedback: MaterialCardView
     private lateinit var pairingStatus: TextView
     private lateinit var pairingProgress: LinearProgressIndicator
     private lateinit var scanButton: MaterialButton
@@ -139,13 +140,16 @@ open class ReceiverActivity : AppCompatActivity() {
     private lateinit var cancelButton: MaterialButton
     private lateinit var pairingRecovery: MaterialButton
     private lateinit var connection: MaterialCardView
+    private lateinit var linkRow: LinearLayout
+    private lateinit var linkBadge: FrameLayout
     private lateinit var linkTitle: TextView
     private lateinit var linkDetail: TextView
-    private lateinit var linkProgress: LinearProgressIndicator
     private lateinit var linkAction: MaterialButton
     private lateinit var connectionSettingsButton: ImageButton
     private lateinit var nav: BottomNavigationView
-    private lateinit var pairingIntro: View
+    private lateinit var pairingArt: ImageView
+    private lateinit var pairingStateArt: ImageView
+    private lateinit var brandWordmark: TextView
     private lateinit var pairingTitle: TextView
     private lateinit var callPanel: MaterialCardView
     private lateinit var sectionTitle: TextView
@@ -174,18 +178,31 @@ open class ReceiverActivity : AppCompatActivity() {
     private var listAttempts: List<SmsAttempt>? = null
     private var renderedTab: Destination? = null
     private var callPanelContents: List<Any?>? = null
+    private var displayedAudioTest: List<Any?>? = null
+    private lateinit var callScreen: LinearLayout
     private val floatDashboardAction get() = resources.configuration.fontScale < 1.3f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (this is IncomingCallActivity) {
             callPanel = card(0)
-            setContentView(ScrollView(this).apply {
+            toolbar = buildToolbar().apply {
+                menu.clear()
+                setNavigationIcon(R.drawable.receiver_back)
+                setNavigationContentDescription(androidx.appcompat.R.string.abc_action_bar_up_description)
+                setNavigationOnClickListener { finishAndRemoveTask() }
+                visibility = View.GONE
+            }
+            callScreen = column().apply {
                 setBackgroundColor(getColor(R.color.receiver_call_surface))
-                isFillViewport = true
-                addView(callPanel)
+                addView(toolbar)
+                addView(ScrollView(this@ReceiverActivity).apply {
+                    isFillViewport = true
+                    addView(callPanel)
+                }, LinearLayout.LayoutParams(-1, 0, 1f))
                 applyScreenInsets(this)
-            })
+            }
+            setContentView(callScreen)
             render()
             return
         }
@@ -202,7 +219,8 @@ open class ReceiverActivity : AppCompatActivity() {
             state.data = if (state.paired) ReceiverVault(this).load() else ReceiverData()
         }
 
-        val root = column().apply { setBackgroundColor(color(android.R.attr.colorBackground)) }
+        dashboardScreen = column()
+        val root = dashboardScreen
         applyScreenInsets(root)
         toolbar = buildToolbar()
         root.addView(toolbar)
@@ -211,24 +229,33 @@ open class ReceiverActivity : AppCompatActivity() {
         pairingScreen = buildPairingScreen()
         dashboard = buildDashboard(savedInstanceState)
         alertsOpen = savedInstanceState?.getBoolean("alerts") == true
+        audioTestOpen = savedInstanceState?.getBoolean("audioTest") ?: intent.getBooleanExtra("audioTest", false)
         settingsScreen = buildSettings()
         settingsBack = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
-                if (alertsOpen) {
+                if (alertsOpen || audioTestOpen) {
                     alertsOpen = false
+                    audioTestOpen = false
                     settingsScreen.scrollTo(0, 0)
                     render()
                 } else showSettings(false)
             }
         }
         onBackPressedDispatcher.addCallback(this, settingsBack)
-        settingsBack.isEnabled = savedInstanceState?.getBoolean("settings") == true
+        settingsBack.isEnabled = savedInstanceState?.getBoolean("settings") ?: intent.getBooleanExtra("audioTestReturn", false)
         content.addView(pairingScreen, FrameLayout.LayoutParams(-1, -1))
         content.addView(dashboard, FrameLayout.LayoutParams(-1, -1))
         content.addView(settingsScreen, FrameLayout.LayoutParams(-1, -1))
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         render()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (this !is IncomingCallActivity && intent.getBooleanExtra("audioTestReturn", false)) {
+            if (intent.getBooleanExtra("audioTest", false)) showAudioTestSettings() else showSettings(true)
+        }
     }
 
     private fun applyScreenInsets(root: View) {
@@ -245,14 +272,18 @@ open class ReceiverActivity : AppCompatActivity() {
     private fun buildToolbar() = MaterialToolbar(this).apply {
         minimumHeight = dp(64)
         setContentInsetsRelative(dp(24), dp(16))
-        setPaddingRelative(0, 0, dp(10), 0)
+        contentInsetStartWithNavigation = dp(60)
+        setPaddingRelative(0, 0, dp(20), 0)
         val brand = row().apply {
-            addView(FrameLayout(this@ReceiverActivity).apply {
-                background = rounded(getColor(R.color.launcher_background), 15)
-                addView(smallIcon(R.drawable.ezcall_icon_mark, Color.WHITE),
-                    FrameLayout.LayoutParams(-1, -1))
+            addView(ImageView(this@ReceiverActivity).apply {
+                setImageResource(R.drawable.receiver_header_brand)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
-            addView(heading(getString(R.string.ez_brand), R.style.TextAppearance_ezcall_TitleLarge))
+            brandWordmark = heading(getString(R.string.ez_brand), R.style.TextAppearance_ezcall_TitleLarge).apply {
+                textSize = 24f
+                typeface = Typeface.create(typeface, 500, false)
+            }
+            addView(brandWordmark)
             addView(label(getString(R.string.r_receiver), R.style.TextAppearance_ezcall_LabelMedium,
                 MaterialR.attr.colorOnPrimaryContainer).apply {
                 background = rounded(color(MaterialR.attr.colorPrimaryContainer), 20)
@@ -260,15 +291,20 @@ open class ReceiverActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(10) })
         }
         addView(brand, Toolbar.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
-        menu.add(0, SETTINGS, 0, R.string.ez_settings).apply {
-            icon = iconDrawable(R.drawable.ic_settings, MaterialR.attr.colorOnSurface)
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            setOnMenuItemClickListener { showSettings(true); true }
+        if (this@ReceiverActivity !is IncomingCallActivity) {
+            toolbarSettings = iconButton(R.drawable.ic_settings, getString(R.string.ez_settings)) { showSettings(true) }.apply {
+                layoutParams = ViewGroup.LayoutParams(dp(48), dp(48))
+            }
+            menu.add(0, SETTINGS, 0, R.string.ez_settings).apply {
+                actionView = toolbarSettings
+                setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            }
         }
     }
 
     private fun showSettings(show: Boolean) {
         alertsOpen = false
+        audioTestOpen = false
         if (show) {
             settingsScreen.scrollTo(0, 0)
         }
@@ -280,53 +316,59 @@ open class ReceiverActivity : AppCompatActivity() {
         isFillViewport = true
         isVerticalScrollBarEnabled = false
         addView(column().apply {
-            setPaddingRelative(dp(24), dp(12), dp(24), dp(20))
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPaddingRelative(dp(24), dp(36), dp(24), dp(24))
 
-            pairingTitle = heading(getString(R.string.ez_pair_phones), R.style.TextAppearance_ezcall_HeadlineLarge)
-            addView(pairingTitle)
-            pairingIntro = column().apply {
-                addView(label(getString(R.string.r_pair_intro), R.style.TextAppearance_ezcall_BodyMedium,
-                    MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 6))
-                val hero = card(28).apply {
-                    setCardBackgroundColor(getColor(R.color.ezcall_pairing_hero))
-                    addView(PairingArtwork(this@ReceiverActivity).apply {
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    }, FrameLayout.LayoutParams(-1, -1))
-                }
-                addView(hero, LinearLayout.LayoutParams(-1, dp(136)).apply { topMargin = dp(12) })
-                addView(settingsGroup {
-                    addView(SettingRow(R.drawable.ic_qr, getString(R.string.r_setup_sender), click = null).apply {
-                        updateDetail(getString(R.string.r_setup_sender_detail))
-                    })
-                }, fullWidth(top = 12))
+            pairingStateArt = ImageView(this@ReceiverActivity).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
-            addView(pairingIntro, fullWidth())
-
-            pairingFeedback = card(16)
-            val notice = column().apply { setPadding(dp(16), dp(12), dp(16), dp(12)) }
-            pairingStatus = label("", R.style.TextAppearance_ezcall_BodyMedium).apply {
+            addView(pairingStateArt, LinearLayout.LayoutParams(-1, dp(208)).apply { bottomMargin = dp(24) })
+            pairingTitle = heading(getString(R.string.ez_pair_phones), R.style.TextAppearance_ezcall_DisplaySmall).apply {
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+            }
+            addView(pairingTitle, fullWidth())
+            pairingStatus = label("", R.style.TextAppearance_ezcall_BodyLarge).apply {
+                gravity = Gravity.CENTER
+                letterSpacing = 0f
+                setTextColor(getColor(R.color.receiver_pairing_body))
                 accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             }
+            addView(pairingStatus, fullWidth(top = 10))
+            pairingArt = ImageView(this@ReceiverActivity).apply {
+                setImageResource(R.drawable.receiver_pairing_home)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            val artSize = (resources.configuration.screenWidthDp - 48).coerceIn(160, 344)
+            addView(pairingArt, LinearLayout.LayoutParams(-1, dp(artSize)).apply { topMargin = dp(22) })
+
             pairingProgress = LinearProgressIndicator(this@ReceiverActivity).apply {
                 isIndeterminate = true
                 trackCornerRadius = dp(2)
+                setIndicatorColor(Color.WHITE)
+                trackColor = 0x52FFFFFF
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }
-            notice.addView(pairingStatus)
-            notice.addView(pairingProgress, fullWidth(top = 8))
-            pairingFeedback.addView(notice)
-            addView(pairingFeedback, fullWidth(top = 16))
+            addView(pairingProgress, LinearLayout.LayoutParams(dp(160), dp(4)).apply { topMargin = dp(24) })
 
-            scanButton = button(getString(R.string.r_scan_qr), 0, click = ::camera)
-            photoButton = button(getString(R.string.r_choose_qr), 0, secondary = true, click = ::choosePhoto)
-            cancelButton = button(getString(R.string.ez_cancel_pairing), R.drawable.ic_close, secondary = true) { ReceiverService.current?.forget() }
-            pairingRecovery = button("", R.drawable.ic_bluetooth, secondary = true, click = ::recoverConnection)
-            addView(scanButton, fullWidth(top = 12))
+            scanButton = pairingButton(getString(R.string.r_scan_qr), click = ::camera)
+            photoButton = pairingButton(getString(R.string.r_choose_qr), secondary = true, click = ::choosePhoto)
+            cancelButton = pairingButton(getString(R.string.ez_cancel_pairing), secondary = true) { ReceiverService.current?.forget() }
+            pairingRecovery = pairingButton("", click = ::recoverConnection)
+            addView(scanButton, fullWidth(top = 20))
+            addView(pairingRecovery, fullWidth(top = 20))
             addView(photoButton, fullWidth(top = 8))
-            addView(pairingRecovery, fullWidth(top = 8))
-            addView(cancelButton, fullWidth(top = 8))
-
+            addView(cancelButton, fullWidth(top = 20))
         })
     }
+
+    private fun pairingButton(title: String, secondary: Boolean = false, click: () -> Unit) =
+        button(title, 0, secondary, click = click).apply {
+            minimumHeight = dp(52)
+            backgroundTintList = ColorStateList.valueOf(if (secondary) 0x29FFFFFF else Color.WHITE)
+            setTextColor(if (secondary) Color.WHITE else getColor(R.color.ezcall_pairing_hero))
+            if (secondary) strokeColor = ColorStateList.valueOf(0xB3FFFFFF.toInt())
+        }
 
     private fun buildDashboard(saved: Bundle?) = column().apply {
         val content = FrameLayout(this@ReceiverActivity)
@@ -338,8 +380,8 @@ open class ReceiverActivity : AppCompatActivity() {
 
         connection = card(20)
         val linkContent = column()
-        val linkRow = row().apply { setPaddingRelative(dp(12), 0, dp(8), 0) }
-        val linkBadge = FrameLayout(this@ReceiverActivity).apply {
+        linkRow = row()
+        linkBadge = FrameLayout(this@ReceiverActivity).apply {
             addView(smallIcon(R.drawable.ic_bluetooth, color(MaterialR.attr.colorOnPrimaryContainer)),
                 FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
         }
@@ -351,15 +393,9 @@ open class ReceiverActivity : AppCompatActivity() {
         linkRow.addView(column().apply { addView(linkTitle); addView(linkDetail, fullWidth(top = 2)) },
             LinearLayout.LayoutParams(0, -2, 1f))
         connectionSettingsButton = iconButton(R.drawable.receiver_forward, getString(R.string.r_settings_connection)) { showSettings(true) }
-        linkRow.addView(connectionSettingsButton, LinearLayout.LayoutParams(dp(48), dp(48)))
+        linkRow.addView(connectionSettingsButton, LinearLayout.LayoutParams(dp(44), dp(44)))
         linkContent.addView(linkRow, fullWidth())
-        linkProgress = LinearProgressIndicator(this@ReceiverActivity).apply {
-            isIndeterminate = true
-            trackCornerRadius = dp(2)
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-        linkContent.addView(linkProgress, fullWidth(bottom = 12).apply { marginStart = dp(16); marginEnd = dp(16) })
-        linkAction = button("", R.drawable.ic_bluetooth, secondary = true, click = ::recoverConnection)
+        linkAction = button("", 0, click = ::recoverConnection)
         linkContent.addView(linkAction, fullWidth(bottom = 12).apply { marginStart = dp(16); marginEnd = dp(16) })
         connection.addView(linkContent)
         header.addView(connection, fullWidth(bottom = 12))
@@ -385,6 +421,7 @@ open class ReceiverActivity : AppCompatActivity() {
             backgroundTintList = ColorStateList.valueOf(color(MaterialR.attr.colorPrimaryContainer))
             setTextColor(color(MaterialR.attr.colorOnPrimaryContainer))
             iconTint = ColorStateList.valueOf(color(MaterialR.attr.colorOnPrimaryContainer))
+            stateListAnimator = null
             elevation = 0f
             maxLines = 2
             minimumHeight = dp(56)
@@ -412,6 +449,11 @@ open class ReceiverActivity : AppCompatActivity() {
             labelVisibilityMode = BottomNavigationView.LABEL_VISIBILITY_LABELED
             setLabelMaxLines(2)
             setItemActiveIndicatorColor(ColorStateList.valueOf(color(MaterialR.attr.colorPrimaryContainer)))
+            itemTextColor = ColorStateList(
+                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(color(androidx.appcompat.R.attr.colorPrimary), color(MaterialR.attr.colorOnSurfaceVariant))
+            )
+            itemIconTintList = ColorStateList.valueOf(color(MaterialR.attr.colorOnSurface))
             Destination.entries.forEach { tab -> menu.add(0, tab.ordinal + 1, 0, tab.title).setIcon(tab.icon) }
             selectedItemId = activeTab.ordinal + 1
             setOnItemSelectedListener { target ->
@@ -432,17 +474,17 @@ open class ReceiverActivity : AppCompatActivity() {
 
     private fun buildEmptyPanel() = column().apply {
         gravity = Gravity.CENTER_HORIZONTAL
-        setPadding(dp(28), dp(32), dp(28), dp(20))
-        emptyIcon = smallIcon(activeTab.icon, color(MaterialR.attr.colorOnSurfaceVariant)).apply {
-            background = rounded(color(MaterialR.attr.colorSurfaceContainerHigh), 20)
-            setPadding(dp(14), dp(14), dp(14), dp(14))
+        setPadding(dp(24), dp(64), dp(24), dp(20))
+        emptyIcon = smallIcon(activeTab.icon, color(MaterialR.attr.colorOnPrimaryContainer)).apply {
+            background = rounded(color(MaterialR.attr.colorPrimaryContainer), 32)
+            setPadding(dp(20), dp(20), dp(20), dp(20))
         }
-        addView(emptyIcon, LinearLayout.LayoutParams(dp(60), dp(60)))
-        emptyTitle = heading("", R.style.TextAppearance_ezcall_TitleMedium).apply { gravity = Gravity.CENTER }
-        addView(emptyTitle, fullWidth(top = 16))
+        addView(emptyIcon, LinearLayout.LayoutParams(dp(64), dp(64)))
+        emptyTitle = heading("", R.style.TextAppearance_ezcall_TitleLarge).apply { gravity = Gravity.CENTER }
+        addView(emptyTitle, fullWidth(top = 12))
         emptyDetail = label("", R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant)
             .apply { gravity = Gravity.CENTER }
-        addView(emptyDetail, fullWidth(top = 4))
+        addView(emptyDetail, fullWidth(top = 10))
     }
 
     override fun onStart() {
@@ -502,6 +544,7 @@ open class ReceiverActivity : AppCompatActivity() {
         outState.putString("camera", cameraFile?.path)
         outState.putBoolean("settings", settingsBack.isEnabled)
         outState.putBoolean("alerts", alertsOpen)
+        outState.putBoolean("audioTest", audioTestOpen)
         outState.putBoolean("awaitingPair", awaitingPair)
         outState.putBoolean("nearbyDenied", nearbyDenied)
         outState.putBoolean("notificationsDenied", notificationsDenied)
@@ -527,8 +570,13 @@ open class ReceiverActivity : AppCompatActivity() {
     private fun render() {
         if (this is IncomingCallActivity) {
             val id = intent.identifier
-            if (state.paired && id != null && (state.inCall?.id == id || ReceiverService.current?.isDialing(id) == true)) renderCall()
-            else finishAndRemoveTask()
+            val call = state.inCall?.takeIf { it.id == id }
+            val test = state.audioTest?.takeIf { it.id == id }
+            if (state.paired && test != null && call?.state != "ringing") {
+                renderAudioTestCall(test, call?.state == "active")
+            } else if (state.paired && id != null && (call != null || ReceiverService.current?.isDialing(id) == true)) {
+                renderCall()
+            } else finishAndRemoveTask()
             return
         }
         val paired = state.paired || pairKey.exists()
@@ -537,6 +585,22 @@ open class ReceiverActivity : AppCompatActivity() {
         settingsScreen.visibility = visible(settingsOpen)
         pairingScreen.visibility = visible(!settingsOpen && !paired)
         dashboard.visibility = visible(!settingsOpen && paired)
+        val pairScreenVisible = !settingsOpen && !paired
+        dashboardScreen.setBackgroundColor(if (pairScreenVisible) getColor(R.color.ezcall_pairing_hero)
+            else color(android.R.attr.colorBackground))
+        brandWordmark.setTextColor(if (pairScreenVisible) Color.WHITE else color(MaterialR.attr.colorOnSurface))
+        toolbarSettings.apply {
+            val surface = if (pairScreenVisible) getColor(R.color.receiver_pairing_settings)
+                else color(MaterialR.attr.colorSurfaceContainerLow)
+            val ink = if (pairScreenVisible) getColor(R.color.receiver_pairing_settings_ink) else color(MaterialR.attr.colorOnSurface)
+            setColorFilter(ink)
+            background = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), rounded(surface, 24), null)
+        }
+        WindowCompat.getInsetsController(window, dashboardScreen).apply {
+            val lightBars = !pairScreenVisible && resources.getBoolean(R.bool.ezcall_light_system_bars)
+            isAppearanceLightStatusBars = lightBars
+            isAppearanceLightNavigationBars = lightBars
+        }
         toolbar.menu.setGroupVisible(0, !settingsOpen)
         if (settingsOpen && toolbar.navigationIcon == null) {
             toolbar.setNavigationIcon(R.drawable.receiver_back)
@@ -576,7 +640,7 @@ open class ReceiverActivity : AppCompatActivity() {
         createAction.isEnabled = action != 0
         if (action != 0 && createAction.text != getString(action)) {
             createAction.setText(action)
-            createAction.setIconResource(if (activeTab == Destination.MESSAGES) R.drawable.receiver_plus else activeTab.icon)
+            createAction.setIconResource(activeTab.icon)
         }
         updateListPadding()
         featureStatus.isVisible = createAction.isVisible && reason != 0
@@ -594,61 +658,105 @@ open class ReceiverActivity : AppCompatActivity() {
     private fun renderPairing() {
         val enrolling = awaitingPair && (ReceiverService.current != null || state.detail.isBlank())
         if (awaitingPair && !enrolling) awaitingPair = false
-        val permissionNeeded = nearbyDenied && !ReceiverService.hasNearby(this)
-        val feedback = statusOverride ?: when {
-            openingQR -> getString(R.string.r_reading_code)
-            enrolling -> receiverNotice(state.detail).ifBlank { getString(R.string.r_pairing) }
-            else -> state.detail.takeIf { it.isNotBlank() }?.let(::receiverNotice)
-        }
+        val permissionNeeded = secret != null && nearbyDenied && !ReceiverService.hasNearby(this)
+        val invalid = statusOverride == getString(R.string.r_no_code)
+        val feedback = statusOverride ?: state.detail.takeIf(String::isNotBlank)?.let(::receiverNotice)
+        val timedOut = !enrolling && feedback == getString(R.string.r_pair_timeout)
         val busy = openingQR || enrolling && statusOverride == null
+        val hasPairingState = busy || permissionNeeded || invalid || timedOut
+        pairingStateArt.isVisible = hasPairingState
+        pairingArt.isVisible = !hasPairingState
+        val drawable = when {
+            permissionNeeded -> R.drawable.receiver_pairing_permission
+            invalid -> R.drawable.receiver_pairing_invalid
+            timedOut -> R.drawable.receiver_pairing_timeout
+            else -> R.drawable.receiver_pairing_connecting
+        }
+        pairingStateArt.setImageResource(drawable)
+        pairingTitle.setTextAppearance(if (hasPairingState) R.style.TextAppearance_ezcall_HeadlineLarge
+            else R.style.TextAppearance_ezcall_DisplaySmall)
+        pairingTitle.typeface = Typeface.create(pairingTitle.typeface, 500, false)
+        pairingTitle.letterSpacing = 0f
+        pairingTitle.setTextColor(Color.WHITE)
         pairingTitle.setText(when {
-            enrolling -> R.string.r_pairing
+            enrolling -> R.string.r_pair_connecting
             permissionNeeded -> R.string.r_need_nearby
+            invalid -> R.string.r_pair_invalid_code
+            timedOut -> R.string.r_pair_timed_out
             else -> R.string.ez_pair_phones
         })
-        pairingIntro.isVisible = !enrolling && feedback == null
-        val neutral = busy || feedback == getString(R.string.r_pair_removed)
-        pairingFeedback.visibility = visible(feedback != null)
-        pairingFeedback.setCardBackgroundColor(color(if (neutral) MaterialR.attr.colorSurfaceContainer else MaterialR.attr.colorErrorContainer))
-        pairingStatus.setTextColor(color(if (neutral) MaterialR.attr.colorOnSurface else MaterialR.attr.colorOnErrorContainer))
-        pairingStatus.updateText(feedback.orEmpty())
-        pairingProgress.visibility = visible(busy)
-        scanButton.visibility = visible(!enrolling)
-        photoButton.visibility = visible(!enrolling)
+        pairingStatus.updateText(when {
+            openingQR -> getString(R.string.r_reading_code)
+            enrolling && connectionAction() == R.string.r_enable_bluetooth && feedback != null -> feedback
+            enrolling -> getString(R.string.r_pair_keep_nearby)
+            invalid -> getString(R.string.r_pair_scan_sender)
+            else -> feedback ?: getString(R.string.r_pair_open_code)
+        })
+        pairingProgress.isVisible = busy
+        scanButton.isVisible = !enrolling && !permissionNeeded
+        photoButton.isVisible = !enrolling
         scanButton.isEnabled = !openingQR
         photoButton.isEnabled = !openingQR
-        cancelButton.visibility = visible(enrolling)
+        scanButton.setText(if (invalid || timedOut) R.string.r_pair_scan_again else R.string.r_scan_qr)
+        photoButton.setText(when {
+            permissionNeeded -> R.string.ez_cancel
+            timedOut -> R.string.r_pair_back
+            else -> R.string.r_choose_qr
+        })
+        photoButton.setOnClickListener {
+            if (permissionNeeded || timedOut) {
+                secret?.fill(0)
+                secret = null
+                statusOverride = null
+                state.detail = ""
+                render()
+            } else choosePhoto()
+        }
+        cancelButton.isVisible = enrolling
         cancelButton.isEnabled = ReceiverService.current != null
         val recovery = when {
             permissionNeeded -> R.string.r_allow_nearby
             enrolling && connectionAction() == R.string.r_enable_bluetooth -> R.string.r_enable_bluetooth
             else -> 0
         }
-        pairingRecovery.visibility = visible(recovery != 0)
-        if (recovery != 0) pairingRecovery.updateText(getString(recovery))
+        pairingRecovery.isVisible = recovery != 0
+        if (recovery != 0) pairingRecovery.setText(recovery)
     }
 
     private fun renderConnection() {
         val recovery = connectionAction()
         val connected = state.connected && recovery == 0
+        val compact = recovery == 0
         val title = when {
-            recovery == R.string.r_allow_nearby -> getString(R.string.r_need_nearby)
-            state.syncing && connected -> getString(R.string.r_sync_active)
-            connected -> getString(R.string.r_sender_connected)
-            else -> getString(R.string.r_sender_disconnected)
+            recovery == R.string.r_allow_nearby -> R.string.r_need_nearby
+            !compact -> R.string.r_connection_lost
+            !connected -> R.string.r_connection_reconnecting
+            state.syncing -> R.string.r_connection_syncing
+            else -> R.string.r_sender_connected
         }
-        val detail = if (!connected || state.syncing) connectionDetail(recovery, connected) else ""
+        val detail = when {
+            !compact -> connectionDetail(recovery, connected)
+            !connected -> getString(R.string.r_connection_stay_near)
+            state.syncing -> getString(R.string.r_connection_syncing_detail)
+            else -> ""
+        }
         connection.isVisible = activeTab == Destination.CALLS || !connected || state.syncing
-        connection.setCardBackgroundColor(color(if (connected) MaterialR.attr.colorPrimaryContainer
-            else MaterialR.attr.colorSurfaceContainer))
-        linkTitle.setTextColor(color(if (connected) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurface))
-        linkDetail.setTextColor(color(MaterialR.attr.colorOnSurfaceVariant))
-        linkTitle.updateText(title)
+        connection.radius = dp(if (compact) 16 else 24).toFloat()
+        connection.setCardBackgroundColor(color(if (compact) MaterialR.attr.colorPrimaryContainer
+            else MaterialR.attr.colorSurfaceContainerHigh))
+        linkRow.minimumHeight = dp(if (!compact) 0 else if (detail.isEmpty()) 44 else 59)
+        val verticalInset = if (!compact) 16 else if (detail.isNotEmpty()) 4 else 0
+        linkRow.setPaddingRelative(dp(if (compact) 12 else 16), dp(verticalInset), dp(8), dp(if (compact) verticalInset else 0))
+        linkBadge.isVisible = compact
+        linkTitle.setTextAppearance(if (compact) R.style.TextAppearance_ezcall_LabelLarge else R.style.TextAppearance_ezcall_TitleLarge)
+        linkTitle.setTextColor(color(if (compact) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurface))
+        linkDetail.setTextAppearance(if (compact) R.style.TextAppearance_ezcall_BodySmall else R.style.TextAppearance_ezcall_BodyMedium)
+        linkDetail.setTextColor(color(if (compact) MaterialR.attr.colorOnPrimaryContainer else MaterialR.attr.colorOnSurfaceVariant))
+        linkTitle.updateText(getString(title))
         linkDetail.updateText(detail)
         linkDetail.visibility = visible(detail.isNotEmpty())
-        connectionSettingsButton.visibility = visible(connected)
-        linkProgress.visibility = visible(state.syncing && connected || !connected && recovery == 0 && ReceiverService.current != null)
-        linkAction.visibility = visible(recovery != 0)
+        connectionSettingsButton.isVisible = connected && !state.syncing
+        linkAction.isVisible = !compact
         if (recovery != 0) linkAction.updateText(getString(recovery))
     }
 
@@ -673,7 +781,7 @@ open class ReceiverActivity : AppCompatActivity() {
             dialName ?: state.data.name(it.address, getString(R.string.r_unknown))
         }
         val test = state.audioTest?.takeIf { call?.id == it.id }?.log
-        val checklist = test?.let(::testChecklist)
+        val checklist = test?.audioChecks()
         val callDetail = if (call != null && (state.pendingCall || !state.connected || call.state != "ringing")) {
             receiverNotice(state.detail)
         } else ""
@@ -689,7 +797,7 @@ open class ReceiverActivity : AppCompatActivity() {
 
         val ringing = call.state == "ringing"
         if (this is IncomingCallActivity) {
-            renderCallScreen(call, name.orEmpty(), callDetail, test, locked)
+            renderCallScreen(call, name.orEmpty(), callDetail, locked)
             return
         }
         callPanel.setCardBackgroundColor(color(MaterialR.attr.colorPrimaryContainer))
@@ -734,25 +842,25 @@ open class ReceiverActivity : AppCompatActivity() {
                     ReceiverService.current?.end(call.id)
                 }.apply { isEnabled = !state.pendingCall }, fullWidth(top = if (ringing) 4 else 0))
             }, fullWidth(top = 12))
-            if (call.simulated && test != null) {
-                addAudioTest(test, ringing, ink)
-            }
         })
     }
 
-    private fun renderCallScreen(call: ReceivedCall, name: String, detail: String, test: AudioTestLog?, locked: Boolean) {
+    private fun renderCallScreen(call: ReceivedCall, name: String, detail: String, locked: Boolean) {
         val ringing = call.state == "ringing"
         val dialing = call.state == "dialing"
         val ink = MaterialR.attr.colorOnPrimaryContainer
+        toolbar.visibility = View.GONE
+        callScreen.setBackgroundColor(getColor(R.color.receiver_call_surface))
         callPanel.setCardBackgroundColor(getColor(R.color.receiver_call_surface))
         callPanel.addView(column().apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            setPaddingRelative(dp(24), dp(32), dp(24), dp(32))
+            setPaddingRelative(dp(24), dp(56), dp(24), dp(80))
             addView(label(getString(R.string.r_call_brand), R.style.TextAppearance_ezcall_LabelLarge, ink).apply {
                 setCompoundDrawablesRelativeWithIntrinsicBounds(iconDrawable(R.drawable.ic_bluetooth, ink), null, null, null)
                 compoundDrawablePadding = dp(8)
-            })
+            }, LinearLayout.LayoutParams(-2, -2))
             val status = when {
+                call.simulated -> R.string.r_settings_audio_test
                 dialing -> R.string.r_calling
                 ringing -> R.string.r_call_incoming
                 else -> R.string.r_call_active
@@ -778,12 +886,19 @@ open class ReceiverActivity : AppCompatActivity() {
                     }
                 }, FrameLayout.LayoutParams(dp(112), dp(112), Gravity.CENTER))
             }
-            addView(avatar, LinearLayout.LayoutParams(dp(224), dp(224)).apply { topMargin = dp(16) })
-            addView(heading(if (known) name else name.takeUnless { it == call.address } ?: receiverNumberDisplay(call.address),
-                R.style.TextAppearance_ezcall_HeadlineLarge, ink).apply { gravity = Gravity.CENTER }, fullWidth())
-            if (known) addView(label(receiverNumberDisplay(call.address), R.style.TextAppearance_ezcall_BodyLarge, ink),
+            addView(avatar, LinearLayout.LayoutParams(dp(224), dp(224)).apply {
+                topMargin = dp(16)
+                bottomMargin = -dp(16)
+            })
+            addView(heading(if (call.simulated) getString(R.string.r_audio_test_sender) else if (known) name
+                else name.takeUnless { it == call.address } ?: receiverNumberDisplay(call.address),
+                R.style.TextAppearance_ezcall_DisplaySmall, ink).apply {
+                gravity = Gravity.CENTER
+                typeface = Typeface.create(typeface, 500, false)
+            }, fullWidth())
+            if (known && !call.simulated) addView(label(receiverNumberDisplay(call.address), R.style.TextAppearance_ezcall_BodyLarge, ink),
                 LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
-            if (ringing && locked) {
+            if (ringing && locked && !call.simulated) {
                 addView(label(getString(R.string.r_call_from_sender), R.style.TextAppearance_ezcall_BodyMedium, ink),
                     LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
             }
@@ -791,7 +906,6 @@ open class ReceiverActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER
                 accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             }, fullWidth(top = 12))
-            if (call.simulated && test != null) addAudioTest(test, ringing, ink)
             addView(View(this@ReceiverActivity), LinearLayout.LayoutParams(1, dp(32), 1f))
             if (dialing) {
                 addView(button(getString(R.string.r_end_call), R.drawable.receiver_end, danger = true) {
@@ -828,30 +942,134 @@ open class ReceiverActivity : AppCompatActivity() {
         })
     }
 
-    private fun LinearLayout.addAudioTest(test: AudioTestLog, ringing: Boolean, ink: Int) {
-        if (!ringing) {
-            addView(label(getString(R.string.ez_test_speak_after_tones), R.style.TextAppearance_ezcall_BodyMedium, ink),
-                fullWidth(top = 12))
-            addView(label(getString(R.string.ez_test_own_wave), R.style.TextAppearance_ezcall_LabelMedium, ink), fullWidth(top = 8))
-            addView(AudioWaveformView(this@ReceiverActivity, test.localWaveform, ink, live = true), LinearLayout.LayoutParams(-1, dp(38)))
-            addView(label(getString(R.string.ez_test_incoming_wave), R.style.TextAppearance_ezcall_LabelMedium, ink), fullWidth(top = 4))
-            addView(AudioWaveformView(this@ReceiverActivity, test.remoteWaveform, ink, live = true), LinearLayout.LayoutParams(-1, dp(38)))
-            addView(label(if (testPassed(test)) getString(R.string.ez_test_auto_passed) else testChecklist(test),
-                R.style.TextAppearance_ezcall_BodyMedium, ink).apply {
-                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-            }, fullWidth(top = 4))
-        }
-        addView(button(getString(R.string.ez_test_log), R.drawable.receiver_check, secondary = true, click = ::showTestLog),
-            fullWidth(top = 8))
+    private fun renderAudioTestCall(test: ReceiverAudioTest, active: Boolean) {
+        val checks = test.log.audioChecks()
+        val passed = checks.all { it }
+        val voiceCheck = checks.first()
+        val callStatus = if (active && (!state.connected || state.pendingCall)) receiverNotice(state.detail) else ""
+        val display = listOf(test.id, active, checks, state.connected, state.pendingCall, callStatus)
+        if (displayedAudioTest == display) return
+        displayedAudioTest = display
+        callPanelContents = null
+        toolbar.visibility = View.VISIBLE
+        callScreen.setBackgroundColor(color(MaterialR.attr.colorSurface))
+        callPanel.setCardBackgroundColor(color(MaterialR.attr.colorSurface))
+        callPanel.removeAllViews()
+        callPanel.visibility = View.VISIBLE
+        callPanel.addView(column().apply {
+            setPaddingRelative(dp(24), dp(16), dp(24), dp(24))
+            when {
+                passed -> addView(audioTestHero(R.drawable.receiver_check, R.string.r_audio_test_complete,
+                    R.string.r_audio_test_passed, R.string.r_audio_test_passed_detail), fullWidth())
+                !active -> addView(audioTestHero(R.drawable.receiver_mic, R.string.ez_test_auto_incomplete,
+                    R.string.r_audio_test_incomplete, R.string.r_audio_test_incomplete_detail), fullWidth())
+                else -> addView(audioTestHero(if (voiceCheck) R.drawable.receiver_mic else R.drawable.ic_call,
+                    R.string.r_audio_test_active, if (voiceCheck) R.string.r_audio_test_check_voice else R.string.r_audio_test_check_audio,
+                    if (voiceCheck) R.string.r_audio_test_voice_detail else R.string.r_audio_test_instructions), fullWidth())
+            }
+            if (active && !passed) {
+                if (callStatus.isNotBlank()) addView(label(callStatus, R.style.TextAppearance_ezcall_BodyMedium,
+                    MaterialR.attr.colorOnSurfaceVariant).apply {
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                }, fullWidth(top = 12))
+                addView(audioTestCard {
+                    addView(heading(getString(R.string.r_audio_test_levels), R.style.TextAppearance_ezcall_TitleMedium))
+                    val wave = if (voiceCheck) test.log.localWaveform else test.log.remoteWaveform
+                    addView(label(getString(if (voiceCheck) R.string.ez_test_own_wave else R.string.ez_test_incoming_wave),
+                        R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 6))
+                    addView(AudioWaveformView(this@ReceiverActivity, wave, color(androidx.appcompat.R.attr.colorPrimary), live = true)
+                        .apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO },
+                        LinearLayout.LayoutParams(-1, dp(38)))
+                }, fullWidth(top = 16))
+            }
+            addView(audioTestCard {
+                if (active || passed) {
+                    addView(heading(getString(R.string.r_audio_test_checks), R.style.TextAppearance_ezcall_TitleMedium))
+                    val titles = listOf(R.string.r_audio_test_tone, R.string.r_audio_test_mic, R.string.r_audio_test_echo)
+                    val waiting = listOf(R.string.ez_test_wait_tone, R.string.ez_test_wait_mic, R.string.ez_test_wait_echo)
+                    titles.forEachIndexed { index, title ->
+                        addAudioTestCheck(title, when {
+                            passed -> R.string.r_audio_test_check_confirmed
+                            checks[index] -> R.string.r_audio_test_detected
+                            else -> waiting[index]
+                        })
+                    }
+                } else {
+                    addAudioTestCheck(R.string.r_audio_test_two_way, R.string.r_audio_test_unconfirmed)
+                    addView(heading(getString(R.string.r_audio_test_before_retry), R.style.TextAppearance_ezcall_TitleMedium), fullWidth(top = 16))
+                    addView(label(getString(R.string.r_audio_test_retry_detail), R.style.TextAppearance_ezcall_BodyMedium), fullWidth(top = 6))
+                }
+            }, fullWidth(top = 16))
+            if (active && !passed) {
+                addView(button(getString(R.string.r_audio_test_end), 0, danger = true) {
+                    ReceiverService.current?.end(test.id)
+                }.apply { isEnabled = state.canControlCurrentCall && !state.pendingCall }, fullWidth(top = 12))
+            } else {
+                addView(button(getString(if (passed) R.string.r_audio_test_done else R.string.r_audio_test_retry), 0) {
+                    leaveAudioTest(instructions = !passed)
+                }, fullWidth(top = 12))
+                addView(button(getString(if (passed) R.string.r_audio_test_again else R.string.r_audio_test_back), 0, secondary = true) {
+                    leaveAudioTest(instructions = passed)
+                }, fullWidth(top = 12))
+            }
+        })
+        ViewCompat.setAccessibilityPaneTitle(callPanel, getString(when {
+            passed -> R.string.r_audio_test_passed
+            active -> R.string.r_audio_test_active
+            else -> R.string.r_audio_test_incomplete
+        }))
+    }
+
+    private fun leaveAudioTest(instructions: Boolean) {
+        startActivity(Intent(this, ReceiverActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra("audioTest", instructions).putExtra("audioTestReturn", true))
+        finishAndRemoveTask()
+    }
+
+    private fun audioTestCard(accent: Boolean = false, items: LinearLayout.() -> Unit) = card(24).apply {
+        setCardBackgroundColor(color(if (accent) MaterialR.attr.colorPrimaryContainer else MaterialR.attr.colorSurfaceContainerLow))
+        addView(column().apply {
+            setPaddingRelative(dp(20), dp(20), dp(20), dp(20))
+            items()
+        })
+    }
+
+    private fun audioTestHero(icon: Int, caption: Int, title: Int, detail: Int) = audioTestCard(accent = true) {
+        val ink = MaterialR.attr.colorOnPrimaryContainer
+        addView(badge(icon, MaterialR.attr.colorSurface, ink), LinearLayout.LayoutParams(dp(48), dp(48)))
+        addView(label(getString(caption), R.style.TextAppearance_ezcall_LabelMedium, ink), fullWidth(top = 12))
+        addView(heading(getString(title), R.style.TextAppearance_ezcall_HeadlineMedium, ink).apply {
+            typeface = Typeface.create(typeface, 500, false)
+        }, fullWidth(top = 8))
+        addView(label(getString(detail), R.style.TextAppearance_ezcall_BodyMedium, ink).apply { textSize = 15f }, fullWidth(top = 8))
+    }
+
+    private fun LinearLayout.addAudioTestCheck(title: Int, detail: Int) {
+        addView(column().apply {
+            setPaddingRelative(dp(16), dp(8), dp(16), dp(6))
+            addView(heading(getString(title), R.style.TextAppearance_ezcall_TitleSmall))
+            addView(label(getString(detail), R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant))
+        }, fullWidth(top = 12))
     }
 
     private fun callCircle(title: Int, icon: Int, danger: Boolean, enabled: Boolean, action: () -> Unit) = column().apply {
         gravity = Gravity.CENTER
-        val fill = if (danger) androidx.appcompat.R.attr.colorError else androidx.appcompat.R.attr.colorPrimary
-        val ink = if (danger) MaterialR.attr.colorOnError else MaterialR.attr.colorOnPrimary
+        val mic = icon == R.drawable.receiver_mic
+        val fill = when {
+            danger -> getColor(R.color.receiver_call_end)
+            mic -> color(MaterialR.attr.colorPrimaryContainer)
+            else -> color(androidx.appcompat.R.attr.colorPrimary)
+        }
+        val ink = when {
+            danger -> Color.WHITE
+            mic -> color(MaterialR.attr.colorOnPrimaryContainer)
+            else -> color(MaterialR.attr.colorOnPrimary)
+        }
         addView(iconButton(icon, getString(title), action).apply {
-            setImageDrawable(iconDrawable(icon, ink))
-            background = RippleDrawable(ColorStateList.valueOf(color(ink)), rounded(color(fill), 32), null)
+            setImageDrawable(iconDrawable(icon, MaterialR.attr.colorOnSurface).apply { setTint(ink) })
+            background = RippleDrawable(ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(ink, 51)),
+                rounded(fill, 32), null)
             isEnabled = enabled
             alpha = if (enabled) 1f else .5f
         }, LinearLayout.LayoutParams(dp(64), dp(64)))
@@ -860,19 +1078,6 @@ open class ReceiverActivity : AppCompatActivity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, fullWidth(top = 8))
     }
-    private fun showTestLog() {
-        state.audioTest?.log?.show(this, R.string.ez_test_log, R.string.ez_test_copy)
-    }
-
-    private fun testPassed(test: AudioTestLog) = ReceiverTestStep.CUE_PLAYED in test &&
-        ReceiverTestStep.MIC_SIGNAL in test && ReceiverTestStep.ECHO_PLAYED in test
-
-    private fun testChecklist(test: AudioTestLog) = listOf(
-        if (ReceiverTestStep.CUE_PLAYED in test) R.string.ez_test_tone_played else R.string.ez_test_wait_tone,
-        if (ReceiverTestStep.MIC_SIGNAL in test) R.string.ez_test_mic_detected else R.string.ez_test_wait_mic,
-        if (ReceiverTestStep.ECHO_PLAYED in test) R.string.ez_test_echo_played else R.string.ez_test_wait_echo
-    ).joinToString("\n") { getString(it) }
-
     private fun renderRows() {
         sectionTitle.text = getString(activeTab.title)
         val rows = when (activeTab) {
@@ -958,7 +1163,7 @@ open class ReceiverActivity : AppCompatActivity() {
                 addView(settingsGroup {
                     addView(SettingRow(R.drawable.ic_notifications, getString(R.string.r_calls_and_alerts),
                         opensPage = true, click = ::showAlerts).apply { updateDetail(getString(R.string.r_calls_and_alerts_detail)) })
-                    audioTestSetting = SettingRow(R.drawable.ic_call, getString(R.string.r_settings_audio_test),
+                    audioTestSetting = SettingRow(R.drawable.receiver_mic, getString(R.string.r_settings_audio_test),
                         opensPage = true, click = ::showAudioTestSettings)
                     addView(audioTestSetting)
                 }, fullWidth(top = 6, bottom = 18))
@@ -981,14 +1186,17 @@ open class ReceiverActivity : AppCompatActivity() {
             addView(forgetSettings, fullWidth(top = 8))
         }
         alertsContent = buildAlerts()
+        audioTestInstructions = buildAudioTestInstructions()
         addView(column().apply {
             addView(settingsContent, fullWidth())
             addView(alertsContent, fullWidth())
+            addView(audioTestInstructions, fullWidth())
         })
     }
 
     private fun showAlerts() {
         alertsOpen = true
+        audioTestOpen = false
         settingsScreen.scrollTo(0, 0)
         render()
     }
@@ -1080,10 +1288,18 @@ open class ReceiverActivity : AppCompatActivity() {
     }
 
     private fun renderSettings(paired: Boolean) {
-        if (!paired) alertsOpen = false
-        settingsContent.isVisible = !alertsOpen
+        if (!paired) {
+            alertsOpen = false
+            audioTestOpen = false
+        }
+        settingsContent.isVisible = !alertsOpen && !audioTestOpen
         alertsContent.isVisible = alertsOpen
-        ViewCompat.setAccessibilityPaneTitle(settingsScreen, getString(if (alertsOpen) R.string.r_calls_and_alerts else R.string.ez_settings))
+        audioTestInstructions.isVisible = audioTestOpen
+        ViewCompat.setAccessibilityPaneTitle(settingsScreen, getString(when {
+            alertsOpen -> R.string.r_calls_and_alerts
+            audioTestOpen -> R.string.r_settings_audio_test
+            else -> R.string.ez_settings
+        }))
         pairedSettings.isVisible = paired
         forgetSettings.isVisible = paired
         if (!paired) return
@@ -1115,7 +1331,7 @@ open class ReceiverActivity : AppCompatActivity() {
         testSetting.isEnabled = idle
         syncSetting.isEnabled = idle && state.inCall?.state != "active"
         if (alertsOpen) renderAlerts()
-        audioTestSetting.updateDetail(state.audioTest?.log?.let { getString(audioTestStatus(it)) }
+        audioTestSetting.updateDetail(state.audioTest?.let { getString(audioTestStatus(it)) }
             ?: getString(R.string.r_check_call_audio))
     }
 
@@ -1128,20 +1344,33 @@ open class ReceiverActivity : AppCompatActivity() {
 
     private fun permissionStatus(allowed: Boolean) = getString(if (allowed) R.string.r_permission_on else R.string.r_permission_off)
 
-    private fun audioTestStatus(test: AudioTestLog) = when {
-        testPassed(test) -> R.string.ez_test_auto_passed
-        state.inCall?.simulated == true -> R.string.r_audio_test_running
+    private fun audioTestStatus(test: ReceiverAudioTest) = when {
+        test.log.audioChecks().all { it } -> R.string.r_audio_test_passed
+        state.inCall?.id == test.id -> R.string.r_audio_test_running
         else -> R.string.ez_test_auto_incomplete
     }
 
     private fun showAudioTestSettings() {
-        val test = state.audioTest?.log
-        val message = test?.let { getString(audioTestStatus(it)) + "\n\n" + testChecklist(it) }
-            ?: getString(R.string.r_settings_audio_test_detail)
-        MaterialAlertDialogBuilder(this).setTitle(R.string.r_settings_audio_test).setMessage(message)
-            .setPositiveButton(R.string.ez_close, null)
-            .apply { if (test != null) setNeutralButton(R.string.ez_test_log) { _, _ -> showTestLog() } }
-            .show()
+        alertsOpen = false
+        audioTestOpen = true
+        settingsBack.isEnabled = true
+        settingsScreen.scrollTo(0, 0)
+        render()
+    }
+
+    private fun buildAudioTestInstructions() = column().apply {
+        setPaddingRelative(dp(24), dp(16), dp(24), dp(24))
+        addView(audioTestHero(R.drawable.receiver_mic, R.string.r_audio_test_receiver,
+            R.string.r_settings_audio_test, R.string.r_audio_test_intro), fullWidth())
+        addView(audioTestCard {
+            addView(heading(getString(R.string.r_audio_test_how), R.style.TextAppearance_ezcall_TitleMedium))
+            addView(label(getString(R.string.r_audio_test_step_sender), R.style.TextAppearance_ezcall_BodyMedium), fullWidth(top = 10))
+            addView(label(getString(R.string.r_audio_test_step_receiver), R.style.TextAppearance_ezcall_BodyMedium), fullWidth(top = 10))
+            addView(label(getString(R.string.r_audio_test_automatic), R.style.TextAppearance_ezcall_BodyMedium,
+                MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 10))
+        }, fullWidth(top = 16))
+        addView(label(getString(R.string.r_audio_test_waiting), R.style.TextAppearance_ezcall_BodyMedium,
+            MaterialR.attr.colorOnSurfaceVariant), fullWidth(top = 16))
     }
 
     private fun openNotifications() {
@@ -1637,9 +1866,9 @@ open class ReceiverActivity : AppCompatActivity() {
                 val disabled = intArrayOf(-android.R.attr.state_enabled)
                 val states = arrayOf(disabled, intArrayOf())
                 backgroundTintList = ColorStateList(states,
-                    intArrayOf(color(MaterialR.attr.colorSurfaceContainerHigh), color(androidx.appcompat.R.attr.colorError)))
+                    intArrayOf(color(MaterialR.attr.colorSurfaceContainerHigh), getColor(R.color.receiver_call_end)))
                 val foreground = ColorStateList(states,
-                    intArrayOf(color(MaterialR.attr.colorOnSurfaceVariant), color(MaterialR.attr.colorOnError)))
+                    intArrayOf(color(MaterialR.attr.colorOnSurfaceVariant), Color.WHITE))
                 setTextColor(foreground)
                 iconTint = foreground
             }

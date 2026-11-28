@@ -1,0 +1,9 @@
+<resources>
+    <string name="s_audio_root_request">Per continuare, autorizza ezcall nel gestore root.</string>
+    <string name="s_audio_root_starting">Configurazione dell’audio con root diretto.</string>
+    <string name="s_ui_test_ready">Verifica riproduzione e microfono prima della prima chiamata.</string>
+    <string name="s_ui_ready_methods">Metodi di configurazione</string>
+    <string name="s_ui_ready_methods_detail">Consulta i metodi disponibili.</string>
+    <string name="s_test_waiting_receiver">In attesa del ricevitore</string>
+    <string name="s_test_report_detail">Verifica riproduzione, microfono e ritorno della voce.</string>
+</resources>

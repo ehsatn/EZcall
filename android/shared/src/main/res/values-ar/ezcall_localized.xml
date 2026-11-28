@@ -10,8 +10,6 @@
     <string name="ez_continue">متابعة</string>
     <string name="ez_contacts">جهات الاتصال</string>
     <string name="ez_brand">ezcall</string>
-    <string name="ez_test_log">سجل اختبار الصوت</string>
-    <string name="ez_test_copy">نسخ السجل</string>
     <string name="ez_test_echo_heard">سمعت صدى صوتي</string>
     <string name="ez_test_echo_confirmed">تم تأكيد سماع صدى الصوت</string>
     <string name="ez_test_speak_after_tones">تحدث بعد سماع نغمات الاختبار. يتحقق ezcall من الصوت تلقائيًا.</string>

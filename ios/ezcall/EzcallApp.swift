@@ -150,19 +150,19 @@ struct EzcallApp: App {
     @ViewBuilder
     private var appContent: some View {
         if relay.isPaired && setupComplete {
-            homeTabs
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if let call = relay.phoneCall, call.id == minimizedCall { ongoingBar(call) }
-                }
-                .onChange(of: tab) { _, selected in
-                    if selected != .messages { lastCallTab = selected }
-                }
-                .sheet(isPresented: $settings) {
-                    NavigationStack { RelaySettings(relay: relay) }
-                }
-                .alert(ezText(relay.notice ?? ""), isPresented: noticeShown) {
-                    Button("OK", role: .cancel) {}
-                }
+            VStack(spacing: 0) {
+                if let call = relay.phoneCall, call.id == minimizedCall { ongoingBar(call) }
+                homeTabs
+            }
+            .onChange(of: tab) { _, selected in
+                if selected != .messages { lastCallTab = selected }
+            }
+            .sheet(isPresented: $settings) {
+                NavigationStack { RelaySettings(relay: relay) }
+            }
+            .alert(ezText(relay.notice ?? ""), isPresented: noticeShown) {
+                Button("OK", role: .cancel) {}
+            }
         } else if !relay.isPaired {
             NavigationStack { PairView(relay: relay).toolbar { languageMenu } }
         } else {
