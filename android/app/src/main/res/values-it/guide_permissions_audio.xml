@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sharing_permissions">Consenti le autorizzazioni scelte</string>
+    <string name="s_sharing_permissions_continue">Consenti le autorizzazioni e continua</string>
+    <string name="s_sharing_permissions_detail">Android chiederà le autorizzazioni selezionate e, se necessario, quelle per le notifiche e i dispositivi nelle vicinanze.</string>
+    <string name="s_guide_audio_test_intro">Prova entrambe le modalità audio con un terzo telefono. I risultati ti aiuteranno a scegliere la modalità audio delle chiamate.</string>
+    <string name="s_guide_audio_test_mode">Prova %1$s</string>
+    <string name="s_guide_audio_test_details">Istruzioni della prova</string>
+    <string name="s_guide_audio_test_recommended">Modalità consigliata: %1$s</string>
+    <string name="s_guide_audio_test_use">Usa %1$s e termina</string>
+    <string name="s_guide_audio_test_retry">Ripeti la prova</string>
+    <string name="s_guide_audio_test_sharing">Controlla la condivisione</string>
+    <string name="s_guide_audio_test_unclear">In nessuna modalità l’audio era chiaro in entrambe le direzioni.</string>
+</resources>

@@ -54,7 +54,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             if (type != AudioBridge.HELLO || hello.size != 17) return
             val client = hello.copyOfRange(1, 17)
             val server = AudioBridge.nonce()
-            val capabilities = if (canIntercept()) AudioBridge.CAN_INJECT else 0
+            val capabilities = (if (canIntercept()) AudioBridge.CAN_INJECT else 0) or AudioBridge.CAN_CONTROL_NETWORK
             AudioBridge.write(output, AudioBridge.SERVER_HELLO, byteArrayOf(AudioBridge.VERSION.toByte(),
                 capabilities.toByte()) + server + AudioBridge.serverProof(token, client, server))
             val (kind, proof) = AudioBridge.read(input)
@@ -63,10 +63,14 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             while (true) {
                 val (message, payload) = AudioBridge.read(input)
                 when (message) {
-                    AudioBridge.START -> {
-                        val normalMode = payload.singleOrNull()?.toInt() == AudioBridge.START_NORMAL_MODE
-                        require(payload.isEmpty() || normalMode)
-                        owner = start(output, normalMode)
+                    AudioBridge.START, AudioBridge.START_TRIAL -> {
+                        val trial = if (message == AudioBridge.START_TRIAL) requireNotNull(AudioBridge.readTrial(payload)) else null
+                        val normalMode = if (trial != null) trial.second == AudioBridge.MODE_IN_CALL else {
+                            val normal = payload.singleOrNull()?.toInt() == AudioBridge.START_NORMAL_MODE
+                            require(payload.isEmpty() || normal)
+                            normal
+                        }
+                        owner = start(output, normalMode, trial?.first)
                     }
                     AudioBridge.STOP -> {
                         val preserveGrace = payload.singleOrNull()?.toInt() == AudioBridge.STOP_FOR_RECOVERY
@@ -87,6 +91,10 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         if (digit != null && digit in AudioBridge.DTMF_DIGITS) owner?.queueDtmf(digit)
                     }
                     AudioBridge.DIAGNOSE -> AudioBridge.write(output, AudioBridge.DIAGNOSTICS, diagnostics())
+                    AudioBridge.NETWORK -> {
+                        val result = runCatching { SenderNetworkControl.respond(AudioProcessContext.context, payload) }
+                        AudioBridge.write(output, AudioBridge.NETWORK, result.getOrElse { "{}".toByteArray() })
+                    }
                     AudioBridge.SHUTDOWN -> {
                         log("Shutdown requested")
                         synchronized(this) { media?.close() }
@@ -104,8 +112,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         }
     }
 
-    private fun start(output: DataOutputStream, normalMode: Boolean): Media? {
-        val next = Media(output, allowRedirect = !normalMode)
+    private fun start(output: DataOutputStream, normalMode: Boolean, trialId: Int?): Media? {
+        val next = Media(output, allowRedirect = !normalMode, trialId = trialId)
         synchronized(this) {
             media?.close()
             media = null
@@ -116,6 +124,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 log("Two-way call audio route unavailable")
                 return null
             }
+            next.openedAt = SystemClock.elapsedRealtime()
+            log("Two-way call audio opened (${if (next.allowRedirect) "automatic" else "normal call"} mode)")
             try {
                 AudioBridge.write(output, AudioBridge.STARTED, byteArrayOf((AudioBridge.DOWNLINK or AudioBridge.UPLINK).toByte()))
             } catch (error: IOException) {
@@ -125,7 +135,6 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             media = next
             next.begin()
         }
-        log("Two-way call audio opened (${if (next.allowRedirect) "automatic" else "normal call"} mode)")
         return next
     }
 
@@ -137,14 +146,16 @@ class CallAudioServer private constructor(private val token: ByteArray) {
     }
 
     @SuppressLint("InlinedApi") // Redirection uses telephony devices opened only on Android 13 and later.
-    private inner class Media(private val output: DataOutputStream, val allowRedirect: Boolean) {
+    private inner class Media(private val output: DataOutputStream, val allowRedirect: Boolean, private val trialId: Int?) {
         @Volatile private var running = true
         private val uplink = ArrayBlockingQueue<ByteArray>(AudioBridge.LIVE_QUEUE_FRAMES)
         private val dtmf = ArrayBlockingQueue<Char>(12)
         private val workers = mutableListOf<Thread>()
         var record: AudioRecord? = null
         var track: AudioTrack? = null
+        var openedAt = 0L
         @Volatile private var receiverReady = false
+        @Volatile private var readyAt = 0L
         @Volatile private var uplinkGeneration = 0
         @Volatile private var failed = false
         @Volatile private var lastDownlinkAt = 0L
@@ -189,6 +200,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             if (!ready) return pauseRelay(recovering)
             val sink = track ?: return
             if (receiverReady || !running || failed) return
+            val acknowledgedAt = SystemClock.elapsedRealtime()
+            val receiverTiming = if (readyAt == 0L) "Receiver ready after ${acknowledgedAt - openedAt}ms" else "Receiver resumed"
             runCatching {
                 sink.play()
                 // Prime the track with silence before any receiver microphone audio is queued.
@@ -196,8 +209,9 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 val primed = sink.write(silence, 0, silence.size, AudioTrack.WRITE_NON_BLOCKING)
                 check(primed >= 0) { "Uplink priming failed: $primed" }
                 checkTelephonyOutput(sink)
+                readyAt = SystemClock.elapsedRealtime()
                 receiverReady = true
-                log("Call audio relay active")
+                log("Call audio relay active ($receiverTiming, track ready in ${readyAt - acknowledgedAt}ms)")
             }.onFailure { mediaFailed("Android couldn't relay call audio to the receiving phone.", it) }
             if (receiverReady) {
                 handset.silence(this)
@@ -207,7 +221,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
 
         fun relaying() = running && receiverReady && !failed
 
-        /** True while far-end audio still arrives and the receiver's voice still reaches the modem. */
+        /** Verifies that the audio streams are running and the output route still points to telephony. */
         fun streamsHealthy(): Boolean {
             val input = record ?: return false
             val sink = track ?: return false
@@ -258,6 +272,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             val frame = ByteArray(AudioBridge.FRAME_BYTES)
             var checkCaptureAt = 0L
             var silencedSince: Long? = null
+            var lastTrialMode: Int? = null
             val stats = AudioStats("Far-end audio", "captured")
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
@@ -284,9 +299,17 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                                 mediaFailed("Android stopped capturing call audio.", IllegalStateException("PSTN capture silenced"))
                             }
                         } else silencedSince = null
+                        if (trialId != null && now - readyAt >= CHECK_SETTLE_MS) {
+                            val mode = probeMode()
+                            if (mode != null && mode != lastTrialMode && relaying()) {
+                                AudioBridge.write(output, AudioBridge.TRIAL_MODE, AudioBridge.trialPayload(trialId, mode))
+                                lastTrialMode = mode
+                            }
+                        }
                     }
                     if (receiverReady) {
                         stats.add(frame)
+                        AudioBridge.boostVoice(frame, AudioBridge.downlinkGain)
                         AudioBridge.write(output, AudioBridge.PCM, frame)
                     }
                 }
@@ -302,6 +325,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             var voice = AudioBridge.UplinkPcm()
             var tone: ByteArray? = null
             var toneOffset = 0
+            var firstFrame = true
             val stats = AudioStats("Receiver audio", "received")
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
@@ -315,6 +339,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         generation = uplinkGeneration
                         voice = AudioBridge.UplinkPcm()
                         tone = null
+                        firstFrame = true
                     }
                     if (tone == null) {
                         tone = dtmf.poll()?.let(AudioBridge::dtmfPcm)
@@ -324,6 +349,13 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                     // The blocking track write paces the stream even while Bluetooth supplies no PCM.
                     val received = uplink.poll()
                     stats.add(received)
+                    if (received != null) {
+                        if (firstFrame) {
+                            firstFrame = false
+                            log("First Receiver PCM arrived ${SystemClock.elapsedRealtime() - readyAt}ms after relay activation")
+                        }
+                        AudioBridge.boostVoice(received, AudioBridge.uplinkGain)
+                    }
                     val pcm = voice.frame(received)
                     if (signal != null) {
                         AudioBridge.mixDtmf(pcm, signal, toneOffset)
@@ -765,6 +797,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             appendLine("Build: ${Build.FINGERPRINT}")
             appendLine("Interceptable: ${canIntercept()} mode=${runCatching { manager?.mode }.getOrNull()} telephony $telephony")
             appendLine("Redirect: active=${handset.isRedirected()} allowed=${synchronized(this@CallAudioServer) { media?.allowRedirect }}")
+            appendLine("Voice boost: up to ${AudioBridge.UPLINK_GAIN_DB}dB uplink, ${AudioBridge.DOWNLINK_GAIN_DB}dB downlink")
             appendLine("Last uplink check: $lastCheck")
             appendLine("Log:")
         }

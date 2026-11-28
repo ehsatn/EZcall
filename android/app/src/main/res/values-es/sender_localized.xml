@@ -62,7 +62,7 @@
     <string name="s_while_off">Cuando la pantalla está abierta</string>
     <string name="s_battery_off">Optimización de la batería para ezcall</string>
     <string name="s_battery_may_pause">Android puede interrumpir el relay para salvar la batería</string>
-    <string name="s_simulate">Probar audio de llamada</string>
+    <string name="s_simulate">Prueba de audio simulada</string>
     <string name="s_simulate_wait">Contesta en el teléfono receptor. Escucha los pitidos y luego habla para oír tu voz.</string>
     <string name="s_simulate_retry">Espera la llamada actual o vuelva a conectarse y intenta de nuevo.</string>
     <string name="s_relay">Religión</string>

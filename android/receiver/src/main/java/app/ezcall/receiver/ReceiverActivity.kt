@@ -53,6 +53,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import app.ezcall.android.PairKey
+import app.ezcall.android.SenderNetwork
 import app.ezcall.android.Support
 import app.ezcall.android.AudioWaveformView
 import app.ezcall.android.languageName
@@ -68,6 +69,7 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -75,6 +77,7 @@ import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
 import java.io.File
+import java.text.NumberFormat
 import java.util.Date
 import kotlin.concurrent.thread
 
@@ -128,6 +131,10 @@ open class ReceiverActivity : AppCompatActivity() {
     private lateinit var forgetSettings: View
     private lateinit var syncSetting: SettingRow
     private lateinit var testSetting: SettingRow
+    private lateinit var senderBattery: SettingRow
+    private lateinit var networkNote: TextView
+    private val networkSwitches = mutableMapOf<SenderNetwork, MaterialSwitch>()
+    private val networkUnavailable = mutableMapOf<SenderNetwork, SettingRow>()
     private lateinit var notificationSetting: SettingRow
     private var lockScreenSetting: SettingRow? = null
     private lateinit var microphoneSetting: SettingRow
@@ -1159,6 +1166,39 @@ open class ReceiverActivity : AppCompatActivity() {
                     addView(testSetting)
                 }, fullWidth(top = 6))
 
+                addView(settingsHeading(R.string.r_sender_phone), fullWidth(top = 18))
+                addView(settingsGroup {
+                    senderBattery = SettingRow(R.drawable.ic_battery, getString(R.string.r_sender_battery), click = null)
+                    addView(senderBattery)
+                    for ((setting, title) in listOf(
+                        SenderNetwork.HOTSPOT to R.string.r_sender_hotspot,
+                        SenderNetwork.MOBILE_DATA to R.string.r_sender_mobile_data
+                    )) {
+                        val control = MaterialSwitch(this@ReceiverActivity).apply {
+                            setText(title)
+                            setTextAppearance(R.style.TextAppearance_ezcall_BodyLarge)
+                            minimumHeight = dp(56)
+                            setPaddingRelative(dp(16), dp(8), dp(16), dp(8))
+                            switchPadding = dp(12)
+                            setOnClickListener {
+                                val requested = isChecked
+                                isChecked = state.senderNetwork[setting] == true
+                                ReceiverService.current?.setSenderNetwork(setting, requested)
+                            }
+                        }
+                        networkSwitches[setting] = control
+                        addView(control, fullWidth())
+                        val unavailable = SettingRow(R.drawable.ic_status, getString(title), click = null)
+                        unavailable.updateDetail(getString(R.string.r_sender_unavailable))
+                        networkUnavailable[setting] = unavailable
+                        addView(unavailable)
+                    }
+                }, fullWidth(top = 6))
+                networkNote = label("", R.style.TextAppearance_ezcall_BodyMedium, MaterialR.attr.colorOnSurfaceVariant).apply {
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                }
+                addView(networkNote, fullWidth(top = 8))
+
                 addView(settingsHeading(R.string.r_calling_settings), fullWidth(top = 18))
                 addView(settingsGroup {
                     addView(SettingRow(R.drawable.ic_notifications, getString(R.string.r_calls_and_alerts),
@@ -1330,6 +1370,24 @@ open class ReceiverActivity : AppCompatActivity() {
         val idle = connected && !state.syncing && state.detail != "Testing the connection…"
         testSetting.isEnabled = idle
         syncSetting.isEnabled = idle && state.inCall?.state != "active"
+        senderBattery.updateDetail(state.senderBattery?.let { NumberFormat.getPercentInstance().format(it / 100.0) }
+            ?: getString(R.string.r_sender_unavailable))
+        networkSwitches.forEach { (setting, control) ->
+            val value = state.senderNetwork[setting]
+            control.isVisible = value != null
+            control.isChecked = value == true
+            control.isEnabled = connected && !state.networkPending
+            networkUnavailable.getValue(setting).isVisible = value == null
+        }
+        val networkMessage = when {
+            state.networkPending -> R.string.r_sender_network_pending
+            state.networkFailed -> R.string.r_sender_network_failed
+            state.senderNetworkAllowed == false -> R.string.r_sender_network_allow
+            state.senderNetworkAllowed == true && state.senderNetwork.isEmpty() -> R.string.r_sender_network_setup
+            else -> 0
+        }
+        networkNote.isVisible = networkMessage != 0
+        if (networkMessage != 0) networkNote.updateText(getString(networkMessage))
         if (alertsOpen) renderAlerts()
         audioTestSetting.updateDetail(state.audioTest?.let { getString(audioTestStatus(it)) }
             ?: getString(R.string.r_check_call_audio))

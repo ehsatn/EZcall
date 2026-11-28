@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sender_network_group">Red</string>
+    <string name="s_sender_network_allow">Permitir el control remoto de la red</string>
+    <string name="s_sender_network_help">Permite que el teléfono vinculado active o desactive el punto de acceso Wi-Fi y los datos móviles. El componente de audio de llamadas debe estar en ejecución.</string>
+</resources>

@@ -27,6 +27,65 @@ class CallAudioTest {
         assertFalse(UplinkHealth.prefersNormal(redirectConfirmed = true, normalConfirmed = true))
     }
 
+    @Test fun automaticModeUsesTwoWayListeningResultsAheadOfUplinkEvidence() {
+        val both = RealCallAudioTest.Result.BOTH
+        val receiverOnly = RealCallAudioTest.Result.RECEIVER_ONLY
+        assertTrue(UplinkHealth.prefersNormal(true, false, receiverOnly, both))
+        assertFalse(UplinkHealth.prefersNormal(false, true, both, receiverOnly))
+        assertFalse(UplinkHealth.prefersNormal(false, true, both, both))
+        assertFalse(UplinkHealth.prefersNormal(false, true, null, receiverOnly))
+        assertTrue(UplinkHealth.prefersNormal(false, true, null, RealCallAudioTest.Result.UNAVAILABLE))
+    }
+
+    @Test fun realCallTestRequiresTheSelectedRouteOnTheBoundCall() {
+        val test = RealCallAudioTest()
+        val normal = RealCallAudioTest.Mode.NORMAL
+        val redirect = RealCallAudioTest.Mode.REDIRECT
+        val both = RealCallAudioTest.Result.BOTH
+        val unavailable = RealCallAudioTest.Result.UNAVAILABLE
+        test.arm(normal)
+        val trial = checkNotNull(test.bind("real-call"))
+        assertNull(test.bind("other-call"))
+        assertFalse(test.observe(trial.id + 1, normal.wire))
+        assertTrue(test.observe(trial.id, normal.wire))
+        assertNull(test.record(trial.id, both))
+        assertFalse(test.end("other-call"))
+        assertTrue(test.end("real-call"))
+        assertNull(test.record(trial.id, unavailable))
+        assertEquals(normal, test.record(trial.id, both))
+        assertNull(test.trial)
+
+        test.arm(redirect)
+        val retry = checkNotNull(test.bind("next-call"))
+        assertTrue(test.observe(retry.id, redirect.wire))
+        assertTrue(test.observe(retry.id, normal.wire))
+        assertTrue(test.end("next-call"))
+        assertNull(test.record(retry.id, both))
+        assertEquals(redirect, test.record(retry.id, unavailable))
+    }
+
+    @Test fun trialPayloadOnlyAcceptsCallAudioModes() {
+        assertEquals(500 to AudioBridge.MODE_IN_CALL,
+            AudioBridge.readTrial(AudioBridge.trialPayload(500, AudioBridge.MODE_IN_CALL)))
+        assertNull(AudioBridge.readTrial(AudioBridge.trialPayload(500, 0)))
+        assertNull(AudioBridge.readTrial(byteArrayOf(AudioBridge.MODE_IN_CALL.toByte())))
+    }
+
+    @Test fun voiceBoostAmplifiesQuietFramesAndRespectsPcmHeadroom() {
+        fun boost(gain: Double, vararg input: Int): List<Int> {
+            val pcm = ByteArray(input.size * 2)
+            val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+            input.forEachIndexed { i, value -> samples.put(i, value.toShort()) }
+            AudioBridge.boostVoice(pcm, gain)
+            return input.indices.map { samples[it].toInt() }
+        }
+        assertEquals(listOf(0, 1_995, -1_995), boost(AudioBridge.uplinkGain, 0, 1_000, -1_000))
+        assertEquals(listOf(1_412, -1_412), boost(AudioBridge.downlinkGain, 1_000, -1_000))
+        assertEquals(listOf(30_000, -15_000), boost(AudioBridge.uplinkGain, 20_000, -10_000))
+        assertEquals(listOf(32_767, -32_768), boost(AudioBridge.uplinkGain, 32_767, -32_768))
+        assertEquals(listOf(0, 0), boost(AudioBridge.uplinkGain, 0, 0))
+    }
+
     @Test fun onlyCarriedLinksCanReuseSavedMtu() {
         assertEquals(23, initialLinkMtu(negotiated = null, saved = 517, carried = false))
         assertEquals(517, initialLinkMtu(negotiated = null, saved = 517, carried = true))

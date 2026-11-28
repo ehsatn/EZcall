@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">تست تماس واقعی</string>
+    <string name="s_real_audio_redirect">انتقال صدا (خودکار)</string>
+    <string name="s_real_audio_instructions">یک حالت انتخاب کنید. از گوشی گیرندهٔ جفت‌شده با گوشی سومی تماس بگیرید و گوشی فرستنده را جایی بگذارید که صدای شما را نشنود. از گوشی گیرنده و گوشی سوم به‌نوبت صحبت کنید. تماس را پایان دهید و به اینجا برگردید تا مشخص کنید کدام طرف صدا را واضح شنید. همین کار را برای حالت دیگر انجام دهید.</string>
+    <string name="s_real_audio_setup">برای تست، گوشی گیرنده را وصل کنید و اعلان تماس، کنترل تماس و صدای دوطرفه را فعال کنید.</string>
+    <string name="s_real_audio_end_first">پیش از شروع تست، تماس فعلی را پایان دهید.</string>
+    <string name="s_real_audio_waiting">تماس بعدی از گوشی گیرنده: %1$s</string>
+    <string name="s_real_audio_in_call">تماس در جریان است. پس از پایان تماس به اینجا برگردید.</string>
+    <string name="s_real_audio_answer">ثبت نتیجهٔ شنیدن صدا</string>
+    <string name="s_real_audio_result_title">در حالت «%1$s» کدام طرف صدا را واضح شنید؟</string>
+    <string name="s_real_audio_both">هر دو طرف صدا را واضح شنیدند</string>
+    <string name="s_real_audio_receiver_only">فقط گوشی گیرنده صدا را واضح شنید</string>
+    <string name="s_real_audio_third_only">فقط گوشی سوم صدا را واضح شنید</string>
+    <string name="s_real_audio_neither">هیچ‌کدام صدا را واضح نشنیدند</string>
+    <string name="s_real_audio_unavailable">حالت در دسترس نبود</string>
+    <string name="s_real_audio_unavailable_detail">تماس در حالت «%1$s» نماند. این نتیجه را ثبت کنید یا پس از ثبت، این حالت را دوباره امتحان کنید.</string>
+    <string name="s_real_audio_untested">تست نشده</string>
+    <string name="s_real_audio_cancel">لغو تست</string>
+</resources>

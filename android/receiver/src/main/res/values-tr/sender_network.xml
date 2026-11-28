@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r_sender_phone">Gönderen telefon</string>
+    <string name="r_sender_battery">Pil</string>
+    <string name="r_sender_hotspot">Wi-Fi erişim noktası</string>
+    <string name="r_sender_mobile_data">Mobil veri</string>
+    <string name="r_sender_unavailable">Kullanılamıyor</string>
+    <string name="r_sender_network_pending">Gönderen telefondaki ayar değiştiriliyor…</string>
+    <string name="r_sender_network_failed">Değişiklik doğrulanmadı. Tekrar denemeden önce gönderen telefonu kontrol edin.</string>
+    <string name="r_sender_network_allow">Gönderen telefonda uzaktan ağ denetimine izin verin.</string>
+    <string name="r_sender_network_setup">Ağ denetimlerini kullanmak için gönderen telefonda arama sesi bileşenini başlatın.</string>
+</resources>

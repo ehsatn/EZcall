@@ -62,7 +62,7 @@
     <string name="s_while_off">وقتی صفحه خاموش است</string>
     <string name="s_battery_off">بهینه‌سازی باتری برای ایزی کال غیرفعال است</string>
     <string name="s_battery_may_pause">ممکن است اندروید برای صرفه‌جویی در باتری، انتقال را متوقف کند</string>
-    <string name="s_simulate">آزمایش صدای تماس</string>
+    <string name="s_simulate">آزمایش شبیه‌سازی‌شدهٔ صدا</string>
     <string name="s_simulate_wait">در گوشی گیرنده پاسخ دهید. بعد از بوق‌ها صحبت کنید تا صدای خودتان را بشنوید.</string>
     <string name="s_simulate_retry">صبر کنید تماس فعلی تمام شود یا دوباره متصل شوید و امتحان کنید.</string>
     <string name="s_relay">انتقال</string>

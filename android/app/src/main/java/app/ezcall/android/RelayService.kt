@@ -20,6 +20,7 @@ import android.database.ContentObserver
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -73,6 +74,7 @@ internal data class RelayState(
             private set
         var testLog: AudioTestLog? = null
             private set
+        val realAudioTest = RealCallAudioTest()
 
         fun set(state: RelayState) {
             current = state
@@ -107,10 +109,16 @@ internal data class RelayState(
 internal class RelayService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
+    private val networkWorker = Executors.newSingleThreadExecutor()
     private var transport: Peripheral? = null
     private var secret: ByteArray? = null
     private var enrolling = false
-    private var activeGeneration = 0
+    @Volatile private var activeGeneration = 0
+    private var networkStatus: JSONObject? = null
+    private var lastSenderStatus: String? = null
+    private var networkBusy = false
+    private var networkCommand: String? = null
+    private val networkPoll = Runnable { refreshNetwork() }
     private var busySync = false
     private var registered = false
     private var failure: String? = null
@@ -183,6 +191,7 @@ internal class RelayService : Service() {
                     audioPublished = transport?.send(PhoneData.packet("audio_start", callId)
                         .put("key", Base64.encodeToString(key, Base64.NO_WRAP)).put("uplink", uplink).put("dtmf", uplink)
                         .apply { if (pairFrames) put("audio_pairs", true) }) == true
+                    if (!audioPublished) stopAudio()
                 } finally {
                     key.fill(0)
                 }
@@ -237,11 +246,18 @@ internal class RelayService : Service() {
                 RelayState.setAudio(RelayState.audio)
             }
         }
+
+        override fun onTrialMode(id: Int, mode: Int) {
+            handler.post {
+                if (!stopped && RelayState.realAudioTest.observe(id, mode)) RelayState.set(RelayState.current)
+            }
+        }
     }
 
     private val events = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
+                Intent.ACTION_BATTERY_CHANGED -> publishSenderStatus()
                 BluetoothAdapter.ACTION_STATE_CHANGED -> openTransport()
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                     val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -368,6 +384,7 @@ internal class RelayService : Service() {
 
     private fun listen() {
         val actions = IntentFilter().apply {
+            addAction(Intent.ACTION_BATTERY_CHANGED)
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
             addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
@@ -495,6 +512,8 @@ internal class RelayService : Service() {
         handler.post {
             if (activeGeneration != generation) return@post
             sendCapabilities()
+            publishSenderStatus()
+            refreshNetwork()
             if (Feature.CALLS.active(this)) call?.takeUnless { it.id == handsetAudioCall }
                 ?.let { transport?.send(it.withCallerSharing(Feature.CALLER.active(this)).packet()) }
         }
@@ -513,6 +532,9 @@ internal class RelayService : Service() {
     private fun resetLink() {
         stopWatchingData()
         activeGeneration++
+        handler.removeCallbacks(networkPoll)
+        networkStatus = null
+        lastSenderStatus = null
         busySync = false
         snapshotID = null
         val active = simulatedCall?.takeIf { it.state == "active" }
@@ -556,6 +578,53 @@ internal class RelayService : Service() {
 
     private fun readableData() =
         (Feature.SMS.active(this) && hasPermission(permission.READ_SMS)) to Feature.CONTACTS.active(this)
+
+    private fun publishSenderStatus() {
+        if (!RelayState.current.connected || forgetID != null || stopped) return
+        val allowed = SenderNetworkControl.allowed(this)
+        val battery = getSystemService(BatteryManager::class.java).getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        val packet = JSONObject().put("type", "sender_status")
+            .put("battery", SenderNetwork.batteryPercent(battery)).put("network_allowed", allowed)
+        if (allowed) for (setting in SenderNetwork.entries) packet.put(setting.field, networkStatus?.opt(setting.field))
+        val serialized = packet.toString()
+        if (serialized != lastSenderStatus && transport?.send(packet) == true) lastSenderStatus = serialized
+    }
+
+    private fun refreshNetwork(requestID: String? = null, payload: ByteArray = byteArrayOf()) {
+        handler.removeCallbacks(networkPoll)
+        if (stopped || forgetID != null || !RelayState.current.connected || !SenderNetworkControl.allowed(this)) {
+            networkStatus = null
+            if (requestID != null) sendNetworkResult(requestID, false)
+            return
+        }
+        handler.postDelayed(networkPoll, 15_000)
+        if (requestID == null && networkBusy) return
+        if (requestID != null) {
+            if (networkCommand != null) {
+                sendNetworkResult(requestID, false)
+                return
+            }
+            networkCommand = requestID
+        }
+        val generation = activeGeneration
+        networkBusy = true
+        networkWorker.execute {
+            fun authorized() = generation == activeGeneration && SenderNetworkControl.allowed(this)
+            val status = if (authorized()) SenderNetworkControl.request(this, payload, ::authorized) else null
+            handler.post {
+                if (requestID != null) networkCommand = null
+                networkBusy = networkCommand != null
+                if (stopped || forgetID != null || generation != activeGeneration) return@post
+                networkStatus = status.takeIf { SenderNetworkControl.allowed(this) }
+                publishSenderStatus()
+                if (requestID != null) sendNetworkResult(requestID, networkStatus?.opt("ok") == true)
+            }
+        }
+    }
+
+    private fun sendNetworkResult(id: String, ok: Boolean) {
+        transport?.send(PhoneData.packet("network_result", id).put("ok", ok))
+    }
 
     private var snapshotSharing = false to false
     private var snapshotID: String? = null
@@ -640,6 +709,8 @@ internal class RelayService : Service() {
         }
         startVisible(RelayState.current.connected)
         sendCapabilities()
+        refreshNetwork()
+        publishSenderStatus()
     }
 
     private fun handleRequest(message: JSONObject) {
@@ -654,6 +725,15 @@ internal class RelayService : Service() {
             "ping" -> {
                 if (transport?.send(PhoneData.packet("pong", id)) == true) {
                     RelayState.set(RelayState.current.copy(tested = true))
+                }
+            }
+            "network_set" -> {
+                val setting = SenderNetwork.fromField(message.opt("setting") as? String)
+                val enabled = message.opt("enabled") as? Boolean
+                if (setting == null || enabled == null || networkStatus?.opt(setting.field) !is Boolean) {
+                    sendNetworkResult(id, false)
+                } else {
+                    refreshNetwork(id, setting.command(enabled))
                 }
             }
             "sync" -> {
@@ -885,13 +965,17 @@ internal class RelayService : Service() {
             transport?.send(PhoneData.packet("audio_stop", id).put("message", HANDSET_AUDIO_MESSAGE))
             return
         }
+        val trial = RelayState.realAudioTest.bind(id)
+        if (trial != null) RelayState.set(RelayState.current)
         val channel = transport ?: return
         val payloadLimit = channel.audioPayloadLimit()
         if (recoveringCall != null || audioCall == id || !channel.audioReady() || payloadLimit == 0) return
         callSetupWakeLock.acquire(AUDIO_SETUP_TIMEOUT_MS)
         audioCall = id
         audioPublished = false
-        audio.begin(id, payloadLimit, pairFrames = payloadLimit >= 96 && channel.supportsAudioPairs())
+        // Reserve the BLE indication slot for call setup while the component opens the SIM route.
+        channel.setAudioActive(true)
+        audio.begin(id, payloadLimit, pairFrames = payloadLimit >= 96 && channel.supportsAudioPairs(), trial = trial)
         startVisible(RelayState.current.connected)
     }
 
@@ -993,8 +1077,10 @@ internal class RelayService : Service() {
                 relayedCall = null
                 handsetAudioCall = null
                 retriedAudioCall = null
+                val testEnded = call?.let { RelayState.realAudioTest.end(it.id) } == true
                 if (call != null) sendCall("ended", number)
                 call = null
+                if (testEnded) RelayState.set(RelayState.current)
             }
         }
     }
@@ -1220,6 +1306,8 @@ internal class RelayService : Service() {
         }
         val id = UUID.randomUUID().toString()
         forgetID = id
+        SenderNetworkControl.allow(this, false)
+        handler.removeCallbacks(networkPoll)
         if (transport?.sendForget(PhoneData.packet("unpair", id)) != true) {
             finishForget(confirmed = false)
         } else {
@@ -1250,6 +1338,7 @@ internal class RelayService : Service() {
         RelayState.simulateCall = null
         RelayState.refreshAudio = null
         RelayState.refreshSharing = null
+        if (RelayState.realAudioTest.trial?.ended == false) RelayState.realAudioTest.cancel()
         RelayState.setAudio(null)
         callAudio?.close()
         callAudio = null
@@ -1261,6 +1350,7 @@ internal class RelayService : Service() {
         if (smsReceiverRegistered) unregisterReceiver(smsSent)
         handler.removeCallbacksAndMessages(null)
         worker.shutdownNow()
+        networkWorker.shutdownNow()
         stopForeground(STOP_FOREGROUND_REMOVE)
         RelayState.set(RelayState(detail = failure))
         super.onDestroy()

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">اختبار مكالمة حقيقية</string>
+    <string name="s_real_audio_redirect">تحويل الصوت (تلقائي)</string>
+    <string name="s_real_audio_instructions">اختر وضعًا، ثم اتصل بهاتف ثالث من هاتف الاستقبال المقترن. ضع هاتف الإرسال بعيدًا عن مدى السمع. تحدثا بالتناوب من هاتف الاستقبال والهاتف الثالث. أنهِ المكالمة وعد إلى هنا لتسجيل من سمع بوضوح. كرر الاختبار في الوضع الآخر.</string>
+    <string name="s_real_audio_setup">صِل هاتف الاستقبال وفعّل تنبيهات المكالمات والتحكم بها وصوت المكالمات ثنائي الاتجاه قبل الاختبار.</string>
+    <string name="s_real_audio_end_first">أنه المكالمة الحالية قبل بدء اختبار الصوت.</string>
+    <string name="s_real_audio_waiting">المكالمة التالية من هاتف الاستقبال: %1$s</string>
+    <string name="s_real_audio_in_call">المكالمة جارية. عد إلى هنا بعد إنهائها.</string>
+    <string name="s_real_audio_answer">تسجيل نتيجة الصوت</string>
+    <string name="s_real_audio_result_title">من سمع بوضوح في وضع «%1$s»؟</string>
+    <string name="s_real_audio_both">سمع الطرفان بوضوح</string>
+    <string name="s_real_audio_receiver_only">سمع هاتف الاستقبال فقط بوضوح</string>
+    <string name="s_real_audio_third_only">سمع الهاتف الثالث فقط بوضوح</string>
+    <string name="s_real_audio_neither">لم يسمع أي طرف بوضوح</string>
+    <string name="s_real_audio_unavailable">الوضع غير متاح</string>
+    <string name="s_real_audio_unavailable_detail">لم تبقَ المكالمة في وضع «%1$s». سجّل النتيجة، ويمكنك إعادة اختبار هذا الوضع بعد ذلك.</string>
+    <string name="s_real_audio_untested">لم يُختبر</string>
+    <string name="s_real_audio_cancel">إلغاء الاختبار</string>
+</resources>

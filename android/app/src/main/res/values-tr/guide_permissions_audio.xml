@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sharing_permissions">Seçilen izinleri ver</string>
+    <string name="s_sharing_permissions_continue">İzinleri ver ve devam et</string>
+    <string name="s_sharing_permissions_detail">Android, seçtiğiniz izinlerin yanı sıra gerektiğinde aktarma bildirimleri ve yakındaki cihazlar için izin ister.</string>
+    <string name="s_guide_audio_test_intro">Üçüncü bir telefonla iki ses modunu da deneyin. Sonuçlar arama sesi modunu seçmenize yardımcı olur.</string>
+    <string name="s_guide_audio_test_mode">%1$s modunu test et</string>
+    <string name="s_guide_audio_test_details">Test talimatları</string>
+    <string name="s_guide_audio_test_recommended">Önerilen mod: %1$s</string>
+    <string name="s_guide_audio_test_use">%1$s modunu kullan ve bitir</string>
+    <string name="s_guide_audio_test_retry">Yeniden test et</string>
+    <string name="s_guide_audio_test_sharing">Paylaşımı gözden geçir</string>
+    <string name="s_guide_audio_test_unclear">İki modda da ses her iki yönde net değildi.</string>
+</resources>

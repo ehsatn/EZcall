@@ -62,7 +62,7 @@
     <string name="s_while_off">Alors que l’écran est éteint</string>
     <string name="s_battery_off">L\'optimisation de la batterie est désactivée pour ezcall</string>
     <string name="s_battery_may_pause">Android peut interrompre le relay pour sauver la batterie</string>
-    <string name="s_simulate">Tester le son des appels</string>
+    <string name="s_simulate">Test audio simulé</string>
     <string name="s_simulate_wait">Répondez sur le téléphone récepteur. Écoutez les bips, puis parlez pour entendre votre voix.</string>
     <string name="s_simulate_retry">Attendre l\'appel actuel ou revenir et essayer à nouveau.</string>
     <string name="s_relay">Relay</string>

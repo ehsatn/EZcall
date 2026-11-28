@@ -12,6 +12,21 @@ class WireTest {
     private val server = hex("047cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc4766997807775510db8ed040293d9ac69f7430dbba7dade63ce982299e04b79d227873d1")
     private val ready = """{"type":"ready"}""".toByteArray()
 
+    @Test fun senderStatusAndNetworkCommandBounds() {
+        assertEquals(0, SenderNetwork.batteryPercent(0))
+        assertEquals(100, SenderNetwork.batteryPercent(100))
+        assertEquals(null, SenderNetwork.batteryPercent(Int.MIN_VALUE))
+        assertEquals(null, SenderNetwork.batteryPercent(101))
+        for (setting in SenderNetwork.entries) {
+            assertEquals(setting, SenderNetwork.fromField(setting.field))
+            assertEquals(setting to false, SenderNetwork.decode(setting.command(false)))
+            assertEquals(setting to true, SenderNetwork.decode(setting.command(true)))
+        }
+        assertEquals(null, SenderNetwork.fromField("wifi"))
+        assertEquals(null, SenderNetwork.decode(byteArrayOf(5)))
+        assertEquals(null, SenderNetwork.decode(byteArrayOf(1, 2)))
+    }
+
     @Test fun fixtureAndReplayProtection() {
         // The fixture's private keys are one and two, so the ECDH secret is the x coordinate of 2G.
         val session = Wire.derive(psk, server.copyOfRange(1, 33), client, server)

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sharing_permissions">السماح بالأذونات المحددة</string>
+    <string name="s_sharing_permissions_continue">السماح بالأذونات والمتابعة</string>
+    <string name="s_sharing_permissions_detail">سيطلب أندرويد الأذونات التي اخترتها، بالإضافة إلى إذن إشعارات الترحيل وإذن الأجهزة القريبة اللازم للإعداد.</string>
+    <string name="s_guide_audio_test_intro">اختبر وضعي الصوت باستخدام هاتف ثالث. تساعد نتائجك في اختيار وضع صوت المكالمات.</string>
+    <string name="s_guide_audio_test_mode">اختبار %1$s</string>
+    <string name="s_guide_audio_test_details">تعليمات الاختبار</string>
+    <string name="s_guide_audio_test_recommended">الوضع المقترح: %1$s</string>
+    <string name="s_guide_audio_test_use">استخدام %1$s وإنهاء الإعداد</string>
+    <string name="s_guide_audio_test_retry">إعادة الاختبار</string>
+    <string name="s_guide_audio_test_sharing">مراجعة المشاركة</string>
+    <string name="s_guide_audio_test_unclear">لم يكن الصوت واضحًا في الاتجاهين في أي من الوضعين.</string>
+</resources>

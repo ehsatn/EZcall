@@ -62,7 +62,7 @@
     <string name="s_while_off">While the screen is off</string>
     <string name="s_battery_off">Battery optimization is off for ezcall</string>
     <string name="s_battery_may_pause">Android may pause the relay to save battery</string>
-    <string name="s_simulate">Test call audio</string>
+    <string name="s_simulate">Simulated audio test</string>
     <string name="s_simulate_wait">Answer on the receiving phone. Listen for beeps, then speak to hear your voice back.</string>
     <string name="s_simulate_retry">Wait for the current call or reconnect and try again.</string>
     <string name="s_relay">Relay</string>

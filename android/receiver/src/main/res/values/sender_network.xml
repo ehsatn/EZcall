@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r_sender_phone">Sending Phone</string>
+    <string name="r_sender_battery">Battery</string>
+    <string name="r_sender_hotspot">Wi-Fi Hotspot</string>
+    <string name="r_sender_mobile_data">Mobile Data</string>
+    <string name="r_sender_unavailable">Unavailable</string>
+    <string name="r_sender_network_pending">Changing setting on the sending phone…</string>
+    <string name="r_sender_network_failed">Change unconfirmed. Check the sending phone before retrying.</string>
+    <string name="r_sender_network_allow">Allow remote network control on the sending phone.</string>
+    <string name="r_sender_network_setup">Start the call audio component on the sending phone to use network controls.</string>
+</resources>

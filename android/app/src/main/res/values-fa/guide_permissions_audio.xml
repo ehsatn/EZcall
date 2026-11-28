@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sharing_permissions">دادن دسترسی‌های انتخاب‌شده</string>
+    <string name="s_sharing_permissions_continue">دادن دسترسی‌ها و ادامه</string>
+    <string name="s_sharing_permissions_detail">اندروید دسترسی‌های انتخاب‌شده و در صورت نیاز، دسترسی اعلان‌های ایزی کال و دستگاه‌های نزدیک را درخواست می‌کند.</string>
+    <string name="s_guide_audio_test_intro">با یک گوشی سوم، هر دو حالت صدا را امتحان کنید. حالت صدا بر اساس چیزی که دو طرف شنیدند انتخاب می‌شود.</string>
+    <string name="s_guide_audio_test_mode">آزمایش «%1$s»</string>
+    <string name="s_guide_audio_test_details">راهنمای تست</string>
+    <string name="s_guide_audio_test_recommended">حالت پیشنهادی: %1$s</string>
+    <string name="s_guide_audio_test_use">انتخاب «%1$s» و پایان</string>
+    <string name="s_guide_audio_test_retry">تست دوباره</string>
+    <string name="s_guide_audio_test_sharing">بازبینی اشتراک‌گذاری</string>
+    <string name="s_guide_audio_test_unclear">در هیچ‌کدام از حالت‌ها صدا در هر دو جهت واضح نبود.</string>
+</resources>

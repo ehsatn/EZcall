@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">Probar una llamada real</string>
+    <string name="s_real_audio_redirect">Redirección (Automático)</string>
+    <string name="s_real_audio_instructions">Elige un modo y usa el teléfono receptor vinculado para llamar a un tercer teléfono. Mantén el teléfono emisor fuera del alcance de la voz. Hablad por turnos desde el receptor y el tercer teléfono. Cuelga y vuelve aquí para indicar quién oyó con claridad. Repite la prueba con el otro modo.</string>
+    <string name="s_real_audio_setup">Conecta el teléfono receptor y activa los avisos, el control y el audio bidireccional de llamadas antes de la prueba.</string>
+    <string name="s_real_audio_end_first">Finaliza la llamada actual antes de iniciar la prueba de audio.</string>
+    <string name="s_real_audio_waiting">Próxima llamada desde el receptor: %1$s</string>
+    <string name="s_real_audio_in_call">Llamada en curso. Vuelve aquí después de colgar.</string>
+    <string name="s_real_audio_answer">Guardar el resultado</string>
+    <string name="s_real_audio_result_title">¿Quién oyó con claridad en %1$s?</string>
+    <string name="s_real_audio_both">Ambos oyeron con claridad</string>
+    <string name="s_real_audio_receiver_only">Solo el receptor oyó con claridad</string>
+    <string name="s_real_audio_third_only">Solo el tercer teléfono oyó con claridad</string>
+    <string name="s_real_audio_neither">Ninguno oyó con claridad</string>
+    <string name="s_real_audio_unavailable">Modo no disponible</string>
+    <string name="s_real_audio_unavailable_detail">La llamada no se mantuvo en %1$s. Guarda el resultado. Podrás volver a probar el modo después.</string>
+    <string name="s_real_audio_untested">Sin probar</string>
+    <string name="s_real_audio_cancel">Cancelar prueba</string>
+</resources>

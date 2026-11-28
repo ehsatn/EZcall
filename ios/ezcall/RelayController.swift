@@ -50,6 +50,36 @@ final class RelayController: NSObject, ObservableObject {
 
     private enum Handshake: Equatable { case idle, serverHello, ready, authenticated }
 
+    enum SenderNetwork: String {
+        case hotspot
+        case mobileData = "mobile_data"
+    }
+
+    struct SenderStatus: Decodable {
+        let battery: Int?
+        let network_allowed: Bool
+        let hotspot: Bool?
+        let mobile_data: Bool?
+
+        var batteryPercent: Int? { battery.flatMap { (0...100).contains($0) ? $0 : nil } }
+
+        subscript(setting: SenderNetwork) -> Bool? {
+            guard network_allowed else { return nil }
+            return setting == .hotspot ? hotspot : mobile_data
+        }
+    }
+
+    private struct NetworkChange: Encodable {
+        let type = "network_set"
+        let id: String
+        let setting: String
+        let enabled: Bool
+    }
+
+    private struct NetworkResult: Decodable {
+        let ok: Bool
+    }
+
     private struct Capabilities: Decodable {
         let control: Bool
         let dial: Bool
@@ -150,6 +180,9 @@ final class RelayController: NSObject, ObservableObject {
     @Published private(set) var testing = false
     @Published private(set) var syncing = false
     @Published private(set) var incrementalSync = false
+    @Published private(set) var senderStatus: SenderStatus?
+    @Published private(set) var networkPending = false
+    @Published private(set) var networkFailed = false
     @Published private(set) var alerts = UNAuthorizationStatus.notDetermined
     @Published private(set) var openedSMSNotifications: [String] = []
     @Published private(set) var callControl = false
@@ -194,6 +227,8 @@ final class RelayController: NSObject, ObservableObject {
     private var rejected = [UUID: Date]()
     private var ping: (id: String, started: TimeInterval)?
     private var testDeadline: Timer?
+    private var pendingNetworkID: String?
+    private var networkDeadline: Timer?
     private var sync: StagedSync?
     private var syncDeadline: Timer?
     private var needsSync = false
@@ -875,6 +910,8 @@ final class RelayController: NSObject, ObservableObject {
         callControl = false
         canDial = false
         canSendSMS = false
+        senderStatus = nil
+        if networkPending { finishNetwork(false) }
         receivedCapabilities = false
         incrementalSync = false
         sharing = nil
@@ -1032,6 +1069,24 @@ final class RelayController: NSObject, ObservableObject {
         send(envelope)
     }
 
+    func setSenderNetwork(_ setting: SenderNetwork, enabled: Bool) {
+        guard status == .connected, !networkPending, senderStatus?[setting] == !enabled else { return }
+        let id = UUID().uuidString.lowercased()
+        pendingNetworkID = id
+        networkPending = true
+        networkFailed = false
+        networkDeadline = after(22) { $0.finishNetwork(false) }
+        send(NetworkChange(id: id, setting: setting.rawValue, enabled: enabled))
+    }
+
+    private func finishNetwork(_ ok: Bool) {
+        networkDeadline?.invalidate()
+        networkDeadline = nil
+        pendingNetworkID = nil
+        networkPending = false
+        networkFailed = !ok
+    }
+
     private func send(_ envelope: some Encodable) {
         do {
             let payload = try JSONEncoder().encode(envelope)
@@ -1132,6 +1187,11 @@ final class RelayController: NSObject, ObservableObject {
             guard let ping, ping.id == header.id else { return }
             let elapsed = (ProcessInfo.processInfo.systemUptime - ping.started) * 1_000
             finishTest(ezText("Round-trip verified · %lld ms", Int64(max(1, Int(elapsed.rounded())))))
+        case "sender_status":
+            senderStatus = try decoder.decode(SenderStatus.self, from: payload)
+        case "network_result":
+            guard let pendingNetworkID, pendingNetworkID == header.id else { return }
+            finishNetwork(try decoder.decode(NetworkResult.self, from: payload).ok)
         case "sms":
             let message = try decoder.decode(RelaySMS.self, from: payload)
             guard valid(message) else { throw WireError.malformed }

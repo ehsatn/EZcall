@@ -31,6 +31,7 @@ internal class CallAudio(private val context: Context, private val events: Event
         fun onAudioStopped(callId: String, reason: String?)
         fun onAudioPacket(packet: ByteArray)
         fun onUplinkCheck(result: Int, mode: Int)
+        fun onTrialMode(id: Int, mode: Int)
     }
 
     enum class Status(val wire: String) { NONE("none"), LISTEN("listen"), TWO_WAY("two_way") }
@@ -55,7 +56,7 @@ internal class CallAudio(private val context: Context, private val events: Event
 
     fun connect(launch: Boolean) = post { ensureLink(launch) }
 
-    fun begin(callId: String, payloadLimit: Int, pairFrames: Boolean) = post {
+    fun begin(callId: String, payloadLimit: Int, pairFrames: Boolean, trial: RealCallAudioTest.Trial? = null) = post {
         endStream(null)
         val current = ensureLink(launch = true)
         if (current == null) {
@@ -65,10 +66,16 @@ internal class CallAudio(private val context: Context, private val events: Event
         val next = Stream(callId, payloadLimit, pairFrames)
         stream = next
         try {
-            val normal = callMode?.takeIf { it.first == callId }?.second ?: Setup.useNormalCallMode(context)
+            val normal = callMode?.takeIf { it.first == callId }?.second
+                ?: trial?.let { it.mode == RealCallAudioTest.Mode.NORMAL } ?: Setup.useNormalCallMode(context)
             callMode = callId to normal
-            val mode = if (normal) byteArrayOf(AudioBridge.START_NORMAL_MODE.toByte()) else ByteArray(0)
-            AudioBridge.write(current.output, AudioBridge.START, mode)
+            if (trial == null) {
+                val mode = if (normal) byteArrayOf(AudioBridge.START_NORMAL_MODE.toByte()) else ByteArray(0)
+                AudioBridge.write(current.output, AudioBridge.START, mode)
+            } else {
+                val mode = if (normal) AudioBridge.MODE_IN_CALL else AudioBridge.MODE_REDIRECT
+                AudioBridge.write(current.output, AudioBridge.START_TRIAL, AudioBridge.trialPayload(trial.id, mode))
+            }
         } catch (_: IOException) {
             drop(current)
         }
@@ -131,6 +138,9 @@ internal class CallAudio(private val context: Context, private val events: Event
                 when (type) {
                     AudioBridge.STARTED -> post { if (link === current) started(payload) }
                     AudioBridge.PCM -> if (link === current) encode(payload)
+                    AudioBridge.TRIAL_MODE -> if (link === current) {
+                        AudioBridge.readTrial(payload)?.let { (id, mode) -> events.onTrialMode(id, mode) }
+                    }
                     AudioBridge.UPLINK_CHECK -> if (link === current && payload.size == 2) {
                         val mode = payload[1].toInt()
                         if (mode == AudioBridge.MODE_REDIRECT || mode == AudioBridge.MODE_IN_CALL) {
@@ -233,7 +243,8 @@ internal class CallAudio(private val context: Context, private val events: Event
         }
     }
 
-    class Link(val socket: Socket, val input: DataInputStream, val output: DataOutputStream, val status: Status)
+    class Link(val socket: Socket, val input: DataInputStream, val output: DataOutputStream, val status: Status,
+               val networkControl: Boolean)
 
     // Starting, finding and authenticating the shell-user component.
     object Setup {
@@ -250,7 +261,9 @@ internal class CallAudio(private val context: Context, private val events: Event
 
         fun useNormalCallMode(context: Context) = normalCallMode(context) ||
             UplinkHealth.prefersNormal(UplinkHealth.confirmed(context, redirect = true),
-                UplinkHealth.confirmed(context, redirect = false))
+                UplinkHealth.confirmed(context, redirect = false),
+                UplinkHealth.heard(context, RealCallAudioTest.Mode.REDIRECT),
+                UplinkHealth.heard(context, RealCallAudioTest.Mode.NORMAL))
 
         fun setNormalCallMode(context: Context, enabled: Boolean) {
             prefs(context).edit().putBoolean("normal_call_mode", enabled).apply()
@@ -447,7 +460,7 @@ internal class CallAudio(private val context: Context, private val events: Event
                 }
                 socket.soTimeout = 0
                 val status = if (hello[1].toInt() and AudioBridge.CAN_INJECT != 0) Status.TWO_WAY else Status.LISTEN
-                Link(socket, input, output, status)
+                Link(socket, input, output, status, hello[1].toInt() and AudioBridge.CAN_CONTROL_NETWORK != 0)
             } catch (_: Exception) {
                 runCatching { socket.close() }
                 null
