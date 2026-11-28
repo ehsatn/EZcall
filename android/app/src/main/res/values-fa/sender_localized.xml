@@ -183,4 +183,7 @@
     <string name="s_audio_report">ارسال گزارش صدا</string>
     <string name="s_audio_report_detail">جزئیات صدای تماس این گوشی را بفرستید تا تماس‌هایی که صدای شما به طرف مقابل نمی‌رسد بررسی شوند. شماره، مخاطب یا پیامی در آن نیست.</string>
     <string name="s_uplink_reached_info">در یک تماس واقعی بررسی شد: صدای گوشی گیرنده به تماس سیم‌کارت رسید.</string>
+    <string name="s_xiaomi_background_help">گوشی‌های شیائومی، ردمی و پوکو خودشان هم برنامه‌ها را در پس‌زمینه متوقف می‌کنند. «شروع خودکار» را برای ezcall روشن کنید و صرفه‌جویی باتری آن را روی «بدون محدودیت» بگذارید تا با خاموش بودن صفحه هم تماس‌ها به گوشی گیرنده برسند.</string>
+    <string name="s_xiaomi_autostart">باز کردن شروع خودکار</string>
+    <string name="s_xiaomi_battery_saver">باز کردن صرفه‌جویی باتری</string>
 </resources>

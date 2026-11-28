@@ -183,4 +183,7 @@
     <string name="s_audio_report">Send audio report</string>
     <string name="s_audio_report_detail">Share this phone’s call audio details to help fix calls where your voice doesn’t reach the other person. No numbers, contacts or messages are included.</string>
     <string name="s_uplink_reached_info">Checked in a real call: the receiving phone’s voice reached the SIM call.</string>
+    <string name="s_xiaomi_background_help">Xiaomi, Redmi and POCO phones also stop apps in the background on their own. Turn on Autostart for ezcall, and set its battery saver to No restrictions, so calls still reach the receiving phone with the screen off.</string>
+    <string name="s_xiaomi_autostart">Open Autostart</string>
+    <string name="s_xiaomi_battery_saver">Open battery saver</string>
 </resources>

@@ -178,4 +178,7 @@
     <string name="s_audio_report">Invia report audio</string>
     <string name="s_audio_report_detail">Condividi i dettagli audio delle chiamate di questo telefono per aiutare a correggere le chiamate in cui la tua voce non arriva all’altra persona. Non include numeri, contatti o messaggi.</string>
     <string name="s_uplink_reached_info">Verificato in una chiamata reale: la voce del telefono ricevente è arrivata alla chiamata SIM.</string>
+    <string name="s_xiaomi_background_help">I telefoni Xiaomi, Redmi e POCO fermano anche da soli le app in background. Attiva l’avvio automatico di ezcall e imposta il suo risparmio batteria su Nessuna restrizione, così le chiamate raggiungono il telefono ricevente a schermo spento.</string>
+    <string name="s_xiaomi_autostart">Apri avvio automatico</string>
+    <string name="s_xiaomi_battery_saver">Apri risparmio batteria</string>
 </resources>

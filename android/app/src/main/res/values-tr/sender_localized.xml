@@ -177,4 +177,7 @@
     <string name="s_audio_report">Ses raporu gönder</string>
     <string name="s_audio_report_detail">Sesinizin karşı tarafa ulaşmadığı aramaları düzeltmeye yardımcı olmak için bu telefonun arama sesi ayrıntılarını paylaşın. Numara, kişi veya mesaj içermez.</string>
     <string name="s_uplink_reached_info">Gerçek bir aramada doğrulandı: alıcı telefonun sesi SIM aramasına ulaştı.</string>
+    <string name="s_xiaomi_background_help">Xiaomi, Redmi ve POCO telefonlar uygulamaları arka planda kendileri de durdurur. Ekran kapalıyken aramaların alıcı telefona ulaşması için ezcall’da Otomatik başlatmayı açın ve pil tasarrufunu Kısıtlama yok olarak ayarlayın.</string>
+    <string name="s_xiaomi_autostart">Otomatik başlatmayı aç</string>
+    <string name="s_xiaomi_battery_saver">Pil tasarrufunu aç</string>
 </resources>

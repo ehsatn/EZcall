@@ -31,6 +31,8 @@ For the second command, install [Android SDK Platform Tools](https://developer.a
 
 During device testing, run **Test connection** on the receiving phone after each recovery, then check call alerts and SMS and contact sync. Test screen lock, Recents and reboot separately. [Android foreground services](https://developer.android.com/develop/connectivity/bluetooth/ble/background) · [Android Force Stop behavior](https://developer.android.com/about/versions/15/behavior-changes-all#enhanced-stop-states)
 
+Xiaomi, Redmi and POCO phones also restrict background apps through their own Autostart and battery saver settings. With those left at their defaults, a Xiaomi 12 Lite stopped relaying calls to the receiving phone while its screen was off. On these phones, **Settings → Allow relay with screen off** also opens Autostart, to turn ezcall on, and ezcall's battery saver, to choose **No restrictions**.
+
 To check Doze on a test phone, leave both phones locked and use `adb shell dumpsys deviceidle force-idle`. Ring the Android SIM and check for the call on the receiving phone. Run `adb shell dumpsys deviceidle unforce` afterward. [Doze testing](https://developer.android.com/training/monitoring-device-state/doze-standby#testing_doze)
 
 Once the receiving phone is connected, open **Audio** and tap **Start test** under **Test call audio**. Answer on the receiving phone, wait for the test tones, then speak. The tones test sender-to-receiver playback even with the receiver microphone off. The echo tests microphone capture and the return path. The test uses no SIM call. With Android Receiver, it ends after all checks pass or after 45 seconds of active testing.

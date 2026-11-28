@@ -178,4 +178,7 @@
     <string name="s_audio_report">Envoyer un rapport audio</string>
     <string name="s_audio_report_detail">Partagez les détails audio des appels de ce téléphone pour aider à corriger les appels où votre voix n’atteint pas votre correspondant. Aucun numéro, contact ni message n’est inclus.</string>
     <string name="s_uplink_reached_info">Vérifié lors d’un vrai appel : la voix du téléphone récepteur a atteint l’appel SIM.</string>
+    <string name="s_xiaomi_background_help">Les téléphones Xiaomi, Redmi et POCO arrêtent aussi eux-mêmes les apps en arrière-plan. Activez le démarrage automatique d’ezcall et réglez son économiseur de batterie sur Aucune restriction pour que les appels atteignent le téléphone récepteur écran éteint.</string>
+    <string name="s_xiaomi_autostart">Ouvrir le démarrage automatique</string>
+    <string name="s_xiaomi_battery_saver">Ouvrir l’économiseur de batterie</string>
 </resources>

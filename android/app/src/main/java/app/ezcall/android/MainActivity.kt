@@ -400,7 +400,7 @@ class MainActivity : AppCompatActivity() {
             Detail.NOTIFICATIONS -> renderPermissionPage(R.string.s_relay_notifications, R.string.s_notifications_in_status) {
                 startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
             }
-            Detail.BATTERY -> renderPermissionPage(R.string.s_battery_action, R.string.s_battery_help, ::requestBatteryExemption)
+            Detail.BATTERY -> renderBatteryPage()
             Detail.OVERLAY -> renderPermissionPage(R.string.s_call_overlay, R.string.s_call_overlay_info) {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             }
@@ -1001,6 +1001,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openSupport() = support.open(R.layout.support_wallets)
+
+    private fun renderBatteryPage() {
+        renderPermissionPage(R.string.s_battery_action, R.string.s_battery_help, ::requestBatteryExemption)
+        if (!XiaomiBackground.applies()) return
+        content.addView(body(getString(R.string.s_xiaomi_background_help)), space(top = 16))
+        content.addView(actionButton(getString(R.string.s_xiaomi_autostart)) {
+            openXiaomiSetting(XiaomiBackground.autostart())
+        }, space(top = 12))
+        content.addView(actionButton(getString(R.string.s_xiaomi_battery_saver)) {
+            openXiaomiSetting(XiaomiBackground.batterySaver(packageName, getString(R.string.ez_brand)))
+        }, space(top = 8))
+    }
+
+    private fun openXiaomiSetting(intent: Intent) {
+        if (runCatching { startActivity(intent) }.isFailure) appSettings(getString(R.string.s_xiaomi_background_help))
+    }
 
     private fun renderSettingsStatus() {
         settingsNotifications?.detail?.text = getString(if (notificationsEnabled()) R.string.s_allowed else R.string.s_android_off)

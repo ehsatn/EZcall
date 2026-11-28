@@ -181,4 +181,7 @@
     <string name="s_audio_report">إرسال تقرير الصوت</string>
     <string name="s_audio_report_detail">شارك تفاصيل صوت المكالمات في هذا الهاتف للمساعدة في إصلاح المكالمات التي لا يصل فيها صوتك إلى الطرف الآخر. لا يتضمن أرقامًا أو جهات اتصال أو رسائل.</string>
     <string name="s_uplink_reached_info">تم التحقق في مكالمة حقيقية: وصل صوت هاتف الاستقبال إلى مكالمة الشريحة.</string>
+    <string name="s_xiaomi_background_help">تُوقف هواتف Xiaomi وRedmi وPOCO التطبيقات في الخلفية بنفسها أيضًا. فعّل التشغيل التلقائي لـ ezcall واضبط توفير البطارية له على بلا قيود، كي تصل المكالمات إلى هاتف الاستقبال والشاشة مطفأة.</string>
+    <string name="s_xiaomi_autostart">فتح التشغيل التلقائي</string>
+    <string name="s_xiaomi_battery_saver">فتح توفير البطارية</string>
 </resources>
