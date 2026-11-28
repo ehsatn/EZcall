@@ -2,5 +2,5 @@
 <resources>
     <string name="s_sender_network_group">الشبكة</string>
     <string name="s_sender_network_allow">السماح بالتحكم بالشبكة عن بُعد</string>
-    <string name="s_sender_network_help">اسمح للهاتف المقترن بتشغيل نقطة اتصال Wi-Fi وبيانات الهاتف أو إيقافهما. يجب أن يكون مكوّن صوت المكالمات قيد التشغيل.</string>
+    <string name="s_sender_network_help">اسمح للهاتف المقترن بتشغيل بيانات الهاتف ونقطة الاتصال وإيقاف Wi-Fi على هذا الهاتف. يجب أن يكون مكوّن صوت المكالمات قيد التشغيل.</string>
 </resources>

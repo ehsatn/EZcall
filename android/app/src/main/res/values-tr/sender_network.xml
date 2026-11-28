@@ -2,5 +2,5 @@
 <resources>
     <string name="s_sender_network_group">Ağ</string>
     <string name="s_sender_network_allow">Uzaktan ağ denetimine izin ver</string>
-    <string name="s_sender_network_help">Eşleştirilen telefonun Wi-Fi erişim noktasını ve mobil veriyi açıp kapatmasına izin ver. Arama sesi bileşeninin çalışıyor olması gerekir.</string>
+    <string name="s_sender_network_help">Eşleştirilen telefonun bu telefonda mobil veriyi ve erişim noktasını açmasına, Wi-Fi’yi kapatmasına izin ver. Arama sesi bileşeninin çalışıyor olması gerekir.</string>
 </resources>

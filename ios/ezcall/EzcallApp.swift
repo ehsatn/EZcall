@@ -1320,19 +1320,29 @@ private struct RelaySettings: View {
                         Text("Unavailable")
                     }
                 }
-                networkToggle("Wi-Fi Hotspot", .hotspot)
-                networkToggle("Mobile Data", .mobileData)
+                if relay.senderStatus?.internetEnabled == false {
+                    Button("Enable Internet", action: relay.enableSenderInternet)
+                        .disabled(relay.status != .connected || relay.networkPending)
+                } else {
+                    LabeledContent("Enable Internet") {
+                        if relay.senderStatus?.internetEnabled == true {
+                            Text("Hotspot Ready")
+                        } else {
+                            Text("Unavailable")
+                        }
+                    }
+                }
             } header: {
                 Text("Sending Phone")
             } footer: {
                 if relay.networkPending {
                     Text("Changing setting on the sending phone…")
-                } else if relay.networkFailed {
+                } else if relay.networkFailed && relay.senderStatus?.internetEnabled != true {
                     Text("Change unconfirmed. Check the sending phone before retrying.")
                 } else if relay.senderStatus?.network_allowed == false {
                     Text("Allow remote network control on the sending phone.")
-                } else if let status = relay.senderStatus, status[.hotspot] == nil && status[.mobileData] == nil {
-                    Text("Start the call audio component on the sending phone to use network controls.")
+                } else if let status = relay.senderStatus, status.internetEnabled == nil {
+                    Text("Requires an updated sending app and a running call audio component with network permissions.")
                 }
             }
 
@@ -1432,19 +1442,6 @@ private struct RelaySettings: View {
             Button("Forget and Delete Data", role: .destructive) { relay.forgetPhone() }
         } message: {
             Text("Choose whether to keep calls, messages and contacts on this iPhone.")
-        }
-    }
-
-    @ViewBuilder
-    private func networkToggle(_ title: LocalizedStringKey, _ setting: RelayController.SenderNetwork) -> some View {
-        if relay.senderStatus?[setting] != nil {
-            Toggle(title, isOn: Binding(
-                get: { relay.senderStatus?[setting] == true },
-                set: { relay.setSenderNetwork(setting, enabled: $0) }
-            ))
-            .disabled(relay.status != .connected || relay.networkPending)
-        } else {
-            LabeledContent(title) { Text("Unavailable") }
         }
     }
 

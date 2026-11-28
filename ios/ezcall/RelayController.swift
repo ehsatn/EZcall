@@ -50,30 +50,20 @@ final class RelayController: NSObject, ObservableObject {
 
     private enum Handshake: Equatable { case idle, serverHello, ready, authenticated }
 
-    enum SenderNetwork: String {
-        case hotspot
-        case mobileData = "mobile_data"
-    }
-
     struct SenderStatus: Decodable {
         let battery: Int?
         let network_allowed: Bool
-        let hotspot: Bool?
-        let mobile_data: Bool?
+        private let internet: Bool?
 
         var batteryPercent: Int? { battery.flatMap { (0...100).contains($0) ? $0 : nil } }
-
-        subscript(setting: SenderNetwork) -> Bool? {
-            guard network_allowed else { return nil }
-            return setting == .hotspot ? hotspot : mobile_data
-        }
+        var internetEnabled: Bool? { network_allowed ? internet : nil }
     }
 
     private struct NetworkChange: Encodable {
         let type = "network_set"
         let id: String
-        let setting: String
-        let enabled: Bool
+        let setting = "internet"
+        let enabled = true
     }
 
     private struct NetworkResult: Decodable {
@@ -1069,14 +1059,14 @@ final class RelayController: NSObject, ObservableObject {
         send(envelope)
     }
 
-    func setSenderNetwork(_ setting: SenderNetwork, enabled: Bool) {
-        guard status == .connected, !networkPending, senderStatus?[setting] == !enabled else { return }
+    func enableSenderInternet() {
+        guard status == .connected, !networkPending, senderStatus?.internetEnabled == false else { return }
         let id = UUID().uuidString.lowercased()
         pendingNetworkID = id
         networkPending = true
         networkFailed = false
-        networkDeadline = after(22) { $0.finishNetwork(false) }
-        send(NetworkChange(id: id, setting: setting.rawValue, enabled: enabled))
+        networkDeadline = after(32) { $0.finishNetwork(false) }
+        send(NetworkChange(id: id))
     }
 
     private func finishNetwork(_ ok: Bool) {

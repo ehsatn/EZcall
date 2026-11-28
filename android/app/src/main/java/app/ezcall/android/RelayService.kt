@@ -178,6 +178,7 @@ internal class RelayService : Service() {
                 if (stopped) return@post
                 RelayState.setAudio(status)
                 sendCapabilities()
+                refreshNetwork()
             }
         }
 
@@ -534,6 +535,8 @@ internal class RelayService : Service() {
         activeGeneration++
         handler.removeCallbacks(networkPoll)
         networkStatus = null
+        networkBusy = false
+        networkCommand = null
         lastSenderStatus = null
         busySync = false
         snapshotID = null
@@ -612,9 +615,9 @@ internal class RelayService : Service() {
             fun authorized() = generation == activeGeneration && SenderNetworkControl.allowed(this)
             val status = if (authorized()) SenderNetworkControl.request(this, payload, ::authorized) else null
             handler.post {
+                if (stopped || forgetID != null || generation != activeGeneration) return@post
                 if (requestID != null) networkCommand = null
                 networkBusy = networkCommand != null
-                if (stopped || forgetID != null || generation != activeGeneration) return@post
                 networkStatus = status.takeIf { SenderNetworkControl.allowed(this) }
                 publishSenderStatus()
                 if (requestID != null) sendNetworkResult(requestID, networkStatus?.opt("ok") == true)
@@ -730,7 +733,8 @@ internal class RelayService : Service() {
             "network_set" -> {
                 val setting = SenderNetwork.fromField(message.opt("setting") as? String)
                 val enabled = message.opt("enabled") as? Boolean
-                if (setting == null || enabled == null || networkStatus?.opt(setting.field) !is Boolean) {
+                if (setting == null || enabled == null || !setting.supports(enabled) ||
+                    networkStatus?.opt(setting.field) !is Boolean) {
                     sendNetworkResult(id, false)
                 } else {
                     refreshNetwork(id, setting.command(enabled))

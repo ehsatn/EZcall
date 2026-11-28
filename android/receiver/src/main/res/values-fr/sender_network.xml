@@ -2,11 +2,11 @@
 <resources>
     <string name="r_sender_phone">Téléphone émetteur</string>
     <string name="r_sender_battery">Batterie</string>
-    <string name="r_sender_hotspot">Point d’accès Wi-Fi</string>
-    <string name="r_sender_mobile_data">Données mobiles</string>
+    <string name="r_enable_internet">Activer Internet</string>
+    <string name="r_sender_hotspot_ready">Point d’accès prêt</string>
     <string name="r_sender_unavailable">Indisponible</string>
     <string name="r_sender_network_pending">Modification du réglage sur le téléphone émetteur…</string>
     <string name="r_sender_network_failed">Modification non confirmée. Vérifiez le téléphone émetteur avant de réessayer.</string>
     <string name="r_sender_network_allow">Autorisez le contrôle du réseau à distance sur le téléphone émetteur.</string>
-    <string name="r_sender_network_setup">Démarrez le composant audio des appels sur le téléphone émetteur pour utiliser les commandes réseau.</string>
+    <string name="r_sender_network_setup">L’application émettrice doit être à jour et le composant audio des appels doit être actif avec les autorisations réseau.</string>
 </resources>

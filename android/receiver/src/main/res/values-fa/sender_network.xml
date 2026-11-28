@@ -2,11 +2,11 @@
 <resources>
     <string name="r_sender_phone">گوشی فرستنده</string>
     <string name="r_sender_battery">باتری</string>
-    <string name="r_sender_hotspot">هات‌اسپات وای‌فای</string>
-    <string name="r_sender_mobile_data">دیتای سیم‌کارت</string>
+    <string name="r_enable_internet">روشن کردن اینترنت</string>
+    <string name="r_sender_hotspot_ready">هات‌اسپات آماده است</string>
     <string name="r_sender_unavailable">در دسترس نیست</string>
     <string name="r_sender_network_pending">در حال تغییر تنظیمات گوشی فرستنده…</string>
     <string name="r_sender_network_failed">تغییر تأیید نشد. پیش از تلاش دوباره، گوشی فرستنده را بررسی کنید.</string>
     <string name="r_sender_network_allow">کنترل شبکه از راه دور را روی گوشی فرستنده فعال کنید.</string>
-    <string name="r_sender_network_setup">برای کنترل شبکه، مؤلفهٔ صدای تماس را روی گوشی فرستنده اجرا کنید.</string>
+    <string name="r_sender_network_setup">برنامهٔ فرستنده باید به‌روز باشد و مؤلفهٔ صدای تماس با مجوزهای شبکه در حال اجرا باشد.</string>
 </resources>

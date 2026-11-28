@@ -43,7 +43,7 @@ internal object ReceiverState {
     var canSendSms = false
     var senderBattery: Int? = null
     var senderNetworkAllowed: Boolean? = null
-    var senderNetwork = emptyMap<SenderNetwork, Boolean>()
+    var senderInternet: Boolean? = null
     var networkPending = false
     var networkFailed = false
     var audioMode = "none"
@@ -268,14 +268,14 @@ internal class ReceiverService : Service() {
         }
     }
 
-    fun setSenderNetwork(setting: SenderNetwork, enabled: Boolean) {
-        if (!state.connected || state.networkPending || state.senderNetwork[setting] != !enabled) return
+    fun enableSenderInternet() {
+        if (!state.connected || state.networkPending || state.senderInternet != false) return
         val request = id()
-        if (send("network_set", request, JSONObject().put("setting", setting.field).put("enabled", enabled))) {
+        if (send("network_set", request, JSONObject().put("setting", SenderNetwork.INTERNET.field).put("enabled", true))) {
             pendingNetworkID = request
             state.networkPending = true
             state.networkFailed = false
-            handler.postDelayed({ if (pendingNetworkID == request) finishNetwork(false) }, 22_000)
+            handler.postDelayed({ if (pendingNetworkID == request) finishNetwork(false) }, 32_000)
         } else state.networkFailed = true
         state.changed()
     }
@@ -447,11 +447,9 @@ internal class ReceiverService : Service() {
             "sender_status" -> {
                 state.senderBattery = (message.opt("battery") as? Int)?.let(SenderNetwork::batteryPercent)
                 state.senderNetworkAllowed = message.opt("network_allowed") as? Boolean
-                state.senderNetwork = if (state.senderNetworkAllowed == true) buildMap {
-                    SenderNetwork.entries.forEach { setting ->
-                        (message.opt(setting.field) as? Boolean)?.let { put(setting, it) }
-                    }
-                } else emptyMap()
+                state.senderInternet = if (state.senderNetworkAllowed == true) {
+                    message.opt(SenderNetwork.INTERNET.field) as? Boolean
+                } else null
                 state.changed()
             }
             "network_result" -> if (pendingNetworkID != null && id == pendingNetworkID) {
@@ -881,7 +879,7 @@ internal class ReceiverService : Service() {
         state.canSendSms = false
         state.senderBattery = null
         state.senderNetworkAllowed = null
-        state.senderNetwork = emptyMap()
+        state.senderInternet = null
         if (state.networkPending) state.networkFailed = true
         state.networkPending = false
         pendingNetworkID = null

@@ -2,11 +2,11 @@
 <resources>
     <string name="r_sender_phone">Telefono trasmittente</string>
     <string name="r_sender_battery">Batteria</string>
-    <string name="r_sender_hotspot">Hotspot Wi-Fi</string>
-    <string name="r_sender_mobile_data">Dati mobili</string>
+    <string name="r_enable_internet">Attiva Internet</string>
+    <string name="r_sender_hotspot_ready">Hotspot pronto</string>
     <string name="r_sender_unavailable">Non disponibile</string>
     <string name="r_sender_network_pending">Modifica dell’impostazione sul telefono trasmittente…</string>
     <string name="r_sender_network_failed">Modifica non confermata. Controlla il telefono trasmittente prima di riprovare.</string>
     <string name="r_sender_network_allow">Consenti il controllo remoto della rete sul telefono trasmittente.</string>
-    <string name="r_sender_network_setup">Avvia il componente audio delle chiamate sul telefono trasmittente per usare i controlli di rete.</string>
+    <string name="r_sender_network_setup">L’app del telefono trasmittente deve essere aggiornata e il componente audio delle chiamate deve essere in esecuzione con le autorizzazioni di rete.</string>
 </resources>

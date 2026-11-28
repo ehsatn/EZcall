@@ -83,84 +83,84 @@
         }
       }
     },
-    "Wi-Fi Hotspot": {
+    "Enable Internet": {
       "extractionState": "manual",
       "localizations": {
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "هات‌اسپات وای‌فای"
+            "value": "روشن کردن اینترنت"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نقطة اتصال Wi-Fi"
+            "value": "تشغيل الإنترنت"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Punto de acceso Wi-Fi"
+            "value": "Activar internet"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Point d’accès Wi-Fi"
+            "value": "Activer Internet"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hotspot Wi-Fi"
+            "value": "Attiva Internet"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wi-Fi erişim noktası"
+            "value": "İnterneti aç"
           }
         }
       }
     },
-    "Mobile Data": {
+    "Hotspot Ready": {
       "extractionState": "manual",
       "localizations": {
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "دیتای سیم‌کارت"
+            "value": "هات‌اسپات آماده است"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بيانات الهاتف"
+            "value": "نقطة الاتصال جاهزة"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Datos móviles"
+            "value": "Punto de acceso listo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Données mobiles"
+            "value": "Point d’accès prêt"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dati mobili"
+            "value": "Hotspot pronto"
           }
         },
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mobil veri"
+            "value": "Erişim noktası hazır"
           }
         }
       }
@@ -329,43 +329,43 @@
         }
       }
     },
-    "Start the call audio component on the sending phone to use network controls.": {
+    "Requires an updated sending app and a running call audio component with network permissions.": {
       "extractionState": "manual",
       "localizations": {
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "برای کنترل شبکه، مؤلفهٔ صدای تماس را روی گوشی فرستنده اجرا کنید."
+            "value": "برنامهٔ فرستنده باید به‌روز باشد و مؤلفهٔ صدای تماس با مجوزهای شبکه در حال اجرا باشد."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شغّل مكوّن صوت المكالمات على الهاتف المُرسِل لاستخدام عناصر التحكم بالشبكة."
+            "value": "يتطلب إصدارًا محدّثًا من تطبيق المُرسِل وتشغيل مكوّن صوت المكالمات مع أذونات الشبكة."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inicia el componente de audio de llamadas en el teléfono emisor para usar los controles de red."
+            "value": "Requiere que la aplicación emisora esté actualizada y que el componente de audio de llamadas esté en ejecución con permisos de red."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Démarrez le composant audio des appels sur le téléphone émetteur pour utiliser les commandes réseau."
+            "value": "L’application émettrice doit être à jour et le composant audio des appels doit être actif avec les autorisations réseau."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avvia il componente audio delle chiamate sul telefono trasmittente per usare i controlli di rete."
+            "value": "L’app del telefono trasmittente deve essere aggiornata e il componente audio delle chiamate deve essere in esecuzione con le autorizzazioni di rete."
           }
         },
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ağ denetimlerini kullanmak için gönderen telefonda arama sesi bileşenini başlatın."
+            "value": "Gönderen uygulamanın güncel olması ve arama sesi bileşeninin ağ izinleriyle çalışması gerekir."
           }
         }
       }

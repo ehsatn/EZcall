@@ -2,5 +2,5 @@
 <resources>
     <string name="s_sender_network_group">Réseau</string>
     <string name="s_sender_network_allow">Autoriser le contrôle du réseau à distance</string>
-    <string name="s_sender_network_help">Permet au téléphone associé d’activer ou de désactiver le point d’accès Wi-Fi et les données mobiles. Le composant audio des appels doit être en cours d’exécution.</string>
+    <string name="s_sender_network_help">Permet au téléphone associé d’activer les données mobiles et le point d’accès, et de désactiver le Wi-Fi sur ce téléphone. Le composant audio des appels doit être actif.</string>
 </resources>

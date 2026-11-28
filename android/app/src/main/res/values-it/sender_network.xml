@@ -2,5 +2,5 @@
 <resources>
     <string name="s_sender_network_group">Rete</string>
     <string name="s_sender_network_allow">Consenti il controllo remoto della rete</string>
-    <string name="s_sender_network_help">Consenti al telefono abbinato di attivare o disattivare l’hotspot Wi-Fi e i dati mobili. Il componente audio delle chiamate deve essere in esecuzione.</string>
+    <string name="s_sender_network_help">Consenti al telefono abbinato di attivare i dati mobili e l’hotspot e di disattivare il Wi-Fi su questo telefono. Il componente audio delle chiamate deve essere in esecuzione.</string>
 </resources>

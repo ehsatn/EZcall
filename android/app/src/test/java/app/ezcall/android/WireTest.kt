@@ -19,11 +19,17 @@ class WireTest {
         assertEquals(null, SenderNetwork.batteryPercent(101))
         for (setting in SenderNetwork.entries) {
             assertEquals(setting, SenderNetwork.fromField(setting.field))
-            assertEquals(setting to false, SenderNetwork.decode(setting.command(false)))
             assertEquals(setting to true, SenderNetwork.decode(setting.command(true)))
         }
+        assertEquals(SenderNetwork.HOTSPOT to false, SenderNetwork.decode(byteArrayOf(1)))
+        assertEquals(SenderNetwork.HOTSPOT to true, SenderNetwork.decode(byteArrayOf(2)))
+        assertEquals(SenderNetwork.MOBILE_DATA to false, SenderNetwork.decode(byteArrayOf(3)))
+        assertEquals(SenderNetwork.MOBILE_DATA to true, SenderNetwork.decode(byteArrayOf(4)))
+        assertEquals(SenderNetwork.INTERNET to true, SenderNetwork.decode(byteArrayOf(6)))
+        assertEquals(false, SenderNetwork.INTERNET.supports(false))
         assertEquals(null, SenderNetwork.fromField("wifi"))
         assertEquals(null, SenderNetwork.decode(byteArrayOf(5)))
+        assertEquals(null, SenderNetwork.decode(byteArrayOf(7)))
         assertEquals(null, SenderNetwork.decode(byteArrayOf(1, 2)))
     }
 

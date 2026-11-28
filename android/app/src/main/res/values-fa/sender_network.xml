@@ -2,5 +2,5 @@
 <resources>
     <string name="s_sender_network_group">شبکه</string>
     <string name="s_sender_network_allow">اجازهٔ کنترل شبکه از راه دور</string>
-    <string name="s_sender_network_help">به گوشی جفت‌شده اجازه دهید هات‌اسپات وای‌فای و دیتای سیم‌کارت را روشن یا خاموش کند. مؤلفهٔ صدای تماس باید در حال اجرا باشد.</string>
+    <string name="s_sender_network_help">به گوشی جفت‌شده اجازه دهید دیتای سیم‌کارت و هات‌اسپات این گوشی را روشن و وای‌فای آن را خاموش کند. مؤلفهٔ صدای تماس باید در حال اجرا باشد.</string>
 </resources>
