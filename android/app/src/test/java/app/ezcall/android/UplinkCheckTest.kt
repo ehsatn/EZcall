@@ -65,6 +65,20 @@ class UplinkCheckTest {
         assertEquals(UplinkCheck.Verdict.PENDING, run(DoubleArray(1_500)) { i -> voice[i] })
     }
 
+    @Test fun summaryExplainsAnUndecidedCheck() {
+        val check = UplinkCheck()
+        assertTrue(check.summary().startsWith("no evaluation yet"))
+        val voice = speech(7, 400)
+        for (i in voice.indices) {
+            check.injected(1_000_000L + i * frameMs, voice[i])
+            check.captured(1_000_000L + i * frameMs, 0.0)
+        }
+        check.evaluate(1_000_000L + voice.size * frameMs)
+        val summary = check.summary()
+        assertTrue(summary, summary.contains("capture=") && summary.contains("spread=0.0dB"))
+        assertTrue(summary, !summary.contains("match="))
+    }
+
     @Test fun rmsReadsLittleEndianSamples() {
         val pcm = byteArrayOf(0x00, 0x10, 0x00, 0xF0.toByte()) // 4096, -4096
         assertEquals(4_096.0, UplinkCheck.rms(pcm), 0.001)

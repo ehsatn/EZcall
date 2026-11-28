@@ -18,6 +18,8 @@ internal class UplinkCheck {
     private var newest = Long.MIN_VALUE
     private var failures = 0
     private var reached = false
+    private var lastStats: String? = null
+    private var maxSpeech = 0
 
     fun injected(atMs: Long, rms: Double) = put(injected, atMs, rms)
 
@@ -48,21 +50,28 @@ internal class UplinkCheck {
         val start = end - WINDOW + 1
         var speech = 0
         for (b in start..end) if (at(injected, b) >= SPEECH_LEVEL) speech++
-        if (speech < MIN_SPEECH) return Verdict.PENDING
         // A capture that stays flat (absent, digital silence or constant noise) can't confirm or rule out anything.
         var count = 0
         var sum = 0.0
         var squares = 0.0
+        var loudest = 0f
         for (b in start..end + MAX_LAG) {
             val value = at(captured, b)
             if (value.isNaN()) continue
             count++
             sum += value
             squares += value * value
+            loudest = max(loudest, value)
         }
-        if (count < WINDOW / 2) return Verdict.PENDING
-        val mean = sum / count
-        if (sqrt(max(0.0, squares / count - mean * mean)) < MIN_CAPTURE_SPREAD) return Verdict.PENDING
+        val mean = if (count == 0) 0.0 else sum / count
+        val spread = if (count == 0) 0.0 else sqrt(max(0.0, squares / count - mean * mean))
+        maxSpeech = max(maxSpeech, speech)
+        val base = "speech=${speech * BUCKET_MS}ms capture=${count * 100 / (WINDOW + MAX_LAG)}% " +
+            "level=${mean.toInt()}dB peak=${loudest.toInt()}dB spread=${fmt(spread, 1)}dB"
+        if (speech < MIN_SPEECH || count < WINDOW / 2 || spread < MIN_CAPTURE_SPREAD) {
+            lastStats = base
+            return Verdict.PENDING
+        }
 
         var following = -1.0
         var leading = -1.0
@@ -70,6 +79,7 @@ internal class UplinkCheck {
             val score = correlation(start, end, lag) ?: continue
             if (lag >= 0) following = max(following, score) else leading = max(leading, score)
         }
+        lastStats = "$base match=${fmt(following, 2)} lead=${fmt(leading, 2)} misses=$failures"
         if (following >= MATCH && following >= leading) {
             reached = true
             return Verdict.REACHED
@@ -80,6 +90,10 @@ internal class UplinkCheck {
         }
         return Verdict.PENDING
     }
+
+    /** What the latest evaluation saw, for the component log. */
+    @Synchronized
+    fun summary() = "${lastStats ?: "no evaluation yet"}; most speech in a window=${maxSpeech * BUCKET_MS}ms"
 
     private fun correlation(start: Long, end: Long, lag: Int): Double? {
         var n = 0
@@ -108,6 +122,8 @@ internal class UplinkCheck {
 
     private fun at(series: FloatArray, bucket: Long): Float =
         if (newest == Long.MIN_VALUE || bucket > newest || bucket <= newest - BUCKETS) Float.NaN else series[slot(bucket)]
+
+    private fun fmt(value: Double, digits: Int) = String.format(java.util.Locale.ROOT, "%.${digits}f", value)
 
     private fun slot(bucket: Long) = Math.floorMod(bucket, BUCKETS.toLong()).toInt()
 

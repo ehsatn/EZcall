@@ -352,18 +352,21 @@ class CallAudioServer private constructor(private val token: ByteArray) {
 
         private fun watchUplink() {
             // Let the handset redirect settle first, so the check measures the mode the call stays in.
-            if (!settle()) return
+            if (!settle()) return stoppedEarly("before uplink capture opened")
+            log("Uplink check starting in ${modeName()} mode")
             val probe = openUplinkMonitor()
             if (probe == null) {
                 finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture unavailable")
                 return
             }
+            log("Uplink capture open: ${probe.sampleRate} Hz, route=${runCatching { probe.routedDevice?.type }.getOrNull()}")
             try {
                 val frame = ByteArray(probe.sampleRate / 50 * 2)
                 var current = UplinkCheck().also { check = it }
                 var deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
                 var nextVerdict = SystemClock.elapsedRealtime() + 1_000
                 var nextConflictCheck = 0L
+                var nextProgress = SystemClock.elapsedRealtime() + PROGRESS_MS
                 while (running && receiverReady && !failed) {
                     val count = probe.read(frame, 0, frame.size)
                     if (count <= 0) return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture read $count")
@@ -379,25 +382,36 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                     }
                     if (now < nextVerdict) continue
                     nextVerdict = now + 1_000
-                    when (current.evaluate(now)) {
+                    val verdict = current.evaluate(now)
+                    if (verdict == UplinkCheck.Verdict.PENDING && now >= nextProgress) {
+                        nextProgress = now + PROGRESS_MS
+                        log("Uplink check pending: ${current.summary()}")
+                    }
+                    when (verdict) {
                         UplinkCheck.Verdict.REACHED -> return finishCheck(AudioBridge.CHECK_REACHED, "receiver voice reached the call")
                         UplinkCheck.Verdict.NOT_REACHED -> {
                             if (!handset.leaveRedirect()) {
                                 return finishCheck(AudioBridge.CHECK_NOT_REACHED, "receiver voice missing from the call")
                             }
-                            log("Receiver voice missing in call redirect mode; checking normal call mode")
-                            if (!settle()) return
+                            log("Receiver voice missing in call redirect mode (${current.summary()}); checking normal call mode")
+                            if (!settle()) return stoppedEarly("while switching to in-call mode")
                             current = UplinkCheck().also { check = it }
                             deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
                             nextVerdict = SystemClock.elapsedRealtime() + 1_000
+                            nextProgress = SystemClock.elapsedRealtime() + PROGRESS_MS
                         }
                         UplinkCheck.Verdict.PENDING -> if (now > deadline) {
                             return finishCheck(AudioBridge.CHECK_UNKNOWN, "not enough receiver speech to decide")
                         }
                     }
                 }
+                stoppedEarly(when {
+                    !running -> "call audio closed"
+                    failed -> "call audio failed"
+                    else -> "receiver paused audio"
+                })
             } catch (error: Exception) {
-                finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink check failed: ${error.javaClass.simpleName}")
+                finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink check failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}")
             } finally {
                 runCatching { probe.stop() }
                 probe.release()
@@ -410,13 +424,22 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             return running && receiverReady
         }
 
+        private fun modeName() = if (handset.isRedirected()) "redirect" else "in-call"
+
+        /** Leaves the check undecided, so it resumes if the receiver comes back during this call. */
+        private fun stoppedEarly(reason: String) {
+            if (checkDone) return
+            lastCheck = "stopped early, $reason (${modeName()} mode); ${check?.summary() ?: "no audio measured"}"
+            log("Uplink check $lastCheck")
+        }
+
         private fun finishCheck(result: Int, detail: String) {
             if (checkDone) return
             checkDone = true
             val redirect = handset.isRedirected()
             if (result == AudioBridge.CHECK_NOT_REACHED) skipRedirect = false // Neither mode worked; keep the default.
             val mode = if (redirect) AudioBridge.MODE_REDIRECT else AudioBridge.MODE_IN_CALL
-            lastCheck = "$detail (${if (redirect) "redirect" else "in-call"} mode)"
+            lastCheck = "$detail (${modeName()} mode)" + (check?.let { "; ${it.summary()}" } ?: "")
             log("Uplink check: $lastCheck")
             runCatching { AudioBridge.write(output, AudioBridge.UPLINK_CHECK, byteArrayOf(result.toByte(), mode.toByte())) }
         }
@@ -425,15 +448,22 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             if (Build.VERSION.SDK_INT < 33) return null
             for (rate in intArrayOf(AudioBridge.SAMPLE_RATE, 16_000, 8_000)) {
                 val minimum = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                if (minimum <= 0) continue
+                if (minimum <= 0) {
+                    log("Uplink capture $rate Hz: no buffer size ($minimum)")
+                    continue
+                }
                 val format = AudioFormat.Builder().setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_IN_MONO)
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build()
                 val probe = runCatching {
                     AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_UPLINK).setAudioFormat(format)
                         .setBufferSizeInBytes(maxOf(minimum, rate / 50 * 2 * 4)).setContext(AudioProcessContext.context)
                         .build()
+                }.onFailure {
+                    log("Uplink capture $rate Hz refused: ${it.javaClass.simpleName}: ${it.message.orEmpty()}")
                 }.getOrNull() ?: continue
+                val state = probe.state
                 if (started(probe)) return probe
+                log("Uplink capture $rate Hz didn't start (state=$state)")
             }
             return null
         }
@@ -714,6 +744,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         private const val MAX_REDIRECT_RETRIES = 2
         private const val CHECK_SETTLE_MS = 1_500L
         private const val CHECK_TIMEOUT_MS = 45_000L
+        private const val PROGRESS_MS = 5_000L
         private const val LOG_LINES = 150
         private val history = ArrayDeque<String>()
 
