@@ -1,7 +1,6 @@
 package app.ezcall.android
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -47,16 +46,24 @@ class UplinkCheckTest {
         assertEquals(UplinkCheck.Verdict.REACHED, verdict)
     }
 
-    @Test fun uplinkCarryingOnlyUnrelatedSoundIsNotReached() {
+    @Test fun uplinkCarryingOnlyUnrelatedSoundStaysUndecided() {
+        // The capture may tap the microphone before injection is mixed in, so no match proves nothing.
         val voice = speech(3, 1_500)
         val room = speech(4, 1_500)
-        assertEquals(UplinkCheck.Verdict.NOT_REACHED, run(voice) { i -> room[i] + 30 })
+        assertEquals(UplinkCheck.Verdict.PENDING, run(voice) { i -> room[i] + 30 })
+    }
+
+    @Test fun nearSilentCaptureWithClicksStaysUndecided() {
+        // Xiaomi 12 Lite: injection reached the far end while the capture averaged under 10 dB with rare clicks.
+        val voice = speech(8, 1_500)
+        val noise = Random(9)
+        assertEquals(UplinkCheck.Verdict.PENDING, run(voice) { i -> if (i % 97 == 0) 900.0 else noise.nextDouble() * 3 })
     }
 
     @Test fun roomPickupThatLeadsTheInjectionDoesNotCountAsReached() {
         val voice = speech(5, 1_500)
         // The sender's microphone hears the person before the Bluetooth-delayed copy is injected.
-        assertNotEquals(UplinkCheck.Verdict.REACHED, run(voice) { i -> if (i + 10 < voice.size) voice[i + 10] + 30 else 30.0 })
+        assertEquals(UplinkCheck.Verdict.PENDING, run(voice) { i -> if (i + 10 < voice.size) voice[i + 10] + 30 else 30.0 })
     }
 
     @Test fun flatCaptureOrSilentReceiverDecidesNothing() {

@@ -182,9 +182,5 @@
     <string name="s_test_echo_missing">بسته‌های بازگشت صدا در صف ارسال قرار نگرفته‌اند.</string>
     <string name="s_audio_report">ارسال گزارش صدا</string>
     <string name="s_audio_report_detail">جزئیات صدای تماس این گوشی را بفرستید تا تماس‌هایی که صدای شما به طرف مقابل نمی‌رسد بررسی شوند. شماره، مخاطب یا پیامی در آن نیست.</string>
-    <string name="s_uplink_failed_title">صدای شما به تماس نرسید</string>
-    <string name="s_uplink_failed_info">در آخرین تماس منتقل‌شده، ezcall تماس سیم‌کارت را بررسی کرد و صدای گوشی گیرنده را در آن پیدا نکرد. ممکن است سخت‌افزار صوتی این گوشی آن را منتقل نکند. گزارش صدا را بفرستید تا بررسی شود.</string>
-    <string name="s_uplink_failed_notice">ممکن است طرف مقابل صدای گوشی گیرنده را نشنود. برای صحبت روی همین گوشی، «صدا روی این گوشی» را بزنید و از تنظیمات ← صدای تماس، گزارش صدا را بفرستید.</string>
     <string name="s_uplink_reached_info">در یک تماس واقعی بررسی شد: صدای گوشی گیرنده به تماس سیم‌کارت رسید.</string>
-    <string name="s_uplink_channel">بررسی صدای تماس</string>
 </resources>

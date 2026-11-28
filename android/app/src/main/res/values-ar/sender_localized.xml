@@ -180,9 +180,5 @@
     <string name="s_test_echo_missing">لم تُدرج حزم الصدى في قائمة الإرسال.</string>
     <string name="s_audio_report">إرسال تقرير الصوت</string>
     <string name="s_audio_report_detail">شارك تفاصيل صوت المكالمات في هذا الهاتف للمساعدة في إصلاح المكالمات التي لا يصل فيها صوتك إلى الطرف الآخر. لا يتضمن أرقامًا أو جهات اتصال أو رسائل.</string>
-    <string name="s_uplink_failed_title">لم يصل صوتك إلى المكالمة</string>
-    <string name="s_uplink_failed_info">في آخر مكالمة مرحّلة، استمع ezcall إلى مكالمة الشريحة ولم يجد فيها صوت هاتف الاستقبال. قد لا تنقله أجهزة الصوت في هذا الهاتف. أرسل تقرير الصوت لفحصه.</string>
-    <string name="s_uplink_failed_notice">قد لا يسمع الطرف الآخر هاتف الاستقبال. اضغط استخدام الصوت على هذا الهاتف للتحدث هنا، وأرسل تقرير الصوت من الإعدادات ← صوت المكالمة.</string>
     <string name="s_uplink_reached_info">تم التحقق في مكالمة حقيقية: وصل صوت هاتف الاستقبال إلى مكالمة الشريحة.</string>
-    <string name="s_uplink_channel">فحوصات صوت المكالمة</string>
 </resources>

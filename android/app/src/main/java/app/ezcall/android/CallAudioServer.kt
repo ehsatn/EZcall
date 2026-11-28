@@ -41,8 +41,6 @@ class CallAudioServer private constructor(private val token: ByteArray) {
     private val clients = AtomicInteger()
     private val handset = HandsetAudio()
     private var media: Media? = null
-    // Learned during this component's lifetime: the HAL only carries injected audio outside call redirect mode.
-    @Volatile private var skipRedirect = false
     @Volatile private var lastCheck = "none"
 
     private fun serve(socket: Socket) {
@@ -293,10 +291,12 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             var voice = AudioBridge.UplinkPcm()
             var tone: ByteArray? = null
             var toneOffset = 0
+            val stats = ReceiverAudioStats()
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
                 while (running) {
                     if (!receiverReady) {
+                        stats.flush()
                         Thread.sleep(10)
                         continue
                     }
@@ -311,7 +311,9 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                     }
                     val signal = tone
                     // The blocking track write paces the stream even while Bluetooth supplies no PCM.
-                    val pcm = voice.frame(uplink.poll())
+                    val received = uplink.poll()
+                    stats.add(received)
+                    val pcm = voice.frame(received)
                     if (signal != null) {
                         AudioBridge.mixDtmf(pcm, signal, toneOffset)
                         toneOffset += pcm.size
@@ -329,12 +331,47 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 }
             } catch (error: Exception) {
                 mediaFailed("Android stopped receiving call audio.", error)
+            } finally {
+                stats.flush()
+            }
+        }
+
+        /** Shows whether the receiver's microphone audio reaches this component, and how loud it is. */
+        private inner class ReceiverAudioStats {
+            private var frames = 0
+            private var voiced = 0
+            private var gaps = 0
+            private var peak = 0f
+            private var sum = 0.0
+
+            fun add(pcm: ByteArray?) {
+                if (pcm == null) gaps++ else {
+                    val level = UplinkCheck.level(UplinkCheck.rms(pcm))
+                    frames++
+                    sum += level
+                    peak = maxOf(peak, level)
+                    if (level >= 45f) voiced++
+                }
+                if (frames + gaps >= STATS_FRAMES) flush()
+            }
+
+            fun flush() {
+                if (frames + gaps == 0) return
+                val ms = AudioBridge.FRAME_SAMPLES * 1000L / AudioBridge.SAMPLE_RATE
+                val average = if (frames == 0) 0 else (sum / frames).toInt()
+                log("Receiver audio: ${frames * ms}ms received, ${gaps * ms}ms missing, ${voiced * ms}ms voiced, " +
+                    "level=${average}dB peak=${peak.toInt()}dB, ${modeName()} mode, track=${track?.playState}")
+                frames = 0
+                voiced = 0
+                gaps = 0
+                peak = 0f
+                sum = 0.0
             }
         }
 
         /**
-         * Confirms in the live call that the receiver's voice reaches the modem, since a HAL can accept the injection
-         * track and still drop its audio. Tries the other audio mode once before reporting failure.
+         * Confirms in the live call that the receiver's voice reaches the modem. Only a match counts: some HALs tap the
+         * uplink capture before injected audio is mixed in, so no match is no evidence of a fault.
          */
         private fun startCheck() {
             if (checkDone || monitor != null || !running) return
@@ -362,8 +399,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             log("Uplink capture open: ${probe.sampleRate} Hz, route=${runCatching { probe.routedDevice?.type }.getOrNull()}")
             try {
                 val frame = ByteArray(probe.sampleRate / 50 * 2)
-                var current = UplinkCheck().also { check = it }
-                var deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
+                val current = UplinkCheck().also { check = it }
+                val deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
                 var nextVerdict = SystemClock.elapsedRealtime() + 1_000
                 var nextConflictCheck = 0L
                 var nextProgress = SystemClock.elapsedRealtime() + PROGRESS_MS
@@ -395,23 +432,10 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         nextProgress = now + PROGRESS_MS
                         log("Uplink check pending: ${current.summary()}")
                     }
-                    when (verdict) {
-                        UplinkCheck.Verdict.REACHED -> return finishCheck(AudioBridge.CHECK_REACHED, "receiver voice reached the call")
-                        UplinkCheck.Verdict.NOT_REACHED -> {
-                            if (!handset.leaveRedirect()) {
-                                return finishCheck(AudioBridge.CHECK_NOT_REACHED, "receiver voice missing from the call")
-                            }
-                            log("Receiver voice missing in call redirect mode (${current.summary()}); checking normal call mode")
-                            if (!settle()) return stoppedEarly("while switching to in-call mode")
-                            current = UplinkCheck().also { check = it }
-                            deadline = SystemClock.elapsedRealtime() + CHECK_TIMEOUT_MS
-                            nextVerdict = SystemClock.elapsedRealtime() + 1_000
-                            nextProgress = SystemClock.elapsedRealtime() + PROGRESS_MS
-                        }
-                        UplinkCheck.Verdict.PENDING -> if (now > deadline) {
-                            return finishCheck(AudioBridge.CHECK_UNKNOWN, "not enough receiver speech to decide")
-                        }
+                    if (verdict == UplinkCheck.Verdict.REACHED) {
+                        return finishCheck(AudioBridge.CHECK_REACHED, "receiver voice reached the call")
                     }
+                    if (now > deadline) return finishCheck(AudioBridge.CHECK_UNKNOWN, "couldn't confirm from uplink capture")
                 }
                 stoppedEarly(when {
                     !running -> "call audio closed"
@@ -445,7 +469,6 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             if (checkDone) return
             checkDone = true
             val redirect = handset.isRedirected()
-            if (result == AudioBridge.CHECK_NOT_REACHED) skipRedirect = false // Neither mode worked; keep the default.
             val mode = if (redirect) AudioBridge.MODE_REDIRECT else AudioBridge.MODE_IN_CALL
             lastCheck = "$detail (${modeName()} mode)" + (check?.let { "; ${it.summary()}" } ?: "")
             log("Uplink check: $lastCheck")
@@ -542,27 +565,11 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 restoreTask?.cancel(false)
                 restoreTask = null
                 mutePlayback()
-                if (!redirected && !skipRedirect) redirect(owner)
+                if (!redirected) redirect(owner)
             }
         }
 
         fun isRedirected() = redirected
-
-        /** Returns the call to Telecom's own call mode for this component's lifetime. False if it wasn't redirected. */
-        fun leaveRedirect(): Boolean = runCatching {
-            control.submit<Boolean> {
-                val manager = audio ?: return@submit false
-                if (!redirected) return@submit false
-                skipRedirect = true
-                watch?.cancel(false)
-                watch = null
-                redirected = false
-                restoreMicrophone(manager)
-                releaseMode(manager)
-                log("Left call redirect mode")
-                true
-            }.get(2, TimeUnit.SECONDS)
-        }.getOrDefault(false)
 
         fun restore(wait: Boolean = false, delayed: Boolean = false) {
             val task = control.submit(Runnable {
@@ -728,7 +735,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE}) soc=$soc")
             appendLine("Build: ${Build.FINGERPRINT}")
             appendLine("Interceptable: ${canIntercept()} mode=${runCatching { manager?.mode }.getOrNull()} telephony $telephony")
-            appendLine("Redirect: active=${handset.isRedirected()} skipped=$skipRedirect")
+            appendLine("Redirect: active=${handset.isRedirected()}")
             appendLine("Last uplink check: $lastCheck")
             appendLine("Log:")
         }
@@ -754,6 +761,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         private const val CHECK_TIMEOUT_MS = 45_000L
         private const val PROGRESS_MS = 5_000L
         private const val NO_CAPTURE_MS = 3_000L
+        private const val STATS_FRAMES = 250 // 5 s
         private const val LOG_LINES = 150
         private val history = ArrayDeque<String>()
 

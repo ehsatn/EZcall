@@ -177,9 +177,5 @@
     <string name="s_test_echo_missing">Aucun paquet d’écho en file d’attente.</string>
     <string name="s_audio_report">Envoyer un rapport audio</string>
     <string name="s_audio_report_detail">Partagez les détails audio des appels de ce téléphone pour aider à corriger les appels où votre voix n’atteint pas votre correspondant. Aucun numéro, contact ni message n’est inclus.</string>
-    <string name="s_uplink_failed_title">Votre voix n’a pas atteint l’appel</string>
-    <string name="s_uplink_failed_info">Lors du dernier appel relayé, ezcall a écouté l’appel SIM sans y trouver la voix du téléphone récepteur. Le matériel audio de ce téléphone ne la transmet peut-être pas. Envoyez un rapport audio pour vérification.</string>
-    <string name="s_uplink_failed_notice">Votre correspondant n’entend peut-être pas le téléphone récepteur. Touchez Utiliser l’audio sur ce téléphone pour parler ici, puis envoyez un rapport audio depuis Paramètres → Audio des appels.</string>
     <string name="s_uplink_reached_info">Vérifié lors d’un vrai appel : la voix du téléphone récepteur a atteint l’appel SIM.</string>
-    <string name="s_uplink_channel">Vérifications de l’audio des appels</string>
 </resources>

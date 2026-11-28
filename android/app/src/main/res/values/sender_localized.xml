@@ -182,9 +182,5 @@
     <string name="s_test_echo_missing">Echo packets have not been queued.</string>
     <string name="s_audio_report">Send audio report</string>
     <string name="s_audio_report_detail">Share this phone’s call audio details to help fix calls where your voice doesn’t reach the other person. No numbers, contacts or messages are included.</string>
-    <string name="s_uplink_failed_title">Your voice didn’t reach the call</string>
-    <string name="s_uplink_failed_info">In the last relayed call, ezcall listened to the SIM call and couldn’t find the receiving phone’s voice in it. This phone’s audio hardware may not pass it on. Send an audio report so it can be checked.</string>
-    <string name="s_uplink_failed_notice">The other person may not hear the receiving phone. Tap Use audio on this phone to talk here, and send an audio report from Settings → Call audio.</string>
     <string name="s_uplink_reached_info">Checked in a real call: the receiving phone’s voice reached the SIM call.</string>
-    <string name="s_uplink_channel">Call audio checks</string>
 </resources>

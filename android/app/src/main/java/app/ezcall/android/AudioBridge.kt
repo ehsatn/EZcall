@@ -44,8 +44,7 @@ internal object AudioBridge {
     const val UPLINK = 2
     // UPLINK_CHECK payload: result, then the audio mode the check ran in.
     const val CHECK_REACHED = 1
-    const val CHECK_NOT_REACHED = 2
-    const val CHECK_UNKNOWN = 3
+    const val CHECK_UNKNOWN = 3 // 2 meant "not reached" before 0.1.26; uplink capture can't prove that.
     const val MODE_REDIRECT = 1
     const val MODE_IN_CALL = 2
     const val MAX_TEXT = 8_000

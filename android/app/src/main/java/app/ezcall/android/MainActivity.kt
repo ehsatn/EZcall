@@ -1034,8 +1034,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun audioTitle(): String = when {
         audioBusy -> getString(R.string.s_starting_audio)
-        liveAudio() == CallAudio.Status.TWO_WAY && uplinkResult() == UplinkHealth.Result.NOT_REACHED ->
-            getString(R.string.s_uplink_failed_title)
         liveAudio() == CallAudio.Status.TWO_WAY -> getString(R.string.s_two_way)
         liveAudio() == CallAudio.Status.LISTEN -> getString(R.string.s_listen_only)
         CallAudio.Setup.enabled(this) && RelayState.current.running -> getString(R.string.s_audio_stopped)
@@ -1077,8 +1075,6 @@ class MainActivity : AppCompatActivity() {
         val info = when {
             display.busy && startingRoot -> if (display.rootGranted) R.string.s_audio_root_starting else R.string.s_audio_root_request
             display.busy -> R.string.s_audio_keep_wireless
-            display.active == CallAudio.Status.TWO_WAY && display.uplink == UplinkHealth.Result.NOT_REACHED ->
-                R.string.s_uplink_failed_info
             display.active == CallAudio.Status.TWO_WAY && display.uplink == UplinkHealth.Result.REACHED ->
                 R.string.s_uplink_reached_info
             display.active == CallAudio.Status.TWO_WAY -> R.string.s_audio_two_way_info

@@ -177,9 +177,5 @@
     <string name="s_test_echo_missing">Nessun pacchetto di eco accodato.</string>
     <string name="s_audio_report">Invia report audio</string>
     <string name="s_audio_report_detail">Condividi i dettagli audio delle chiamate di questo telefono per aiutare a correggere le chiamate in cui la tua voce non arriva all’altra persona. Non include numeri, contatti o messaggi.</string>
-    <string name="s_uplink_failed_title">La tua voce non è arrivata alla chiamata</string>
-    <string name="s_uplink_failed_info">Nell’ultima chiamata inoltrata, ezcall ha ascoltato la chiamata SIM e non ha trovato la voce del telefono ricevente. L’hardware audio di questo telefono potrebbe non trasmetterla. Invia un report audio per farla verificare.</string>
-    <string name="s_uplink_failed_notice">L’altra persona potrebbe non sentire il telefono ricevente. Tocca Usa l’audio su questo telefono per parlare qui e invia un report audio da Impostazioni → Audio chiamate.</string>
     <string name="s_uplink_reached_info">Verificato in una chiamata reale: la voce del telefono ricevente è arrivata alla chiamata SIM.</string>
-    <string name="s_uplink_channel">Controlli audio delle chiamate</string>
 </resources>

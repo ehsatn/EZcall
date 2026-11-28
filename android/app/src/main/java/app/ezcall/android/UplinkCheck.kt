@@ -5,18 +5,21 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
- * Decides whether the receiver's voice injected into the call actually reaches the modem uplink, by matching the
- * loudness envelope of the injected stream against the envelope of the HAL's uplink capture. Speech gives the envelope
- * a shape to match; silence decides nothing. A match must follow the injection in time, so the sender's own
- * microphone hearing the same person in the room (which leads the Bluetooth-delayed injection) doesn't count.
+ * Confirms that the receiver's voice injected into the call reaches the modem uplink, by matching the loudness
+ * envelope of the injected stream against the envelope of the HAL's uplink capture. Speech gives the envelope a shape
+ * to match; silence decides nothing. A match must follow the injection in time, so the sender's own microphone hearing
+ * the same person in the room (which leads the Bluetooth-delayed injection) doesn't count.
+ *
+ * Only a match is evidence. Some HALs tap the uplink capture before injected audio is mixed in (a Snapdragon 778G
+ * phone carried the injected audio to the far end while its capture stayed near-silent), so a missing match never
+ * means the voice is missing from the call.
  */
 internal class UplinkCheck {
-    enum class Verdict { PENDING, REACHED, NOT_REACHED }
+    enum class Verdict { PENDING, REACHED }
 
     private val injected = FloatArray(BUCKETS) { Float.NaN }
     private val captured = FloatArray(BUCKETS) { Float.NaN }
     private var newest = Long.MIN_VALUE
-    private var failures = 0
     private var reached = false
     private var lastStats: String? = null
     private var maxSpeech = 0
@@ -50,8 +53,9 @@ internal class UplinkCheck {
         val start = end - WINDOW + 1
         var speech = 0
         for (b in start..end) if (at(injected, b) >= SPEECH_LEVEL) speech++
-        // A capture that stays flat (absent, digital silence or constant noise) can't confirm or rule out anything.
+        // A capture that is absent, near-silent or flat can't confirm anything.
         var count = 0
+        var active = 0
         var sum = 0.0
         var squares = 0.0
         var loudest = 0f
@@ -59,6 +63,7 @@ internal class UplinkCheck {
             val value = at(captured, b)
             if (value.isNaN()) continue
             count++
+            if (value >= CAPTURE_ACTIVE_LEVEL) active++
             sum += value
             squares += value * value
             loudest = max(loudest, value)
@@ -67,8 +72,8 @@ internal class UplinkCheck {
         val spread = if (count == 0) 0.0 else sqrt(max(0.0, squares / count - mean * mean))
         maxSpeech = max(maxSpeech, speech)
         val base = "speech=${speech * BUCKET_MS}ms capture=${count * 100 / (WINDOW + MAX_LAG)}% " +
-            "level=${mean.toInt()}dB peak=${loudest.toInt()}dB spread=${fmt(spread, 1)}dB"
-        if (speech < MIN_SPEECH || count < WINDOW / 2 || spread < MIN_CAPTURE_SPREAD) {
+            "active=${active * BUCKET_MS}ms level=${mean.toInt()}dB peak=${loudest.toInt()}dB spread=${fmt(spread, 1)}dB"
+        if (speech < MIN_SPEECH || count < WINDOW / 2 || active < MIN_ACTIVE || spread < MIN_CAPTURE_SPREAD) {
             lastStats = base
             return Verdict.PENDING
         }
@@ -79,14 +84,10 @@ internal class UplinkCheck {
             val score = correlation(start, end, lag) ?: continue
             if (lag >= 0) following = max(following, score) else leading = max(leading, score)
         }
-        lastStats = "$base match=${fmt(following, 2)} lead=${fmt(leading, 2)} misses=$failures"
+        lastStats = "$base match=${fmt(following, 2)} lead=${fmt(leading, 2)}"
         if (following >= MATCH && following >= leading) {
             reached = true
             return Verdict.REACHED
-        }
-        val acousticOnly = leading > following && following < MATCH
-        if ((following < MISMATCH || acousticOnly) && speech >= FAIL_SPEECH && ++failures >= FAIL_WINDOWS) {
-            return Verdict.NOT_REACHED
         }
         return Verdict.PENDING
     }
@@ -133,12 +134,11 @@ internal class UplinkCheck {
         private const val WINDOW = 125 // 5 s
         private const val MAX_LAG = 10 // 400 ms of track and capture buffering
         private const val MIN_SPEECH = 25 // 1 s of speech in the window
-        private const val FAIL_SPEECH = 40
-        private const val FAIL_WINDOWS = 4
+        private const val MIN_ACTIVE = 12 // 0.5 s of real capture signal in the window
         private const val SPEECH_LEVEL = 45f // about -50 dBFS
+        private const val CAPTURE_ACTIVE_LEVEL = 35f // about -60 dBFS
         private const val MIN_CAPTURE_SPREAD = 3.0
         private const val MATCH = 0.5
-        private const val MISMATCH = 0.2
 
         fun level(rms: Double) = (20 * log10(max(rms, 1.0))).toFloat()
 

@@ -232,25 +232,9 @@ internal class RelayService : Service() {
                 if (stopped) return@post
                 val saved = UplinkHealth.save(this@RelayService, result, mode)
                 Log.i("EzcallRelay", "Uplink check: $saved")
-                if (saved == UplinkHealth.Result.NOT_REACHED) showUplinkWarning()
                 RelayState.setAudio(RelayState.audio)
             }
         }
-    }
-
-    private fun showUplinkWarning() {
-        val localized = ezcallContext()
-        val notifications = getSystemService(NotificationManager::class.java)
-        val channel = NotificationChannel("audio_check", localized.getString(R.string.s_uplink_channel),
-            NotificationManager.IMPORTANCE_DEFAULT)
-        notifications.createNotificationChannel(channel)
-        val main = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val text = localized.getString(R.string.s_uplink_failed_notice)
-        notifications.notify(UPLINK_NOTIFICATION, Notification.Builder(this, channel.id)
-            .setSmallIcon(R.drawable.ic_ezcall_notification)
-            .setContentTitle(localized.getString(R.string.s_uplink_failed_title))
-            .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text))
-            .setContentIntent(main).setAutoCancel(true).build())
     }
 
     private val events = object : BroadcastReceiver() {
@@ -1279,7 +1263,6 @@ internal class RelayService : Service() {
         private const val ACTION_HANDSET_AUDIO = "app.ezcall.android.HANDSET_AUDIO"
         private const val HANDSET_AUDIO_MESSAGE = "Call audio is on the sending phone."
         private const val INITIAL_RETRY_MS = 1_000L
-        private const val UPLINK_NOTIFICATION = 18
         private const val DIAL_TIMEOUT_MS = 15_000L
         private const val AUDIO_SETUP_TIMEOUT_MS = 30_000L
         private val DIALABLE = Regex("[+]?[0-9*#][0-9*#,;]{0,63}")

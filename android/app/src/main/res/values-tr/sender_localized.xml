@@ -176,9 +176,5 @@
     <string name="s_test_echo_missing">Yankı paketleri sıraya alınmadı.</string>
     <string name="s_audio_report">Ses raporu gönder</string>
     <string name="s_audio_report_detail">Sesinizin karşı tarafa ulaşmadığı aramaları düzeltmeye yardımcı olmak için bu telefonun arama sesi ayrıntılarını paylaşın. Numara, kişi veya mesaj içermez.</string>
-    <string name="s_uplink_failed_title">Sesiniz aramaya ulaşmadı</string>
-    <string name="s_uplink_failed_info">Son aktarılan aramada ezcall SIM aramasını dinledi ve alıcı telefonun sesini bulamadı. Bu telefonun ses donanımı sesi iletmiyor olabilir. İncelenmesi için ses raporu gönderin.</string>
-    <string name="s_uplink_failed_notice">Karşı taraf alıcı telefonu duymuyor olabilir. Burada konuşmak için Sesi bu telefonda kullan’a dokunun ve Ayarlar → Arama sesi bölümünden ses raporu gönderin.</string>
     <string name="s_uplink_reached_info">Gerçek bir aramada doğrulandı: alıcı telefonun sesi SIM aramasına ulaştı.</string>
-    <string name="s_uplink_channel">Arama sesi kontrolleri</string>
 </resources>
