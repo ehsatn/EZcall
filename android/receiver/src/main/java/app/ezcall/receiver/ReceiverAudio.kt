@@ -13,11 +13,13 @@ import app.ezcall.android.PcmLevel
 import app.ezcall.android.ReceiverTestStep
 import app.ezcall.android.TestSignal
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 @SuppressLint("MissingPermission") // The service enables microphone capture only after a visible, granted request.
 internal class ReceiverAudio(
+    private val routing: Future<*>,
     private val onPlaying: () -> Unit,
     private val onError: (Throwable) -> Unit,
     private val onTestStep: ((ReceiverTestStep) -> Unit)? = null,
@@ -28,10 +30,9 @@ internal class ReceiverAudio(
 ) {
     private data class Packet(val bytes: ByteArray, val sequence: Long?)
 
-    private val downlink = ArrayBlockingQueue<Packet>(5)
+    // Give the finite test cue room to arrive while Android opens the audio route.
+    private val downlink = ArrayBlockingQueue<Packet>(if (echoSequence != null) 16 else 5)
     @Volatile private var running = true
-    private val format = AudioFormat.Builder().setSampleRate(Opus.SAMPLE_RATE)
-        .setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
 
     init {
         thread(name = "ezcall-playback") { runCatching { play() }.onFailure { if (running) onError(it) } }
@@ -57,7 +58,11 @@ internal class ReceiverAudio(
     }
 
     private fun play() {
+        routing.get()
+        if (!running) return
         Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+        val format = AudioFormat.Builder().setSampleRate(Opus.SAMPLE_RATE)
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
         val minimum = AudioTrack.getMinBufferSize(Opus.SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val sink = AudioTrack.Builder().setAudioAttributes(
             AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
@@ -156,6 +161,8 @@ internal class ReceiverAudio(
     }
 
     private fun record(payloadLimit: Int, send: (ByteArray) -> Unit, onRecording: () -> Unit) {
+        routing.get()
+        if (!running) return
         Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
         val buffer = ByteArray(Opus.FRAME_BYTES)
         val minimum = AudioRecord.getMinBufferSize(Opus.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)

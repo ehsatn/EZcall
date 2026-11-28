@@ -189,5 +189,5 @@
     <string name="s_audio_mode">Call audio mode</string>
     <string name="s_audio_mode_auto">Automatic</string>
     <string name="s_audio_mode_normal">Normal call mode</string>
-    <string name="s_audio_mode_help">Automatic takes the call off this phone’s earpiece and microphone while the receiving phone has it. If the other person can’t hear the receiving phone, choose Normal call mode: this phone’s earpiece is muted and its microphone stays on. Applies from the next call.</string>
+    <string name="s_audio_mode_help">Automatic prefers redirecting the call off this phone’s earpiece and microphone. If only normal call mode has been confirmed on this phone, Automatic uses that mode. You can also choose Normal call mode yourself. It silences this phone’s earpiece and leaves its microphone on. Changes apply from the next call.</string>
 </resources>

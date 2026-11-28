@@ -184,5 +184,5 @@
     <string name="s_audio_mode">Modo de audio de llamada</string>
     <string name="s_audio_mode_auto">Automático</string>
     <string name="s_audio_mode_normal">Modo de llamada normal</string>
-    <string name="s_audio_mode_help">En automático, la llamada deja de usar el auricular y el micrófono de este teléfono mientras la tiene el teléfono receptor. Si la otra persona no oye el teléfono receptor, elige Modo de llamada normal: el auricular de este teléfono se silencia y su micrófono sigue activo. Se aplica desde la próxima llamada.</string>
+    <string name="s_audio_mode_help">El modo automático prefiere desviar la llamada del auricular y el micrófono de este teléfono. Si solo se ha confirmado el modo de llamada normal en este teléfono, el modo automático lo usa. También puedes elegir el modo normal manualmente. Este silencia el auricular y mantiene activo el micrófono. El cambio se aplica desde la próxima llamada.</string>
 </resources>

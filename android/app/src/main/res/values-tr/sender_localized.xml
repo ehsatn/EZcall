@@ -183,5 +183,5 @@
     <string name="s_audio_mode">Arama sesi modu</string>
     <string name="s_audio_mode_auto">Otomatik</string>
     <string name="s_audio_mode_normal">Normal arama modu</string>
-    <string name="s_audio_mode_help">Otomatik modda, alıcı telefon aramayı üstlendiği sürece arama bu telefonun kulaklığından ve mikrofonundan ayrılır. Karşı taraf alıcı telefonu duymuyorsa Normal arama modunu seçin: bu telefonun kulaklığı sessize alınır ve mikrofonu açık kalır. Sonraki aramadan itibaren geçerlidir.</string>
+    <string name="s_audio_mode_help">Otomatik mod, aramayı bu telefonun kulaklığı ve mikrofonundan ayırmayı tercih eder. Bu telefonda yalnızca normal arama modu doğrulandıysa otomatik mod onu kullanır. Normal arama modunu elle de seçebilirsiniz. Bu modda kulaklık sessize alınır ve mikrofon açık kalır. Değişiklik sonraki aramadan itibaren geçerlidir.</string>
 </resources>
