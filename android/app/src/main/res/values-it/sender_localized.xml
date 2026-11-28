@@ -184,5 +184,5 @@
     <string name="s_audio_mode">Modalità audio chiamate</string>
     <string name="s_audio_mode_auto">Automatica</string>
     <string name="s_audio_mode_normal">Modalità chiamata normale</string>
-    <string name="s_audio_mode_help">In automatico, la chiamata lascia l’auricolare e il microfono di questo telefono mentre la gestisce il telefono ricevente. Se l’altra persona non sente il telefono ricevente, scegli Modalità chiamata normale: l’auricolare di questo telefono viene silenziato e il microfono resta attivo. Vale dalla prossima chiamata.</string>
+    <string name="s_audio_mode_help">La modalità automatica preferisce escludere l’auricolare e il microfono di questo telefono dalla chiamata. Se su questo telefono è stata confermata solo la modalità chiamata normale, la modalità automatica usa quella. Puoi anche scegliere la modalità normale manualmente. Silenzia l’auricolare e lascia attivo il microfono. La modifica vale dalla prossima chiamata.</string>
 </resources>

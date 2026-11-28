@@ -29,6 +29,7 @@ import app.ezcall.android.TEST_ECHO_SEQUENCE
 import app.ezcall.android.Wire
 import org.json.JSONObject
 import java.util.UUID
+import java.util.concurrent.Executors
 
 internal object ReceiverState {
     val listeners = mutableSetOf<() -> Unit>()
@@ -648,19 +649,30 @@ internal class ReceiverService : Service() {
         val log = testLog(id)
         val echoSequence = message.optLong("test_echo_sequence", -1L)
             .takeIf { log != null && it == TEST_ECHO_SEQUENCE }
-        log?.add("Audio setup: uplink=${state.microphoneOffered} pairedPackets=$pairedAudio micEnabled=$microphone systemCall=${systemCall?.id == id}")
-        if (systemCall?.id != id) runCatching {
-            manager.mode = AudioManager.MODE_IN_COMMUNICATION
-            audioModeRequested = true
-        }.onFailure { log?.add("Audio communication mode failed: ${it.javaClass.simpleName}") }
-        log?.let {
-            val output = runCatching {
-                val stream = AudioManager.STREAM_VOICE_CALL
-                "communication device type=${manager.communicationDevice?.type ?: "unknown"} volume=${manager.getStreamVolume(stream)}/${manager.getStreamMaxVolume(stream)}"
-            }.getOrDefault("Android did not provide device and volume information")
-            it.add("Audio output: $output")
+        val usesSystemCall = systemCall?.id == id
+        log?.add("Audio setup: uplink=${state.microphoneOffered} pairedPackets=$pairedAudio micEnabled=$microphone systemCall=$usesSystemCall")
+        val detail: ((String) -> Unit)? = log?.let { test -> { message ->
+            val at = SystemClock.elapsedRealtime()
+            handler.post { test.add("$message (worker to handler=${SystemClock.elapsedRealtime() - at}ms)") }
+            Unit
+        } }
+        audioModeRequested = !usesSystemCall
+        val routing = audioRouting.submit {
+            val startedAt = SystemClock.elapsedRealtime()
+            if (!usesSystemCall) runCatching {
+                manager.mode = AudioManager.MODE_IN_COMMUNICATION
+            }.onFailure { detail?.invoke("Audio communication mode failed: ${it.javaClass.simpleName}") }
+            // The test stays on the call route. On the loudspeaker the microphone would hear the cue and pass its own
+            // check without anyone speaking.
+            if (detail != null) {
+                val output = runCatching {
+                    val stream = AudioManager.STREAM_VOICE_CALL
+                    "communication device type=${manager.communicationDevice?.type ?: "unknown"} volume=${manager.getStreamVolume(stream)}/${manager.getStreamMaxVolume(stream)}"
+                }.getOrDefault("Android did not provide device and volume information")
+                detail("Audio output: $output route setup=${SystemClock.elapsedRealtime() - startedAt}ms")
+            }
         }
-        audio = ReceiverAudio({
+        audio = ReceiverAudio(routing, {
             handler.post {
                 if (seal === cipher) {
                     playbackReady = true
@@ -679,11 +691,7 @@ internal class ReceiverService : Service() {
             }
         }, onTestStep = if (state.audioTest?.id == id) { step ->
             handler.post { if (seal === cipher) testStep(step, id) }
-        } else null, onTestDetail = log?.let { test -> { detail ->
-            val at = SystemClock.elapsedRealtime()
-            handler.post { test.add("$detail (worker to handler=${SystemClock.elapsedRealtime() - at}ms)") }
-            Unit
-        } },
+        } else null, onTestDetail = detail,
             onTestPlayedPacket = log?.let { test -> { sequence -> test.track(AudioTestMetric.PCM_WRITTEN, sequence) } },
             testLog = log, echoSequence = echoSequence)
         if (microphone) startMicrophone()
@@ -799,8 +807,9 @@ internal class ReceiverService : Service() {
         state.microphoneLive = false
         armSyncTimeout()
         if (audioModeRequested) {
-            runCatching { getSystemService(AudioManager::class.java).mode = AudioManager.MODE_NORMAL }
             audioModeRequested = false
+            val manager = getSystemService(AudioManager::class.java)
+            audioRouting.execute { runCatching { manager.mode = AudioManager.MODE_NORMAL } }
         }
     }
 
@@ -977,6 +986,7 @@ internal class ReceiverService : Service() {
         private const val LINK_ALERT = 20
         private const val CALL_ALERT = 21
         private const val SMS_ALERT = 22
+        private val audioRouting = Executors.newSingleThreadExecutor { Thread(it, "ezcall-audio-route") }
         var current: ReceiverService? = null
             private set
 

@@ -184,5 +184,5 @@
     <string name="s_audio_mode">Mode audio des appels</string>
     <string name="s_audio_mode_auto">Automatique</string>
     <string name="s_audio_mode_normal">Mode d’appel normal</string>
-    <string name="s_audio_mode_help">En automatique, l’appel quitte l’écouteur et le micro de ce téléphone tant que le téléphone récepteur le prend en charge. Si votre correspondant n’entend pas le téléphone récepteur, choisissez Mode d’appel normal : l’écouteur de ce téléphone est coupé et son micro reste actif. S’applique à partir du prochain appel.</string>
+    <string name="s_audio_mode_help">Le mode automatique privilégie le transfert de l’appel hors de l’écouteur et du micro de ce téléphone. Si seul le mode d’appel normal a été confirmé sur ce téléphone, le mode automatique l’utilise. Vous pouvez aussi choisir le mode normal. Il coupe l’écouteur et laisse le micro actif. Le changement s’applique dès l’appel suivant.</string>
 </resources>

@@ -1057,8 +1057,6 @@ class MainActivity : AppCompatActivity() {
         else -> getString(R.string.s_audio_not_setup)
     }
 
-    private fun uplinkResult(): UplinkHealth.Result? = UplinkHealth.load(this)?.result
-
     private data class AudioDisplay(
         val title: String,
         val active: CallAudio.Status?,
@@ -1071,7 +1069,7 @@ class MainActivity : AppCompatActivity() {
         val overlayEnabled: Boolean,
         val error: Int?,
         val rootGranted: Boolean,
-        val uplink: UplinkHealth.Result?,
+        val uplinkConfirmed: Boolean,
         val reporting: Boolean,
         val normalCallMode: Boolean
     ) {
@@ -1086,13 +1084,14 @@ class MainActivity : AppCompatActivity() {
         val display = AudioDisplay(audioTitle(), active, configured, audioBusy, RelayState.current.running, paired,
             paired || (configured && LocalAdb.hasKey()),
             CallAudio.Setup.method(this), Settings.canDrawOverlays(this),
-            setupAudioError, rootGranted, uplinkResult(), audioReporting, CallAudio.Setup.normalCallMode(this))
+            setupAudioError, rootGranted, UplinkHealth.confirmed(this, redirect = !CallAudio.Setup.useNormalCallMode(this)),
+            audioReporting, CallAudio.Setup.normalCallMode(this))
         if (shownAudio == display) return
         shownAudio = display
         val info = when {
             display.busy && startingRoot -> if (display.rootGranted) R.string.s_audio_root_starting else R.string.s_audio_root_request
             display.busy -> R.string.s_audio_keep_wireless
-            display.active == CallAudio.Status.TWO_WAY && display.uplink == UplinkHealth.Result.REACHED ->
+            display.active == CallAudio.Status.TWO_WAY && display.uplinkConfirmed ->
                 R.string.s_uplink_reached_info
             display.active == CallAudio.Status.TWO_WAY -> R.string.s_audio_two_way_info
             display.active == CallAudio.Status.LISTEN -> R.string.s_audio_listen_info
@@ -1266,6 +1265,7 @@ class MainActivity : AppCompatActivity() {
             appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Setup: method=${CallAudio.Setup.method(context)} enabled=${CallAudio.Setup.enabled(context)} " +
                 "mode=${if (CallAudio.Setup.normalCallMode(context)) "normal" else "automatic"} " +
+                "nextCallMode=${if (CallAudio.Setup.useNormalCallMode(context)) "in-call" else "prefer-redirect"} " +
                 "status=${RelayState.audio} relay=${RelayState.current.running} connected=${RelayState.current.connected}")
             appendLine("Last real-call check: " + (uplink?.let {
                 "${it.result} in ${if (it.redirect) "redirect" else "in-call"} mode at ${java.util.Date(it.at)}"

@@ -40,6 +40,7 @@ internal class CallAudio(private val context: Context, private val events: Event
         ArrayBlockingQueue(AudioBridge.LIVE_QUEUE_FRAMES), ThreadPoolExecutor.DiscardOldestPolicy())
     @Volatile private var link: Link? = null
     @Volatile private var stream: Stream? = null
+    private var callMode: Pair<String, Boolean>? = null
     @Volatile var status = Status.NONE
         private set
 
@@ -64,7 +65,9 @@ internal class CallAudio(private val context: Context, private val events: Event
         val next = Stream(callId, payloadLimit, pairFrames)
         stream = next
         try {
-            val mode = if (Setup.normalCallMode(context)) byteArrayOf(AudioBridge.START_NORMAL_MODE.toByte()) else ByteArray(0)
+            val normal = callMode?.takeIf { it.first == callId }?.second ?: Setup.useNormalCallMode(context)
+            callMode = callId to normal
+            val mode = if (normal) byteArrayOf(AudioBridge.START_NORMAL_MODE.toByte()) else ByteArray(0)
             AudioBridge.write(current.output, AudioBridge.START, mode)
         } catch (_: IOException) {
             drop(current)
@@ -129,7 +132,10 @@ internal class CallAudio(private val context: Context, private val events: Event
                     AudioBridge.STARTED -> post { if (link === current) started(payload) }
                     AudioBridge.PCM -> if (link === current) encode(payload)
                     AudioBridge.UPLINK_CHECK -> if (link === current && payload.size == 2) {
-                        events.onUplinkCheck(payload[0].toInt(), payload[1].toInt())
+                        val mode = payload[1].toInt()
+                        if (mode == AudioBridge.MODE_REDIRECT || mode == AudioBridge.MODE_IN_CALL) {
+                            events.onUplinkCheck(payload[0].toInt(), mode)
+                        }
                     }
                     AudioBridge.ERROR -> post {
                         if (link === current) endStream(String(payload, Charsets.UTF_8).take(160))
@@ -241,6 +247,10 @@ internal class CallAudio(private val context: Context, private val events: Event
         /** Keeps the SIM call in Telecom's normal mode, for phones whose audio hardware drops the receiver's voice
          * in call redirect mode. Applies from the next call. */
         fun normalCallMode(context: Context) = prefs(context).getBoolean("normal_call_mode", false)
+
+        fun useNormalCallMode(context: Context) = normalCallMode(context) ||
+            UplinkHealth.prefersNormal(UplinkHealth.confirmed(context, redirect = true),
+                UplinkHealth.confirmed(context, redirect = false))
 
         fun setNormalCallMode(context: Context, enabled: Boolean) {
             prefs(context).edit().putBoolean("normal_call_mode", enabled).apply()

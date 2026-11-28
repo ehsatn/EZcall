@@ -63,7 +63,11 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             while (true) {
                 val (message, payload) = AudioBridge.read(input)
                 when (message) {
-                    AudioBridge.START -> owner = start(output, payload.singleOrNull()?.toInt() == AudioBridge.START_NORMAL_MODE)
+                    AudioBridge.START -> {
+                        val normalMode = payload.singleOrNull()?.toInt() == AudioBridge.START_NORMAL_MODE
+                        require(payload.isEmpty() || normalMode)
+                        owner = start(output, normalMode)
+                    }
                     AudioBridge.STOP -> {
                         val preserveGrace = payload.singleOrNull()?.toInt() == AudioBridge.STOP_FOR_RECOVERY
                         require(payload.isEmpty() || preserveGrace)
@@ -397,10 +401,11 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         private fun watchUplink() {
             // Let the handset redirect settle first, so the check measures the mode the call stays in.
             if (!settle()) return stoppedEarly("before uplink capture opened")
-            log("Uplink check starting in ${modeName()} mode")
+            val mode = probeMode() ?: return stoppedEarly("call audio mode unavailable")
+            log("Uplink check starting in ${modeName(mode)} mode")
             val probe = openUplinkMonitor()
             if (probe == null) {
-                finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture unavailable")
+                finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "uplink capture unavailable")
                 return
             }
             log("Uplink capture open: ${probe.sampleRate} Hz, route=${runCatching { probe.routedDevice?.type }.getOrNull()}")
@@ -415,21 +420,24 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 while (running && receiverReady && !failed) {
                     // Non-blocking, so a capture that never delivers can't hold this thread or the recording open.
                     val count = probe.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
-                    if (count < 0) return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture read $count")
+                    if (count < 0) return finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "uplink capture read $count")
                     val now = SystemClock.elapsedRealtime()
                     if (count > 0) {
                         lastAudioAt = now
                         current.captured(now, UplinkCheck.rms(frame, count))
                     } else if (now - lastAudioAt > NO_CAPTURE_MS) {
-                        return finishCheck(AudioBridge.CHECK_UNKNOWN,
+                        return finishCheck(mode, AudioBridge.CHECK_UNKNOWN,
                             "uplink capture delivered no audio for ${NO_CAPTURE_MS / 1000} s")
                     } else Thread.sleep(10)
                     if (now >= nextConflictCheck) {
                         nextConflictCheck = now + 100
+                        if (probeMode() != mode) {
+                            return finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "call audio mode changed during check")
+                        }
                         // Never let the check take call audio away from the receiver.
                         if (record?.activeRecordingConfiguration?.isClientSilenced == true ||
                             probe.activeRecordingConfiguration?.isClientSilenced == true) {
-                            return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture conflicts with call capture")
+                            return finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "uplink capture conflicts with call capture")
                         }
                     }
                     if (now < nextVerdict) continue
@@ -440,9 +448,14 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                         log("Uplink check pending: ${current.summary()}")
                     }
                     if (verdict == UplinkCheck.Verdict.REACHED) {
-                        return finishCheck(AudioBridge.CHECK_REACHED, "receiver voice reached the call")
+                        if (!relaying()) return stoppedEarly("receiver stopped relaying during check")
+                        return if (probeMode() == mode) {
+                            finishCheck(mode, AudioBridge.CHECK_REACHED, "receiver voice reached the call")
+                        } else {
+                            finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "call audio mode changed during check")
+                        }
                     }
-                    if (now > deadline) return finishCheck(AudioBridge.CHECK_UNKNOWN, "couldn't confirm from uplink capture")
+                    if (now > deadline) return finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "couldn't confirm from uplink capture")
                 }
                 stoppedEarly(when {
                     !running -> "call audio closed"
@@ -450,7 +463,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                     else -> "receiver paused audio"
                 })
             } catch (error: Exception) {
-                finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink check failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}")
+                finishCheck(mode, AudioBridge.CHECK_UNKNOWN, "uplink check failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}")
             } finally {
                 runCatching { probe.stop() }
                 probe.release()
@@ -463,7 +476,17 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             return running && receiverReady
         }
 
-        private fun modeName() = if (handset.isRedirected()) "redirect" else "in-call"
+        private fun probeMode() = when (runCatching { audio?.mode }.getOrNull()) {
+            AudioManager.MODE_CALL_REDIRECT -> AudioBridge.MODE_REDIRECT
+            AudioManager.MODE_IN_CALL -> AudioBridge.MODE_IN_CALL
+            else -> null
+        }
+
+        private fun modeName(mode: Int? = probeMode()) = when (mode) {
+            AudioBridge.MODE_REDIRECT -> "redirect"
+            AudioBridge.MODE_IN_CALL -> "in-call"
+            else -> "unknown"
+        }
 
         /** Leaves the check undecided, so it resumes if the receiver comes back during this call. */
         private fun stoppedEarly(reason: String) {
@@ -472,12 +495,10 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             log("Uplink check $lastCheck")
         }
 
-        private fun finishCheck(result: Int, detail: String) {
+        private fun finishCheck(mode: Int, result: Int, detail: String) {
             if (checkDone) return
             checkDone = true
-            val redirect = handset.isRedirected()
-            val mode = if (redirect) AudioBridge.MODE_REDIRECT else AudioBridge.MODE_IN_CALL
-            lastCheck = "$detail (${modeName()} mode)" + (check?.let { "; ${it.summary()}" } ?: "")
+            lastCheck = "$detail (${modeName(mode)} mode)" + (check?.let { "; ${it.summary()}" } ?: "")
             log("Uplink check: $lastCheck")
             runCatching { AudioBridge.write(output, AudioBridge.UPLINK_CHECK, byteArrayOf(result.toByte(), mode.toByte())) }
         }
@@ -571,6 +592,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 if (!owner.relaying()) return@execute
                 restoreTask?.cancel(false)
                 restoreTask = null
+                if (!owner.allowRedirect && redirected) restoreNow()
                 mutePlayback()
                 if (!redirected && owner.allowRedirect) redirect(owner)
             }

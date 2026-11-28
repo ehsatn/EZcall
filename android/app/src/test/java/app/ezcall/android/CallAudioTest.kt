@@ -1,5 +1,6 @@
 package app.ezcall.android
 
+import android.bluetooth.BluetoothDevice
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,6 +20,27 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 class CallAudioTest {
+    @Test fun automaticModeKeepsNormalOnlyWhenItAloneHasPositiveEvidence() {
+        assertFalse(UplinkHealth.prefersNormal(redirectConfirmed = false, normalConfirmed = false))
+        assertTrue(UplinkHealth.prefersNormal(redirectConfirmed = false, normalConfirmed = true))
+        assertFalse(UplinkHealth.prefersNormal(redirectConfirmed = true, normalConfirmed = false))
+        assertFalse(UplinkHealth.prefersNormal(redirectConfirmed = true, normalConfirmed = true))
+    }
+
+    @Test fun onlyCarriedLinksCanReuseSavedMtu() {
+        assertEquals(23, initialLinkMtu(negotiated = null, saved = 517, carried = false))
+        assertEquals(517, initialLinkMtu(negotiated = null, saved = 517, carried = true))
+        assertEquals(185, initialLinkMtu(negotiated = 185, saved = 517, carried = true))
+        assertEquals(185, initialLinkMtu(negotiated = 185, saved = 517, carried = false))
+    }
+
+    @Test fun onlyAnEndedBleLinkInvalidatesTheMtu() {
+        assertTrue(leLinkDisconnected(BluetoothDevice.TRANSPORT_LE) { true })
+        assertFalse(leLinkDisconnected(BluetoothDevice.TRANSPORT_BREDR) { false })
+        assertFalse(leLinkDisconnected(BluetoothDevice.TRANSPORT_AUTO) { true })
+        assertTrue(leLinkDisconnected(BluetoothDevice.TRANSPORT_AUTO) { false })
+    }
+
     @Test fun failedSetupCanRetryOnceOnlyForTheActiveRelayedCall() {
         val call = RelayService.Call("first", "", 0, "active")
         assertTrue(call.canRetryAudio("first", "first", null, null))

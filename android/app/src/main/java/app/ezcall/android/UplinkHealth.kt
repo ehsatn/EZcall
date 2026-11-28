@@ -3,7 +3,7 @@ package app.ezcall.android
 import android.content.Context
 import android.os.Build
 
-/** The last real-call check of whether the receiver's voice reached the SIM call, kept per Android build. */
+/** Real-call checks, with positive evidence kept per audio mode and Android build. */
 internal object UplinkHealth {
     enum class Result { REACHED, UNKNOWN }
 
@@ -13,12 +13,25 @@ internal object UplinkHealth {
 
     fun result(wire: Int) = if (wire == AudioBridge.CHECK_REACHED) Result.REACHED else Result.UNKNOWN
 
-    /** Saves a check. An undecided check never replaces a confirmed one. Returns the result. */
+    fun prefersNormal(redirectConfirmed: Boolean, normalConfirmed: Boolean) = normalConfirmed && !redirectConfirmed
+
+    fun confirmed(context: Context, redirect: Boolean): Boolean =
+        prefs(context).getString(confirmedBuildKey(redirect), null) == Build.FINGERPRINT ||
+            load(context)?.let { it.result == Result.REACHED && it.redirect == redirect } == true
+
+    /** Saves the latest check and keeps past confirmations even when this check is undecided. */
     fun save(context: Context, wire: Int, mode: Int): Result {
         val result = result(wire)
-        if (result == Result.UNKNOWN && load(context)?.result == Result.REACHED) return result
-        prefs(context).edit().putString("uplink_result", result.name)
-            .putBoolean("uplink_redirect", mode == AudioBridge.MODE_REDIRECT)
+        val previous = load(context)
+        val redirect = mode == AudioBridge.MODE_REDIRECT
+        val edit = prefs(context).edit()
+        // Retain a confirmation made before each mode had its own record.
+        if (previous?.result == Result.REACHED) edit.putString(confirmedBuildKey(previous.redirect), Build.FINGERPRINT)
+        if (result == Result.REACHED) {
+            edit.putString(confirmedBuildKey(redirect), Build.FINGERPRINT)
+        }
+        edit.putString("uplink_result", result.name)
+            .putBoolean("uplink_redirect", redirect)
             .putLong("uplink_at", System.currentTimeMillis())
             .putString("uplink_build", Build.FINGERPRINT).apply()
         return result
@@ -32,6 +45,8 @@ internal object UplinkHealth {
         val result = Result.entries.firstOrNull { it.name == prefs.getString("uplink_result", null) } ?: return null
         return Record(result, prefs.getBoolean("uplink_redirect", false), prefs.getLong("uplink_at", 0))
     }
+
+    private fun confirmedBuildKey(redirect: Boolean) = if (redirect) "uplink_redirect_build" else "uplink_normal_build"
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
