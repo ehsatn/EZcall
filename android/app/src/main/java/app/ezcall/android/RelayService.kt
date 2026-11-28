@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -40,6 +41,7 @@ import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import com.google.android.material.R as MaterialR
 import com.google.android.material.button.MaterialButton
 import org.json.JSONObject
@@ -241,6 +243,12 @@ internal class RelayService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 BluetoothAdapter.ACTION_STATE_CHANGED -> openTransport()
+                BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                    val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        ?: return
+                    val linkType = intent.getIntExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_AUTO)
+                    transport?.onAclDisconnected(device, linkType)
+                }
                 TelephonyManager.ACTION_PHONE_STATE_CHANGED -> handleCall(intent)
                 Telephony.Sms.Intents.SMS_RECEIVED_ACTION -> handleSms(intent)
             }
@@ -361,6 +369,7 @@ internal class RelayService : Service() {
     private fun listen() {
         val actions = IntentFilter().apply {
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
             addAction(TelephonyManager.ACTION_PHONE_STATE_CHANGED)
             addAction(Telephony.Sms.Intents.SMS_RECEIVED_ACTION)
         }

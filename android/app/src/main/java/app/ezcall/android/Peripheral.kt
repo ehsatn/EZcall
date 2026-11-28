@@ -31,6 +31,12 @@ internal fun audioBeforeControl(controlIsSms: Boolean?, afterAudio: Boolean, que
 internal fun initialLinkMtu(negotiated: Int?, saved: Int?, carried: Boolean) =
     negotiated ?: saved?.takeIf { carried } ?: 23
 
+internal fun leLinkDisconnected(transport: Int, gattConnected: () -> Boolean) = when (transport) {
+    BluetoothDevice.TRANSPORT_LE -> true
+    BluetoothDevice.TRANSPORT_BREDR -> false
+    else -> !gattConnected()
+}
+
 @SuppressLint("MissingPermission")
 internal class Peripheral(
     context: Context,
@@ -173,9 +179,7 @@ internal class Peripheral(
                     }
                     adopt(device, "Gatt connected ${sinceOpen}ms after server open")
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    carriedLinks.remove(device)
-                    // Keep the MTU: this callback also follows our own cancelConnection while the receiver keeps the
-                    // link up, and it won't renegotiate on that link. A new link negotiates and replaces it.
+                    // A local GATT cancel can leave the underlying BLE link and its MTU intact.
                     if (peer?.device != device) return@post
                     trace("Gatt closed by stack, status=$status")
                     testLog()?.add("BLE disconnected: status=$status")
@@ -365,6 +369,16 @@ internal class Peripheral(
         old?.let { runCatching { server?.cancelConnection(it.device) } }
         runCatching { server?.close() }
         server = null
+    }
+
+    fun onAclDisconnected(device: BluetoothDevice, transport: Int) {
+        val disconnected = leLinkDisconnected(transport) {
+            runCatching { manager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED }
+                .getOrDefault(true)
+        }
+        if (!disconnected) return
+        carriedLinks.remove(device)
+        linkMtu.remove(device)
     }
 
     fun send(message: JSONObject, log: AudioTestLog? = testLog()): Boolean =

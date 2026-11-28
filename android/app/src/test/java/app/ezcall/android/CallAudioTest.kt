@@ -1,5 +1,6 @@
 package app.ezcall.android
 
+import android.bluetooth.BluetoothDevice
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,6 +32,13 @@ class CallAudioTest {
         assertEquals(517, initialLinkMtu(negotiated = null, saved = 517, carried = true))
         assertEquals(185, initialLinkMtu(negotiated = 185, saved = 517, carried = true))
         assertEquals(185, initialLinkMtu(negotiated = 185, saved = 517, carried = false))
+    }
+
+    @Test fun onlyAnEndedBleLinkInvalidatesTheMtu() {
+        assertTrue(leLinkDisconnected(BluetoothDevice.TRANSPORT_LE) { true })
+        assertFalse(leLinkDisconnected(BluetoothDevice.TRANSPORT_BREDR) { false })
+        assertFalse(leLinkDisconnected(BluetoothDevice.TRANSPORT_AUTO) { true })
+        assertTrue(leLinkDisconnected(BluetoothDevice.TRANSPORT_AUTO) { false })
     }
 
     @Test fun failedSetupCanRetryOnceOnlyForTheActiveRelayedCall() {
