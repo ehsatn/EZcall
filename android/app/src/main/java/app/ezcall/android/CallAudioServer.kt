@@ -367,11 +367,19 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 var nextVerdict = SystemClock.elapsedRealtime() + 1_000
                 var nextConflictCheck = 0L
                 var nextProgress = SystemClock.elapsedRealtime() + PROGRESS_MS
+                var lastAudioAt = SystemClock.elapsedRealtime()
                 while (running && receiverReady && !failed) {
-                    val count = probe.read(frame, 0, frame.size)
-                    if (count <= 0) return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture read $count")
+                    // Non-blocking, so a capture that never delivers can't hold this thread or the recording open.
+                    val count = probe.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
+                    if (count < 0) return finishCheck(AudioBridge.CHECK_UNKNOWN, "uplink capture read $count")
                     val now = SystemClock.elapsedRealtime()
-                    current.captured(now, UplinkCheck.rms(frame, count))
+                    if (count > 0) {
+                        lastAudioAt = now
+                        current.captured(now, UplinkCheck.rms(frame, count))
+                    } else if (now - lastAudioAt > NO_CAPTURE_MS) {
+                        return finishCheck(AudioBridge.CHECK_UNKNOWN,
+                            "uplink capture delivered no audio for ${NO_CAPTURE_MS / 1000} s")
+                    } else Thread.sleep(10)
                     if (now >= nextConflictCheck) {
                         nextConflictCheck = now + 100
                         // Never let the check take call audio away from the receiver.
@@ -745,6 +753,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         private const val CHECK_SETTLE_MS = 1_500L
         private const val CHECK_TIMEOUT_MS = 45_000L
         private const val PROGRESS_MS = 5_000L
+        private const val NO_CAPTURE_MS = 3_000L
         private const val LOG_LINES = 150
         private val history = ArrayDeque<String>()
 
