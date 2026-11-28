@@ -84,6 +84,7 @@ class MainActivity : AppCompatActivity() {
     private val audioSetupFromGuide get() = audioSetupParent == Detail.GUIDE
     private var connectionPanel: LinearLayout? = null
     private var sharingPanel: LinearLayout? = null
+    private var guideTestPanel: LinearLayout? = null
     private var audioPanel: LinearLayout? = null
     private var audioIntro: View? = null
     private var audioMethodsLink: LinearLayout? = null
@@ -118,7 +119,9 @@ class MainActivity : AppCompatActivity() {
     }
     private var setupAudioReady: CallAudio.Status? = null
     private var setupAudioError: Int? = null
-    private var requestingFeature: Feature? = null
+    private val selectedSharing = linkedSetOf<Feature>()
+    private var sharingRequestFromGuide: Boolean? = null
+    private var sharingDenied = false
     private var lastState: RelayState? = null
     private var pairingAgain = false
     private var pairingHint: String? = null
@@ -127,7 +130,8 @@ class MainActivity : AppCompatActivity() {
     internal enum class Step(val title: Int, val detail: Int, val help: Int) {
         SHARING(R.string.s_choose_sharing, R.string.s_ui_guide_sharing, R.string.s_ui_guide_help_sharing),
         LINK(R.string.ez_pair_phones, R.string.s_ui_guide_pairing, R.string.s_ui_guide_help_pairing),
-        AUDIO(R.string.s_setup_audio, R.string.s_ui_guide_optional_audio, R.string.s_ui_guide_help_audio);
+        AUDIO(R.string.s_setup_audio, R.string.s_ui_guide_optional_audio, R.string.s_ui_guide_help_audio),
+        CALL_TEST(R.string.s_real_audio_title, R.string.s_guide_audio_test_intro, R.string.s_real_audio_instructions);
 
         companion object {
             fun afterSharing(paired: Boolean) = if (paired) AUDIO else LINK
@@ -154,7 +158,10 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.isNavigationBarContrastEnforced = false
-        requestingFeature = savedInstanceState?.getString("feature")?.let(Feature::valueOf)
+        savedInstanceState?.getStringArrayList("selectedSharing")?.mapTo(selectedSharing, Feature::valueOf)
+        sharingRequestFromGuide = savedInstanceState?.takeIf { it.containsKey("sharingRequestFromGuide") }
+            ?.getBoolean("sharingRequestFromGuide")
+        sharingDenied = savedInstanceState?.getBoolean("sharingDenied") == true
         setupAudioReady = savedInstanceState?.getString("setupAudioReady")?.let(CallAudio.Status::valueOf)
         setupAudioError = savedInstanceState?.getInt("setupAudioError")?.takeIf { it != 0 }
         connectionIssue = savedInstanceState?.getInt("connectionIssue")?.takeIf { it != 0 }
@@ -277,6 +284,7 @@ class MainActivity : AppCompatActivity() {
             detail in setOf(Detail.SETTINGS_AUDIO, Detail.NOTIFICATIONS, Detail.BATTERY) -> showDetail(Detail.SETTINGS)
             detail == Detail.GUIDE && step == Step.LINK -> cancelGuidePairing()
             detail == Detail.GUIDE && step == Step.AUDIO -> moveTo(Step.SHARING)
+            detail == Detail.GUIDE && step == Step.CALL_TEST -> moveTo(Step.AUDIO)
             detail == Detail.GUIDE -> closeGuide()
             detail != null -> showDetail(null)
             else -> navigation.selectedItemId = Page.CONNECTION.ordinal + 1
@@ -350,6 +358,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderPage() {
         connectionPanel = null
         sharingPanel = null
+        guideTestPanel = null
         audioPanel = null
         audioIntro = null
         audioMethodsLink = null
@@ -429,7 +438,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        requestingFeature?.let { outState.putString("feature", it.name) }
+        outState.putStringArrayList("selectedSharing", ArrayList(selectedSharing.map { it.name }))
+        sharingRequestFromGuide?.let { outState.putBoolean("sharingRequestFromGuide", it) }
+        outState.putBoolean("sharingDenied", sharingDenied)
         setupAudioReady?.let { outState.putString("setupAudioReady", it.name) }
         setupAudioError?.let { outState.putInt("setupAudioError", it) }
         connectionIssue?.let { outState.putInt("connectionIssue", it) }
@@ -665,7 +676,8 @@ class MainActivity : AppCompatActivity() {
     private fun renderSharing() {
         val panel = sharingPanel ?: return
         panel.removeAllViews()
-        val callsEnabled = Feature.CALLS.active(this)
+        val inGuide = detail == Detail.GUIDE
+        val callsEnabled = Feature.CALLS.active(this) || Feature.CALLS in selectedSharing
         val sections = listOf(
             R.string.s_ui_calls_group to listOf(Feature.CALLS, Feature.CALLER, Feature.CONTROL),
             R.string.s_ui_messages_group to listOf(Feature.SMS, Feature.SEND_SMS),
@@ -676,10 +688,36 @@ class MainActivity : AppCompatActivity() {
             val group = stack()
             for (feature in features) {
                 if (group.childCount > 0) group.addView(divider(), space())
-                val enabled = callsEnabled || (feature != Feature.CALLER && feature != Feature.CONTROL)
+                val enabled = sharingRequestFromGuide == null && (callsEnabled || !feature.needsCallAlerts)
                 group.addView(sharingRow(feature, enabled), space())
             }
             panel.addView(surfaceCard(group), space(top = 6))
+        }
+        if (!inGuide) {
+            panel.addView(groupLabel(R.string.s_sender_network_group), space(top = 12))
+            val title = getString(R.string.s_sender_network_allow)
+            val summary = getString(R.string.s_sender_network_help)
+            panel.addView(surfaceCard(sharingToggle(R.drawable.ic_devices, title, summary, enabled = true,
+                checked = SenderNetworkControl.allowed(this)) {
+                SenderNetworkControl.allow(this, it)
+                RelayState.refreshSharing?.invoke()
+            }), space(top = 6))
+        }
+        val needsPermission = sharingPermissions(inGuide).isNotEmpty()
+        if (needsPermission) panel.addView(body(getString(R.string.s_sharing_permissions_detail)), space(top = 12))
+        if (sharingDenied) panel.addView(textButton(getString(R.string.ez_settings)) {
+            appSettings(getString(R.string.s_permission_denied))
+        }, space(top = 8))
+        if (inGuide) {
+            val label = when {
+                needsPermission -> R.string.s_sharing_permissions_continue
+                PairKey(this).exists() -> R.string.ez_continue
+                else -> R.string.s_ui_continue_pairing
+            }
+            setGuideAction(label, canContinue = sharingRequestFromGuide == null) { applySharing(fromGuide = true) }
+        } else if (needsPermission || selectedSharing.isNotEmpty()) {
+            panel.addView(actionButton(getString(R.string.s_sharing_permissions)) { applySharing(fromGuide = false) }
+                .apply { isEnabled = sharingRequestFromGuide == null }, space(top = 12))
         }
     }
 
@@ -689,31 +727,40 @@ class MainActivity : AppCompatActivity() {
             Feature.CALLER -> R.drawable.ic_caller to R.string.s_incoming_number
             Feature.CONTROL -> R.drawable.ic_answer to R.string.s_control_description
             Feature.SMS -> R.drawable.ic_sms to R.string.s_sms_description
-            Feature.SEND_SMS -> R.drawable.ic_sender_send_sms to R.string.s_send_description
+            Feature.SEND_SMS -> R.drawable.ic_sender_send_sms to R.string.s_share_send
             Feature.CONTACTS -> R.drawable.ic_contacts to R.string.s_contacts_description
         }
         val title = getString(feature.title)
-        val active = enabled && feature.active(this)
+        val active = feature.active(this)
+        val selected = feature in selectedSharing
         val summary = when {
-            !enabled -> getString(R.string.s_ui_enable_alerts)
-            feature.optedIn(this) && !active -> getString(R.string.s_ui_permission_needed)
+            !enabled && sharingRequestFromGuide == null -> getString(R.string.s_ui_enable_alerts)
+            selected || feature.optedIn(this) && !active -> getString(R.string.s_ui_permission_needed)
             else -> getString(description)
         }
+        return sharingToggle(icon, title, if (enabled) summary else getString(description), enabled,
+            selected || active && (enabled || sharingRequestFromGuide != null)) { checked ->
+            if (checked) {
+                if (feature.permissions.all { hasPermission(it) }) feature.allow(this, true)
+                else selectedSharing.add(feature)
+            } else {
+                selectedSharing.remove(feature)
+                if (feature == Feature.CALLS) selectedSharing.removeAll { it.needsCallAlerts }
+                feature.allow(this, false)
+            }
+            refreshSharing()
+        }
+    }
+
+    private fun sharingToggle(icon: Int, title: String, summary: String, enabled: Boolean, checked: Boolean,
+                              change: (Boolean) -> Unit): View {
         val toggle = MaterialSwitch(this).apply {
             contentDescription = getString(R.string.s_feature_summary, title, summary)
             isEnabled = enabled
-            isChecked = active
+            isChecked = checked
             minimumWidth = dp(52)
             minimumHeight = dp(48)
-            setOnClickListener {
-                if (isChecked) {
-                    isChecked = false
-                    enable(feature)
-                } else {
-                    feature.allow(this@MainActivity, false)
-                    refreshSharing()
-                }
-            }
+            setOnClickListener { change(isChecked) }
         }
         return row().apply {
             minimumHeight = dp(59)
@@ -730,7 +777,7 @@ class MainActivity : AppCompatActivity() {
             addView(stack().apply {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 addView(text(title, R.style.TextAppearance_ezcall_TitleMedium))
-                addView(text(if (!enabled) getString(description) else summary, R.style.TextAppearance_ezcall_BodySmall,
+                addView(text(summary, R.style.TextAppearance_ezcall_BodySmall,
                     color(MaterialR.attr.colorOnSurfaceVariant)))
             }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) })
             addView(toggle, LinearLayout.LayoutParams(-2, -2))
@@ -754,6 +801,11 @@ class MainActivity : AppCompatActivity() {
         val backTo = Detail.SETTINGS.takeIf { guideFromSettings }
         guideFromSettings = false
         showDetail(backTo)
+    }
+
+    private fun finishGuide() {
+        saveStep(null)
+        closeGuide()
     }
 
     private fun saveStep(next: Step?) {
@@ -796,40 +848,24 @@ class MainActivity : AppCompatActivity() {
         content.addView(if (current == Step.SHARING) body(getString(current.detail))
             else secondaryText(getString(current.detail)), space(top = 6))
         when (current) {
-            Step.SHARING -> {
-                sharingPanel = stack().also { content.addView(it, space(top = 16)) }
-                val next = Step.afterSharing(PairKey(this).exists())
-                setGuideAction(if (next == Step.AUDIO) R.string.ez_continue else R.string.s_ui_continue_pairing) {
-                    moveTo(next)
-                    if (next == Step.LINK && !RelayState.current.running) ensureBluetooth()
-                }
-            }
+            Step.SHARING -> sharingPanel = stack().also { content.addView(it, space(top = 16)) }
             Step.LINK -> connectionPanel = stack().also { content.addView(it, space(top = 20)) }
             Step.AUDIO -> {
-                val configured = CallAudio.Setup.enabled(this) || liveAudio() != null
-                if (!configured) content.addView(body(getString(R.string.s_ui_finish_later)), space(top = 8))
                 content.addView(AudioGuideArtwork(this, color(androidx.appcompat.R.attr.colorPrimary),
                     color(MaterialR.attr.colorOutlineVariant), color(MaterialR.attr.colorOnSurface)),
                     space(top = 24).apply { height = dp(174) })
-                val finishSetup = {
-                    saveStep(null)
-                    closeGuide()
-                }
-                if (configured) {
-                    setGuideAction(R.string.s_ui_finish_guide, action = finishSetup)
-                    guideAction.addView(textButton(getString(R.string.s_ui_audio_setup_methods), ::openAudioSetup), space(top = 8))
-                } else {
-                    setGuideAction(R.string.s_setup_audio, action = ::openAudioSetup)
-                    guideAction.addView(textButton(getString(R.string.s_ui_finish_guide), finishSetup), space(top = 8))
-                }
             }
+            Step.CALL_TEST -> guideTestPanel = stack().also { content.addView(it, space(top = 16)) }
         }
     }
 
-    private fun setGuideAction(label: Int, canContinue: Boolean = true, action: () -> Unit) {
+    private fun setGuideAction(label: Int, canContinue: Boolean = true, action: () -> Unit) =
+        setGuideAction(getString(label), canContinue, action)
+
+    private fun setGuideAction(label: String, canContinue: Boolean = true, action: () -> Unit) {
         guideAction.removeAllViews()
         guideAction.visibility = View.VISIBLE
-        guideAction.addView(actionButton(getString(label), action = action).apply { isEnabled = canContinue }, space())
+        guideAction.addView(actionButton(label, action = action).apply { isEnabled = canContinue }, space())
     }
 
     private fun showGuideHelp(step: Step) {
@@ -837,6 +873,7 @@ class MainActivity : AppCompatActivity() {
             Step.SHARING -> R.string.s_ui_help_sharing_title
             Step.LINK -> R.string.s_ui_help_pairing_title
             Step.AUDIO -> R.string.s_ui_help_audio_title
+            Step.CALL_TEST -> R.string.s_real_audio_title
         }
         val dialog = BottomSheetDialog(this)
         dialog.setContentView(ScrollView(this).apply {
@@ -1071,12 +1108,14 @@ class MainActivity : AppCompatActivity() {
         val rootGranted: Boolean,
         val uplinkConfirmed: Boolean,
         val reporting: Boolean,
-        val normalCallMode: Boolean
+        val normalCallMode: Boolean,
+        val realTest: RealCallAudioTest.Trial?
     ) {
         val shizuku get() = method == CallAudio.Setup.Method.SHIZUKU
     }
 
     private fun renderAudio() {
+        renderGuideAudio()
         val panel = audioPanel ?: return
         val paired = WirelessPairing.isPaired(this)
         val configured = CallAudio.Setup.enabled(this)
@@ -1085,7 +1124,7 @@ class MainActivity : AppCompatActivity() {
             paired || (configured && LocalAdb.hasKey()),
             CallAudio.Setup.method(this), Settings.canDrawOverlays(this),
             setupAudioError, rootGranted, UplinkHealth.confirmed(this, redirect = !CallAudio.Setup.useNormalCallMode(this)),
-            audioReporting, CallAudio.Setup.normalCallMode(this))
+            audioReporting, CallAudio.Setup.normalCallMode(this), RelayState.realAudioTest.trial)
         if (shownAudio == display) return
         shownAudio = display
         val info = when {
@@ -1160,6 +1199,7 @@ class MainActivity : AppCompatActivity() {
         if (!methods) {
             if (display.configured) {
                 addAudioMode(panel, display)
+                addRealAudioTest(panel, display)
                 addAudioReport(panel, display)
             }
             return
@@ -1210,6 +1250,71 @@ class MainActivity : AppCompatActivity() {
         }.view, accent = display.overlayEnabled), space(top = 12))
     }
 
+    private fun renderGuideAudio() {
+        if (detail != Detail.GUIDE) return
+        if (step == Step.AUDIO) {
+            if (liveAudio() == CallAudio.Status.TWO_WAY) {
+                setGuideAction(R.string.s_real_audio_title) { moveTo(Step.CALL_TEST) }
+                guideAction.addView(textButton(getString(R.string.s_ui_audio_setup_methods), ::openAudioSetup), space(top = 8))
+            } else setGuideAction(R.string.s_setup_audio, action = ::openAudioSetup)
+            guideAction.addView(textButton(getString(R.string.s_ui_finish_guide), ::finishGuide), space(top = 8))
+            return
+        }
+        val panel = guideTestPanel ?: return
+        val test = RelayState.realAudioTest
+        val trial = test.trial
+        val redirect = UplinkHealth.heard(this, RealCallAudioTest.Mode.REDIRECT)
+        val normal = UplinkHealth.heard(this, RealCallAudioTest.Mode.NORMAL)
+        val recommended = RealCallAudioTest.recommendation(redirect, normal)
+        val nextTest = when {
+            redirect == null -> RealCallAudioTest.Mode.REDIRECT
+            normal == null -> RealCallAudioTest.Mode.NORMAL
+            else -> null
+        }
+        panel.removeAllViews()
+        panel.addView(body(realAudioTestSummary(trial)).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }, space())
+        when {
+            trial != null -> setGuideAction(if (trial.ended) R.string.s_real_audio_answer else R.string.s_guide_audio_test_details,
+                action = ::openRealAudioTest)
+            recommended != null -> {
+                val normalMode = recommended == RealCallAudioTest.Mode.NORMAL
+                val mode = getString(if (normalMode) R.string.s_audio_mode_normal else R.string.s_audio_mode_auto)
+                panel.addView(body(getString(R.string.s_guide_audio_test_recommended, mode)), space(top = 12))
+                setGuideAction(getString(R.string.s_guide_audio_test_use, mode)) {
+                    CallAudio.Setup.setNormalCallMode(this, normalMode)
+                    finishGuide()
+                }
+                guideAction.addView(textButton(getString(R.string.s_guide_audio_test_retry), ::openRealAudioTest), space(top = 8))
+                return
+            }
+            !callSharingReady() -> {
+                panel.addView(body(getString(R.string.s_real_audio_setup)), space(top = 12))
+                setGuideAction(R.string.s_guide_audio_test_sharing) { moveTo(Step.SHARING) }
+            }
+            !RelayState.current.connected -> {
+                panel.addView(body(getString(R.string.s_reconnect_detail)), space(top = 12))
+                setGuideAction(R.string.s_reconnect, !relayStarting) {
+                    if (!PairKey(this).exists()) moveTo(Step.LINK)
+                    ensureBluetooth()
+                }
+            }
+            liveAudio() != CallAudio.Status.TWO_WAY -> setGuideAction(R.string.s_setup_audio, action = ::openAudioSetup)
+            nextTest != null -> setGuideAction(getString(R.string.s_guide_audio_test_mode, audioTrialMode(nextTest))) {
+                armRealAudioTest(nextTest)
+            }
+            else -> {
+                panel.addView(body(getString(R.string.s_guide_audio_test_unclear)), space(top = 12))
+                setGuideAction(R.string.s_guide_audio_test_retry, action = ::openRealAudioTest)
+            }
+        }
+        guideAction.addView(textButton(getString(R.string.s_ui_finish_guide)) {
+            test.cancel()
+            finishGuide()
+        }, space(top = 8))
+    }
+
     private fun addAudioMode(panel: LinearLayout, display: AudioDisplay) {
         val current = getString(if (display.normalCallMode) R.string.s_audio_mode_normal else R.string.s_audio_mode_auto)
         panel.addView(surfaceCard(settingsRow(R.drawable.ic_call, getString(R.string.s_audio_mode), current,
@@ -1228,6 +1333,98 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.ez_cancel, null)
             .show()
+    }
+
+    private fun addRealAudioTest(panel: LinearLayout, display: AudioDisplay) {
+        panel.addView(surfaceCard(settingsRow(R.drawable.ic_headset, getString(R.string.s_real_audio_title),
+            realAudioTestSummary(display.realTest), enabled = !display.busy, action = ::openRealAudioTest).view), space(top = 12))
+    }
+
+    private fun realAudioTestSummary(trial: RealCallAudioTest.Trial?): String = when {
+            trial?.ended == true -> getString(R.string.s_real_audio_answer)
+            trial?.callId != null -> getString(R.string.s_real_audio_in_call)
+            trial != null -> getString(R.string.s_real_audio_waiting, audioTrialMode(trial.mode))
+            else -> RealCallAudioTest.Mode.entries.joinToString("\n") { mode ->
+                val result = UplinkHealth.heard(this, mode)
+                "${audioTrialMode(mode)} · ${getString(result?.let(::audioTrialResult) ?: R.string.s_real_audio_untested)}"
+            }
+    }
+
+    private fun callSharingReady() = Feature.CALLS.active(this) && Feature.CONTROL.active(this)
+
+    private fun openRealAudioTest() {
+        val test = RelayState.realAudioTest
+        val trial = test.trial
+        val dialog = MaterialAlertDialogBuilder(this).setTitle(R.string.s_real_audio_title)
+        when {
+            trial == null -> {
+                val available = RelayState.current.connected && liveAudio() == CallAudio.Status.TWO_WAY && callSharingReady()
+                if (!available) {
+                    dialog.setMessage(R.string.s_real_audio_setup).setPositiveButton(android.R.string.ok, null).show()
+                    return
+                }
+                dialog.setMessage(R.string.s_real_audio_instructions)
+                    .setPositiveButton(R.string.s_audio_mode_normal) { _, _ -> armRealAudioTest(RealCallAudioTest.Mode.NORMAL) }
+                    .setNeutralButton(R.string.s_real_audio_redirect) { _, _ -> armRealAudioTest(RealCallAudioTest.Mode.REDIRECT) }
+                    .setNegativeButton(R.string.ez_cancel, null).show()
+            }
+            !trial.ended -> {
+                val message = if (trial.callId == null) {
+                    getString(R.string.s_real_audio_waiting, audioTrialMode(trial.mode)) + "\n\n" +
+                        getString(R.string.s_real_audio_instructions)
+                } else getString(R.string.s_real_audio_in_call)
+                dialog.setMessage(message)
+                    .setNeutralButton(R.string.s_real_audio_cancel) { _, _ ->
+                        if (test.trial?.id == trial.id) test.cancel()
+                        renderAudio()
+                    }
+                    .setPositiveButton(android.R.string.ok, null).show()
+            }
+            trial.matched -> {
+                val results = RealCallAudioTest.Result.entries.filter { it != RealCallAudioTest.Result.UNAVAILABLE }
+                dialog.setTitle(getString(R.string.s_real_audio_result_title, audioTrialMode(trial.mode)))
+                    .setItems(results.map { getString(audioTrialResult(it)) }.toTypedArray()) { _, which ->
+                        saveRealAudioResult(trial.id, results[which])
+                    }
+                    .setNegativeButton(R.string.ez_cancel, null).show()
+            }
+            else -> {
+                dialog.setMessage(getString(R.string.s_real_audio_unavailable_detail, audioTrialMode(trial.mode)))
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        saveRealAudioResult(trial.id, RealCallAudioTest.Result.UNAVAILABLE)
+                    }
+                    .setNegativeButton(R.string.ez_cancel, null).show()
+            }
+        }
+    }
+
+    private fun armRealAudioTest(mode: RealCallAudioTest.Mode) {
+        if (runCatching { getSystemService(TelecomManager::class.java).isInCall }.getOrDefault(true)) {
+            MaterialAlertDialogBuilder(this).setTitle(R.string.s_real_audio_title)
+                .setMessage(R.string.s_real_audio_end_first).setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        RelayState.realAudioTest.arm(mode)
+        renderAudio()
+        openRealAudioTest()
+    }
+
+    private fun saveRealAudioResult(id: Int, result: RealCallAudioTest.Result) {
+        val mode = RelayState.realAudioTest.record(id, result) ?: return
+        UplinkHealth.saveHeard(this, mode, result)
+        renderAudio()
+    }
+
+    private fun audioTrialMode(mode: RealCallAudioTest.Mode): String = getString(
+        if (mode == RealCallAudioTest.Mode.NORMAL) R.string.s_audio_mode_normal else R.string.s_real_audio_redirect
+    )
+
+    private fun audioTrialResult(result: RealCallAudioTest.Result): Int = when (result) {
+        RealCallAudioTest.Result.BOTH -> R.string.s_real_audio_both
+        RealCallAudioTest.Result.RECEIVER_ONLY -> R.string.s_real_audio_receiver_only
+        RealCallAudioTest.Result.THIRD_PHONE_ONLY -> R.string.s_real_audio_third_only
+        RealCallAudioTest.Result.NEITHER -> R.string.s_real_audio_neither
+        RealCallAudioTest.Result.UNAVAILABLE -> R.string.s_real_audio_unavailable
     }
 
     private fun addAudioReport(panel: LinearLayout, display: AudioDisplay) {
@@ -1270,6 +1467,9 @@ class MainActivity : AppCompatActivity() {
             appendLine("Last real-call check: " + (uplink?.let {
                 "${it.result} in ${if (it.redirect) "redirect" else "in-call"} mode at ${java.util.Date(it.at)}"
             } ?: "none on this Android build"))
+            appendLine("Guided real-call tests: " + RealCallAudioTest.Mode.entries.joinToString(", ") { mode ->
+                "${mode.name}=${UplinkHealth.heard(context, mode)?.name ?: "untested"}"
+            })
             appendLine()
             append(component ?: "Call audio component isn't running. Start call audio, then send the report again.")
         }
@@ -1288,28 +1488,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun enable(feature: Feature) {
-        val missing = feature.permissions.filterNot { hasPermission(it) }
+    private fun sharingPermissions(fromGuide: Boolean) = SharingPermissions.missing(
+        selectedSharing, includeNearby = fromGuide, includeNotifications = Build.VERSION.SDK_INT >= 33 &&
+            !getPreferences(MODE_PRIVATE).getBoolean("askedNotification", false), hasPermission = ::hasPermission
+    )
+
+    private fun applySharing(fromGuide: Boolean) {
+        if (sharingRequestFromGuide != null) return
+        val missing = sharingPermissions(fromGuide)
         if (missing.isEmpty()) {
-            feature.allow(this, true)
-            refreshSharing()
+            finishSharingRequest(fromGuide)
             return
         }
-        val description = when (feature) {
-            Feature.CALLS -> getString(R.string.s_share_status)
-            Feature.CALLER -> getString(R.string.s_share_caller)
-            Feature.CONTROL -> getString(R.string.s_share_control)
-            Feature.SMS -> getString(R.string.s_share_text)
-            Feature.SEND_SMS -> getString(R.string.s_share_send)
-            Feature.CONTACTS -> getString(R.string.s_share_contacts)
+        if (permission.POST_NOTIFICATIONS in missing) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("askedNotification", true).apply()
         }
-        MaterialAlertDialogBuilder(this).setTitle(feature.title).setMessage(description)
-            .setNegativeButton(getString(R.string.ez_cancel)) { _, _ -> renderSharing() }
-            .setOnCancelListener { renderSharing() }
-            .setPositiveButton(getString(R.string.ez_continue)) { _, _ ->
-                requestingFeature = feature
-                requestPermissions(missing.toTypedArray(), SHARE)
-            }.show()
+        sharingRequestFromGuide = fromGuide
+        requestPermissions(missing, SHARE)
+        renderSharing()
+    }
+
+    private fun finishSharingRequest(fromGuide: Boolean) {
+        val granted = SharingPermissions.granted(selectedSharing, Feature.CALLS.active(this), ::hasPermission)
+        granted.forEach { it.allow(this, true) }
+        selectedSharing.removeAll(granted)
+        sharingDenied = selectedSharing.isNotEmpty()
+        refreshSharing()
+        if (!fromGuide || detail != Detail.GUIDE || step != Step.SHARING) return
+        val next = Step.afterSharing(PairKey(this).exists())
+        moveTo(next)
+        if (next == Step.LINK && !RelayState.current.running) {
+            if (RelayService.hasBluetoothPermissions(this)) ensureBluetooth()
+            else showLinkIssue(R.string.s_nearby_pair)
+        }
     }
 
     private fun showAudioPort() {
@@ -1471,7 +1682,7 @@ class MainActivity : AppCompatActivity() {
     private fun ensureBluetooth() {
         if (relayStarting) return
         connectionIssue = null
-        val needed = arrayOf(permission.BLUETOOTH_ADVERTISE, permission.BLUETOOTH_CONNECT)
+        val needed = SharingPermissions.nearby
         if (needed.any { !hasPermission(it) }) {
             requestPermissions(needed, NEARBY)
             return
@@ -1552,12 +1763,9 @@ class MainActivity : AppCompatActivity() {
                 if (hasPermission(permission.POST_NOTIFICATIONS)) startWirelessPairing()
                 else appSettings(getString(R.string.s_wireless_allow_notice))
             }
-            SHARE -> requestingFeature?.let { feature ->
-                requestingFeature = null
-                val granted = feature.permissions.any { hasPermission(it) }
-                feature.allow(this, granted)
-                refreshSharing()
-                if (!granted) appSettings(getString(R.string.s_permission_denied))
+            SHARE -> sharingRequestFromGuide?.let { fromGuide ->
+                sharingRequestFromGuide = null
+                finishSharingRequest(fromGuide)
             }
         }
     }

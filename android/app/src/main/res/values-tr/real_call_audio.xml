@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">Gerçek aramayı test et</string>
+    <string name="s_real_audio_redirect">Yönlendirme (Otomatik)</string>
+    <string name="s_real_audio_instructions">Bir mod seçin ve eşleştirilmiş alıcı telefondan üçüncü bir telefonu arayın. Gönderici telefonu sesinizin ulaşamayacağı bir yere koyun. Alıcı ve üçüncü telefonda sırayla konuşun. Aramayı bitirin ve kimin net duyduğunu kaydetmek için buraya dönün. Diğer modla testi tekrarlayın.</string>
+    <string name="s_real_audio_setup">Testten önce alıcı telefonu bağlayın, arama bildirimlerini, arama kontrolünü ve iki yönlü arama sesini açın.</string>
+    <string name="s_real_audio_end_first">Ses testini başlatmadan önce mevcut aramayı bitirin.</string>
+    <string name="s_real_audio_waiting">Alıcı telefondan sonraki arama: %1$s</string>
+    <string name="s_real_audio_in_call">Arama sürüyor. Aramayı bitirdikten sonra buraya dönün.</string>
+    <string name="s_real_audio_answer">Sonucu kaydet</string>
+    <string name="s_real_audio_result_title">%1$s modunda kim net duydu?</string>
+    <string name="s_real_audio_both">İki taraf da net duydu</string>
+    <string name="s_real_audio_receiver_only">Yalnızca alıcı telefon net duydu</string>
+    <string name="s_real_audio_third_only">Yalnızca üçüncü telefon net duydu</string>
+    <string name="s_real_audio_neither">İki taraf da net duymadı</string>
+    <string name="s_real_audio_unavailable">Mod kullanılamadı</string>
+    <string name="s_real_audio_unavailable_detail">Arama %1$s modunda kalmadı. Sonucu kaydedin. Ardından bu modu yeniden deneyebilirsiniz.</string>
+    <string name="s_real_audio_untested">Test edilmedi</string>
+    <string name="s_real_audio_cancel">Testi iptal et</string>
+</resources>

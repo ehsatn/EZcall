@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">Test a real call</string>
+    <string name="s_real_audio_redirect">Redirect (Automatic)</string>
+    <string name="s_real_audio_instructions">Choose a mode, then use the paired receiving phone to call a third phone. Keep this sending phone out of earshot. Speak one at a time on the receiving phone and the third phone. End the call, return here, and save what each person could hear clearly. Repeat with the other mode.</string>
+    <string name="s_real_audio_setup">Connect the receiving phone and enable Call alerts, Call control, and two-way call audio before testing.</string>
+    <string name="s_real_audio_end_first">End the current call before starting a new audio test.</string>
+    <string name="s_real_audio_waiting">Next call from the receiving phone: %1$s</string>
+    <string name="s_real_audio_in_call">Call in progress. Return here after hanging up.</string>
+    <string name="s_real_audio_answer">Save what you heard</string>
+    <string name="s_real_audio_result_title">What could you hear in %1$s?</string>
+    <string name="s_real_audio_both">Both could hear clearly</string>
+    <string name="s_real_audio_receiver_only">Only the receiving phone could hear clearly</string>
+    <string name="s_real_audio_third_only">Only the third phone could hear clearly</string>
+    <string name="s_real_audio_neither">Neither could hear clearly</string>
+    <string name="s_real_audio_unavailable">Mode unavailable</string>
+    <string name="s_real_audio_unavailable_detail">The call did not stay in %1$s. Save this result or retry the mode after saving.</string>
+    <string name="s_real_audio_untested">Untested</string>
+    <string name="s_real_audio_cancel">Cancel test</string>
+</resources>

@@ -25,6 +25,7 @@ import app.ezcall.android.AudioTestLog
 import app.ezcall.android.AudioTestMetric
 import app.ezcall.android.PairKey
 import app.ezcall.android.ReceiverTestStep
+import app.ezcall.android.SenderNetwork
 import app.ezcall.android.TEST_ECHO_SEQUENCE
 import app.ezcall.android.Wire
 import org.json.JSONObject
@@ -40,6 +41,11 @@ internal object ReceiverState {
     var canControl = false
     var canDial = false
     var canSendSms = false
+    var senderBattery: Int? = null
+    var senderNetworkAllowed: Boolean? = null
+    var senderNetwork = emptyMap<SenderNetwork, Boolean>()
+    var networkPending = false
+    var networkFailed = false
     var audioMode = "none"
     var inCall: ReceivedCall? = null
     var presentedCall: String? = null
@@ -93,6 +99,7 @@ internal class ReceiverService : Service() {
     private var pairedAudio = false
     private var audioModeRequested = false
     private var pendingSmsID: String? = null
+    private var pendingNetworkID: String? = null
     private var pendingCall: CallAction? = null
     private val pendingCallID get() = pendingCall?.id
     var systemCall: RelayConnection? = null
@@ -261,6 +268,25 @@ internal class ReceiverService : Service() {
         }
     }
 
+    fun setSenderNetwork(setting: SenderNetwork, enabled: Boolean) {
+        if (!state.connected || state.networkPending || state.senderNetwork[setting] != !enabled) return
+        val request = id()
+        if (send("network_set", request, JSONObject().put("setting", setting.field).put("enabled", enabled))) {
+            pendingNetworkID = request
+            state.networkPending = true
+            state.networkFailed = false
+            handler.postDelayed({ if (pendingNetworkID == request) finishNetwork(false) }, 22_000)
+        } else state.networkFailed = true
+        state.changed()
+    }
+
+    private fun finishNetwork(ok: Boolean) {
+        pendingNetworkID = null
+        state.networkPending = false
+        state.networkFailed = !ok
+        state.changed()
+    }
+
     fun answer(callID: String, allowMic: Boolean) {
         testLog(callID)?.add("Receiver action: answer, microphoneRequested=$allowMic")
         if (!state.canControlCurrentCall || state.inCall?.takeIf { it.state == "ringing" }?.id != callID || state.pendingCall) return
@@ -417,6 +443,19 @@ internal class ReceiverService : Service() {
             "pong" -> if (id == ping) {
                 ping = null
                 show("Connection test passed.")
+            }
+            "sender_status" -> {
+                state.senderBattery = (message.opt("battery") as? Int)?.let(SenderNetwork::batteryPercent)
+                state.senderNetworkAllowed = message.opt("network_allowed") as? Boolean
+                state.senderNetwork = if (state.senderNetworkAllowed == true) buildMap {
+                    SenderNetwork.entries.forEach { setting ->
+                        (message.opt(setting.field) as? Boolean)?.let { put(setting, it) }
+                    }
+                } else emptyMap()
+                state.changed()
+            }
+            "network_result" -> if (pendingNetworkID != null && id == pendingNetworkID) {
+                finishNetwork(message.opt("ok") == true)
             }
             "call" -> message.call()?.let(::receiveCall)
             "call_error" -> if (id == pendingCallID || id == state.inCall?.id || id == recovery?.id) {
@@ -840,6 +879,12 @@ internal class ReceiverService : Service() {
         state.canControl = false
         state.canDial = false
         state.canSendSms = false
+        state.senderBattery = null
+        state.senderNetworkAllowed = null
+        state.senderNetwork = emptyMap()
+        if (state.networkPending) state.networkFailed = true
+        state.networkPending = false
+        pendingNetworkID = null
         state.audioMode = "none"
         state.pendingCall = false
         if (hadPendingSms) setSmsStatus("No SMS confirmation received. Check the sending phone before retrying.")

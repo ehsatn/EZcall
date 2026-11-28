@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r_sender_phone">Teléfono emisor</string>
+    <string name="r_sender_battery">Batería</string>
+    <string name="r_sender_hotspot">Punto de acceso Wi-Fi</string>
+    <string name="r_sender_mobile_data">Datos móviles</string>
+    <string name="r_sender_unavailable">No disponible</string>
+    <string name="r_sender_network_pending">Cambiando el ajuste en el teléfono emisor…</string>
+    <string name="r_sender_network_failed">Cambio sin confirmar. Comprueba el teléfono emisor antes de volver a intentarlo.</string>
+    <string name="r_sender_network_allow">Permite el control remoto de la red en el teléfono emisor.</string>
+    <string name="r_sender_network_setup">Inicia el componente de audio de llamadas en el teléfono emisor para usar los controles de red.</string>
+</resources>

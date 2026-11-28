@@ -62,7 +62,7 @@
     <string name="s_while_off">Quando lo schermo si spegne</string>
     <string name="s_battery_off">L\'ottimizzazione della batteria è sospesa per ezcall</string>
     <string name="s_battery_may_pause">Android potrebbe interrompere il relay per salvare la batteria</string>
-    <string name="s_simulate">Prova audio chiamata</string>
+    <string name="s_simulate">Test audio simulato</string>
     <string name="s_simulate_wait">Rispondi sul telefono ricevente. Ascolta i segnali, poi parla per sentire la tua voce.</string>
     <string name="s_simulate_retry">Aspettate la chiamata corrente o riconnette e provate di nuovo.</string>
     <string name="s_relay">Il rilascio</string>

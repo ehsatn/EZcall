@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">Tester un appel réel</string>
+    <string name="s_real_audio_redirect">Redirection (Automatique)</string>
+    <string name="s_real_audio_instructions">Choisissez un mode, puis appelez un troisième téléphone depuis le récepteur associé. Placez le téléphone émetteur hors de portée de voix. Parlez à tour de rôle sur le récepteur et le troisième téléphone. Raccrochez, puis indiquez ici qui a entendu clairement. Répétez le test dans l’autre mode.</string>
+    <string name="s_real_audio_setup">Connectez le récepteur et activez les alertes, le contrôle et l’audio bidirectionnel des appels avant le test.</string>
+    <string name="s_real_audio_end_first">Terminez l’appel en cours avant de lancer le test audio.</string>
+    <string name="s_real_audio_waiting">Prochain appel depuis le récepteur : %1$s</string>
+    <string name="s_real_audio_in_call">Appel en cours. Revenez ici après avoir raccroché.</string>
+    <string name="s_real_audio_answer">Enregistrer le résultat</string>
+    <string name="s_real_audio_result_title">Qui a entendu clairement en mode %1$s ?</string>
+    <string name="s_real_audio_both">Les deux côtés ont entendu clairement</string>
+    <string name="s_real_audio_receiver_only">Seul le récepteur a entendu clairement</string>
+    <string name="s_real_audio_third_only">Seul le troisième téléphone a entendu clairement</string>
+    <string name="s_real_audio_neither">Aucun côté n’a entendu clairement</string>
+    <string name="s_real_audio_unavailable">Mode indisponible</string>
+    <string name="s_real_audio_unavailable_detail">L’appel n’est pas resté en mode %1$s. Enregistrez ce résultat. Vous pourrez ensuite réessayer ce mode.</string>
+    <string name="s_real_audio_untested">Non testé</string>
+    <string name="s_real_audio_cancel">Annuler le test</string>
+</resources>

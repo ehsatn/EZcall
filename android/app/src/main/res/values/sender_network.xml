@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sender_network_group">Network</string>
+    <string name="s_sender_network_allow">Allow Remote Network Control</string>
+    <string name="s_sender_network_help">Let the paired phone switch the Wi-Fi hotspot and mobile data on or off. Requires the running call audio component.</string>
+</resources>

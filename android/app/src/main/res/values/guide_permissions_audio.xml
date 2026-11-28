@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sharing_permissions">Allow selected permissions</string>
+    <string name="s_sharing_permissions_continue">Allow permissions and continue</string>
+    <string name="s_sharing_permissions_detail">Android will ask for the access you selected, plus relay notifications and any nearby-device access needed for setup.</string>
+    <string name="s_guide_audio_test_intro">Test both audio modes with a third phone. Your results will guide the choice of call audio mode.</string>
+    <string name="s_guide_audio_test_mode">Test %1$s</string>
+    <string name="s_guide_audio_test_details">Test instructions</string>
+    <string name="s_guide_audio_test_recommended">Recommended mode: %1$s</string>
+    <string name="s_guide_audio_test_use">Use %1$s and finish</string>
+    <string name="s_guide_audio_test_retry">Test again</string>
+    <string name="s_guide_audio_test_sharing">Review sharing</string>
+    <string name="s_guide_audio_test_unclear">Neither mode had clear audio in both directions.</string>
+</resources>

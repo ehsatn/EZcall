@@ -1312,6 +1312,31 @@ private struct RelaySettings: View {
             }
 
             Section {
+                LabeledContent("Battery") {
+                    if let battery = relay.senderStatus?.batteryPercent {
+                        Text(Double(battery) / 100, format: .percent.precision(.fractionLength(0)))
+                            .monospacedDigit()
+                    } else {
+                        Text("Unavailable")
+                    }
+                }
+                networkToggle("Wi-Fi Hotspot", .hotspot)
+                networkToggle("Mobile Data", .mobileData)
+            } header: {
+                Text("Sending Phone")
+            } footer: {
+                if relay.networkPending {
+                    Text("Changing setting on the sending phone…")
+                } else if relay.networkFailed {
+                    Text("Change unconfirmed. Check the sending phone before retrying.")
+                } else if relay.senderStatus?.network_allowed == false {
+                    Text("Allow remote network control on the sending phone.")
+                } else if let status = relay.senderStatus, status[.hotspot] == nil && status[.mobileData] == nil {
+                    Text("Start the call audio component on the sending phone to use network controls.")
+                }
+            }
+
+            Section {
                 if relay.syncing {
                     HStack(spacing: 10) {
                         ProgressView()
@@ -1407,6 +1432,19 @@ private struct RelaySettings: View {
             Button("Forget and Delete Data", role: .destructive) { relay.forgetPhone() }
         } message: {
             Text("Choose whether to keep calls, messages and contacts on this iPhone.")
+        }
+    }
+
+    @ViewBuilder
+    private func networkToggle(_ title: LocalizedStringKey, _ setting: RelayController.SenderNetwork) -> some View {
+        if relay.senderStatus?[setting] != nil {
+            Toggle(title, isOn: Binding(
+                get: { relay.senderStatus?[setting] == true },
+                set: { relay.setSenderNetwork(setting, enabled: $0) }
+            ))
+            .disabled(relay.status != .connected || relay.networkPending)
+        } else {
+            LabeledContent(title) { Text("Unavailable") }
         }
     }
 

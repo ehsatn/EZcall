@@ -1,6 +1,375 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Sending Phone": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "گوشی فرستنده"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الهاتف المُرسِل"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teléfono emisor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléphone émetteur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefono trasmittente"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gönderen telefon"
+          }
+        }
+      }
+    },
+    "Battery": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "باتری"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "البطارية"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batería"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batterie"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batteria"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pil"
+          }
+        }
+      }
+    },
+    "Wi-Fi Hotspot": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هات‌اسپات وای‌فای"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقطة اتصال Wi-Fi"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punto de acceso Wi-Fi"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Point d’accès Wi-Fi"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hotspot Wi-Fi"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi erişim noktası"
+          }
+        }
+      }
+    },
+    "Mobile Data": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دیتای سیم‌کارت"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بيانات الهاتف"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos móviles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Données mobiles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dati mobili"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mobil veri"
+          }
+        }
+      }
+    },
+    "Unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "در دسترس نیست"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متاح"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indisponible"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non disponibile"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kullanılamıyor"
+          }
+        }
+      }
+    },
+    "Changing setting on the sending phone…": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "در حال تغییر تنظیمات گوشی فرستنده…"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ تغيير الإعداد على الهاتف المُرسِل…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiando el ajuste en el teléfono emisor…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modification du réglage sur le téléphone émetteur…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica dell’impostazione sul telefono trasmittente…"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gönderen telefondaki ayar değiştiriliyor…"
+          }
+        }
+      }
+    },
+    "Change unconfirmed. Check the sending phone before retrying.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغییر تأیید نشد. پیش از تلاش دوباره، گوشی فرستنده را بررسی کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم تأكيد التغيير. تحقّق من الهاتف المُرسِل قبل إعادة المحاولة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambio sin confirmar. Comprueba el teléfono emisor antes de volver a intentarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modification non confirmée. Vérifiez le téléphone émetteur avant de réessayer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica non confermata. Controlla il telefono trasmittente prima di riprovare."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Değişiklik doğrulanmadı. Tekrar denemeden önce gönderen telefonu kontrol edin."
+          }
+        }
+      }
+    },
+    "Allow remote network control on the sending phone.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کنترل شبکه از راه دور را روی گوشی فرستنده فعال کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمح بالتحكم بالشبكة عن بُعد على الهاتف المُرسِل."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite el control remoto de la red en el teléfono emisor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorisez le contrôle du réseau à distance sur le téléphone émetteur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consenti il controllo remoto della rete sul telefono trasmittente."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gönderen telefonda uzaktan ağ denetimine izin verin."
+          }
+        }
+      }
+    },
+    "Start the call audio component on the sending phone to use network controls.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "برای کنترل شبکه، مؤلفهٔ صدای تماس را روی گوشی فرستنده اجرا کنید."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شغّل مكوّن صوت المكالمات على الهاتف المُرسِل لاستخدام عناصر التحكم بالشبكة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia el componente de audio de llamadas en el teléfono emisor para usar los controles de red."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrez le composant audio des appels sur le téléphone émetteur pour utiliser les commandes réseau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvia il componente audio delle chiamate sul telefono trasmittente per usare i controlli di rete."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ağ denetimlerini kullanmak için gönderen telefonda arama sesi bileşenini başlatın."
+          }
+        }
+      }
+    },
     "Check for Updates": {
       "extractionState": "manual",
       "localizations": {

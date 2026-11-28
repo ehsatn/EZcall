@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_sharing_permissions">Permitir los permisos elegidos</string>
+    <string name="s_sharing_permissions_continue">Conceder permisos y continuar</string>
+    <string name="s_sharing_permissions_detail">Android pedirá los permisos que hayas elegido y, cuando haga falta, los de notificaciones y dispositivos cercanos.</string>
+    <string name="s_guide_audio_test_intro">Prueba ambos modos de audio con un tercer teléfono. Los resultados ayudarán a elegir el modo de audio de las llamadas.</string>
+    <string name="s_guide_audio_test_mode">Probar %1$s</string>
+    <string name="s_guide_audio_test_details">Instrucciones de la prueba</string>
+    <string name="s_guide_audio_test_recommended">Modo recomendado: %1$s</string>
+    <string name="s_guide_audio_test_use">Usar %1$s y finalizar</string>
+    <string name="s_guide_audio_test_retry">Volver a probar</string>
+    <string name="s_guide_audio_test_sharing">Revisar opciones de compartir</string>
+    <string name="s_guide_audio_test_unclear">En ninguno de los modos se oyó con claridad en ambos sentidos.</string>
+</resources>

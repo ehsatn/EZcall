@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="s_real_audio_title">Prova una chiamata reale</string>
+    <string name="s_real_audio_redirect">Reindirizzamento (Automatico)</string>
+    <string name="s_real_audio_instructions">Scegli una modalità e usa il telefono ricevente associato per chiamare un terzo telefono. Tieni il mittente fuori dalla portata della voce. Parlate a turno dal ricevente e dal terzo telefono. Termina la chiamata e torna qui per indicare chi ha sentito chiaramente. Ripeti la prova nell’altra modalità.</string>
+    <string name="s_real_audio_setup">Collega il ricevente e attiva gli avvisi, il controllo e l’audio bidirezionale delle chiamate prima della prova.</string>
+    <string name="s_real_audio_end_first">Termina la chiamata in corso prima di avviare la prova audio.</string>
+    <string name="s_real_audio_waiting">Prossima chiamata dal ricevente: %1$s</string>
+    <string name="s_real_audio_in_call">Chiamata in corso. Torna qui dopo aver riagganciato.</string>
+    <string name="s_real_audio_answer">Salva il risultato</string>
+    <string name="s_real_audio_result_title">Chi ha sentito chiaramente in modalità %1$s?</string>
+    <string name="s_real_audio_both">Entrambi hanno sentito chiaramente</string>
+    <string name="s_real_audio_receiver_only">Solo il ricevente ha sentito chiaramente</string>
+    <string name="s_real_audio_third_only">Solo il terzo telefono ha sentito chiaramente</string>
+    <string name="s_real_audio_neither">Nessuno ha sentito chiaramente</string>
+    <string name="s_real_audio_unavailable">Modalità non disponibile</string>
+    <string name="s_real_audio_unavailable_detail">La chiamata non è rimasta in modalità %1$s. Salva il risultato. Potrai poi riprovare questa modalità.</string>
+    <string name="s_real_audio_untested">Da provare</string>
+    <string name="s_real_audio_cancel">Annulla prova</string>
+</resources>

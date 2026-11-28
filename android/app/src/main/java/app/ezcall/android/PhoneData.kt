@@ -19,6 +19,8 @@ internal enum class Feature(val title: Int, val permissions: Array<String>) {
     SEND_SMS(R.string.s_send_from_receiving, arrayOf(permission.SEND_SMS)),
     CONTACTS(R.string.ez_contacts, arrayOf(permission.READ_CONTACTS));
 
+    val needsCallAlerts get() = this == CALLER || this == CONTROL
+
     fun optedIn(context: Context): Boolean =
         context.getSharedPreferences("sharing", Context.MODE_PRIVATE).getBoolean(name, false)
 

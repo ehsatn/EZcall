@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="r_sender_phone">الهاتف المُرسِل</string>
+    <string name="r_sender_battery">البطارية</string>
+    <string name="r_sender_hotspot">نقطة اتصال Wi-Fi</string>
+    <string name="r_sender_mobile_data">بيانات الهاتف</string>
+    <string name="r_sender_unavailable">غير متاح</string>
+    <string name="r_sender_network_pending">جارٍ تغيير الإعداد على الهاتف المُرسِل…</string>
+    <string name="r_sender_network_failed">لم يتم تأكيد التغيير. تحقّق من الهاتف المُرسِل قبل إعادة المحاولة.</string>
+    <string name="r_sender_network_allow">اسمح بالتحكم بالشبكة عن بُعد على الهاتف المُرسِل.</string>
+    <string name="r_sender_network_setup">شغّل مكوّن صوت المكالمات على الهاتف المُرسِل لاستخدام عناصر التحكم بالشبكة.</string>
+</resources>

@@ -35,6 +35,9 @@ Messages are UTF-8 JSON objects. Times use Unix epoch milliseconds. Request IDs 
 | Android | `sms_batch` | `id`, `items` array of SMS objects |
 | Android | `contacts_batch` | `id`, `items` array of contact objects |
 | Android | `sync_end` | `id`, optional incremental sync fields described below |
+| Android | `sender_status` | Optional integer `battery` (0–100), boolean `network_allowed`, and optional booleans `hotspot` and `mobile_data` |
+| Receiver | `network_set` | `id` (new UUID), `setting` (`hotspot` or `mobile_data`), `enabled` (boolean) |
+| Android | `network_result` | Matching `id` and boolean `ok`, which confirms the requested state was observed |
 | Android | `error` | `id`, `message` |
 | Android | `sms` | SMS fields |
 | Android | `call` | `id`, `address`, `date`, `state` |
@@ -58,6 +61,8 @@ Messages are UTF-8 JSON objects. Times use Unix epoch milliseconds. Request IDs 
 | Receiver | `unpair_ack` | Matching `id`, sent after removing the saved pairing and clearing its synced data. |
 
 An SMS object has string `id`, `address`, `body`, numeric `date` and `direction` (`in` or `out`). A contact object has string `id`, `name` and string-array `numbers`. Call states are `ringing`, `active` and `ended` with one ID per observed call. An empty call address means the number was unavailable.
+
+The Sender sends `sender_status` after authentication and when its status changes. The network fields describe the tethered Wi-Fi hotspot and mobile data for the default data SIM. They are present only while the Sender owner allows remote network control and its privileged component can read the Android settings. Send a network change only for a field present in the latest status. The Sender reports any observed state change before its matching result. A missing result leaves the outcome unconfirmed. Clear state on disconnect and require an explicit user action to retry.
 
 Android advertises `send_sms` only when the owner opts in and Android grants the send permission. The receiver waits for the matching result, which reports Android’s send status. A dropped link can leave the result unknown. Retry requires a new explicit action from the user.
 

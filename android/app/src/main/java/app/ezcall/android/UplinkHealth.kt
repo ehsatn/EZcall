@@ -13,7 +13,26 @@ internal object UplinkHealth {
 
     fun result(wire: Int) = if (wire == AudioBridge.CHECK_REACHED) Result.REACHED else Result.UNKNOWN
 
-    fun prefersNormal(redirectConfirmed: Boolean, normalConfirmed: Boolean) = normalConfirmed && !redirectConfirmed
+    fun prefersNormal(
+        redirectConfirmed: Boolean, normalConfirmed: Boolean,
+        redirectHeard: RealCallAudioTest.Result? = null, normalHeard: RealCallAudioTest.Result? = null
+    ): Boolean {
+        val both = RealCallAudioTest.Result.BOTH
+        if (redirectHeard == both || normalHeard == both) return redirectHeard != both
+        val unavailable = RealCallAudioTest.Result.UNAVAILABLE
+        val redirectWorks = redirectConfirmed && (redirectHeard == null || redirectHeard == unavailable)
+        val normalWorks = normalConfirmed && (normalHeard == null || normalHeard == unavailable)
+        return normalWorks && !redirectWorks
+    }
+
+    fun heard(context: Context, mode: RealCallAudioTest.Mode): RealCallAudioTest.Result? {
+        val record = prefs(context).getString(heardKey(mode), null) ?: return null
+        return RealCallAudioTest.Result.entries.find { record == "${Build.FINGERPRINT}|${it.name}" }
+    }
+
+    fun saveHeard(context: Context, mode: RealCallAudioTest.Mode, result: RealCallAudioTest.Result) {
+        prefs(context).edit().putString(heardKey(mode), "${Build.FINGERPRINT}|${result.name}").apply()
+    }
 
     fun confirmed(context: Context, redirect: Boolean): Boolean =
         prefs(context).getString(confirmedBuildKey(redirect), null) == Build.FINGERPRINT ||
@@ -47,6 +66,8 @@ internal object UplinkHealth {
     }
 
     private fun confirmedBuildKey(redirect: Boolean) = if (redirect) "uplink_redirect_build" else "uplink_normal_build"
+
+    private fun heardKey(mode: RealCallAudioTest.Mode) = "heard_${mode.name}"
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

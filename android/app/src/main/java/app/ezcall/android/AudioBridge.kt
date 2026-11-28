@@ -7,12 +7,14 @@ import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.sin
 
 // Loopback protocol between the relay and the call audio component that runs as the shell user.
 // Both sides prove the shared token before any audio flows. Messages are type, 16-bit length, payload.
 internal object AudioBridge {
-    const val VERSION = 17
+    const val VERSION = 18
     const val SAMPLE_RATE = Opus.SAMPLE_RATE
     const val FRAME_SAMPLES = Opus.FRAME_SAMPLES
     const val FRAME_BYTES = Opus.FRAME_BYTES
@@ -30,6 +32,8 @@ internal object AudioBridge {
     const val RECEIVER_READY = 0x13
     const val RECEIVER_RECOVERING = 2
     const val STOP_FOR_RECOVERY = 1
+    const val START_TRIAL = 0x14
+    const val TRIAL_MODE = 0x15
     const val PCM = 0x20
     const val DTMF = 0x21
     const val DTMF_DIGITS = "123456789*0#"
@@ -38,9 +42,11 @@ internal object AudioBridge {
     const val SHUTDOWN = 0x40
     const val DIAGNOSE = 0x50
     const val DIAGNOSTICS = 0x51
+    const val NETWORK = 0x52
 
     // SERVER_HELLO capability bits.
     const val CAN_INJECT = 1
+    const val CAN_CONTROL_NETWORK = 2
     // STARTED bits.
     const val DOWNLINK = 1
     const val UPLINK = 2
@@ -50,6 +56,10 @@ internal object AudioBridge {
     const val MODE_REDIRECT = 1
     const val MODE_IN_CALL = 2
     const val MAX_TEXT = 8_000
+    const val UPLINK_GAIN_DB = 6
+    const val DOWNLINK_GAIN_DB = 3
+    val uplinkGain = 10.0.pow(UPLINK_GAIN_DB / 20.0)
+    val downlinkGain = 10.0.pow(DOWNLINK_GAIN_DB / 20.0)
 
     private const val SERVER_LABEL = "xcall-audio/v1/server"
     private const val CLIENT_LABEL = "xcall-audio/v1/client"
@@ -57,6 +67,27 @@ internal object AudioBridge {
     private const val DTMF_TONE_SAMPLES = FRAME_SAMPLES * 8
     private const val DTMF_COMPONENT_PEAK = 1_802
     private val random = SecureRandom()
+
+    fun trialPayload(id: Int, mode: Int): ByteArray = ByteBuffer.allocate(5).putInt(id).put(mode.toByte()).array()
+
+    fun readTrial(payload: ByteArray): Pair<Int, Int>? {
+        if (payload.size != 5) return null
+        val buffer = ByteBuffer.wrap(payload)
+        val id = buffer.int
+        val mode = buffer.get().toInt()
+        return if (mode == MODE_REDIRECT || mode == MODE_IN_CALL) id to mode else null
+    }
+
+    fun boostVoice(pcm: ByteArray, gain: Double) {
+        val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        var peak = 0
+        for (i in 0 until samples.limit()) peak = maxOf(peak, abs(samples[i].toInt()))
+        if (peak == 0) return
+        // Back off the boost for loud frames, preserving headroom and any already-loud signal.
+        val applied = minOf(gain, maxOf(1.0, 30_000.0 / peak))
+        if (applied == 1.0) return
+        for (i in 0 until samples.limit()) samples.put(i, (samples[i] * applied).toInt().toShort())
+    }
 
     private fun dtmfEnvelope(sample: Int) =
         minOf(1.0, minOf(sample, DTMF_TONE_SAMPLES - 1 - sample) / (SAMPLE_RATE * 0.004))

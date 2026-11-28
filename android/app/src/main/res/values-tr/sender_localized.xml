@@ -62,7 +62,7 @@
     <string name="s_while_off">Ekranı kapatırken</string>
     <string name="s_battery_off">Batarya optimizasyonu ezcall için kapatıldı</string>
     <string name="s_battery_may_pause">Android, bataryayı kurtarmak için akışını durdurabilir</string>
-    <string name="s_simulate">Arama sesini test et</string>
+    <string name="s_simulate">Simülasyonla ses testi</string>
     <string name="s_simulate_wait">Alıcı telefonda yanıtlayın. Bip seslerini dinleyin, ardından sesinizi duymak için konuşun.</string>
     <string name="s_simulate_retry">Şimdiki çağrı için bekleyin veya yeniden bağlayın ve tekrar deneyin.</string>
     <string name="s_relay">Relay için</string>

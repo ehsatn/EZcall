@@ -62,7 +62,7 @@
     <string name="s_while_off">بينما يغلق الشاشة</string>
     <string name="s_battery_off">تحسين البطارية مفتوحة لـ ezcall</string>
     <string name="s_battery_may_pause">أندرويد قد تتوقف عن تشغيلها لإنقاذ البطارية</string>
-    <string name="s_simulate">اختبار صوت المكالمة</string>
+    <string name="s_simulate">اختبار صوت بمكالمة محاكاة</string>
     <string name="s_simulate_wait">أجب على الهاتف المستقبِل. استمع إلى الصفارات ثم تحدّث لسماع صدى صوتك.</string>
     <string name="s_simulate_retry">انتظر المكالمة الحالية أو إعادة الاتصال ومحاولة مرة أخرى.</string>
     <string name="s_relay">ريلى</string>
