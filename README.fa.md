@@ -8,8 +8,8 @@
 
 | دستگاه | فایل | پیش‌نیاز |
 | --- | --- | --- |
-| اندروید دارای سیم‌کارت | [فرستنده ۰٫۱٫۳۰ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-8/ezcall-sender-0.1.30-release.apk) | اندروید ۱۲ یا بالاتر، قابلیت تماس و پشتیبانی از اعلان حضور به‌عنوان دستگاه جانبی بلوتوث کم‌مصرف (BLE) |
-| گوشی اندرویدی دوم | [گیرنده ۰٫۱٫۱۷ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-8/ezcall-receiver-0.1.17-release.apk) | اندروید ۱۲ یا بالاتر و BLE |
+| اندروید دارای سیم‌کارت | [فرستنده ۰٫۱٫۳۴ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-9/ezcall-sender-0.1.34-release.apk) | اندروید ۱۲ یا بالاتر، قابلیت تماس و پشتیبانی از اعلان حضور به‌عنوان دستگاه جانبی بلوتوث کم‌مصرف (BLE) |
+| گوشی اندرویدی دوم | [گیرنده ۰٫۱٫۲۰ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-9/ezcall-receiver-0.1.20-release.apk) | اندروید ۱۲ یا بالاتر و BLE |
 | آیفون | [پیوستن به EasyCall Relay در TestFlight](https://testflight.apple.com/join/gRnJCZ5E) | iOS ۱۷ یا بالاتر و برنامهٔ TestFlight |
 
 در اندروید، APK مربوط به نقش گوشی را روی همان دستگاه باز کنید و مراحل نصب را انجام دهید. در صفحهٔ هر انتشار فایل SHA-256 برای بررسی صحت دانلود موجود است. شمارهٔ نسخهٔ سه برنامه مستقل است. اگر از فرستندهٔ ۰٫۱٫۸ به نسخهٔ جدید می‌روید، اندروید آن را به‌عنوان برنامه‌ای جدا نصب می‌کند. جفت‌سازی گیرنده و در صورت استفاده، راه‌اندازی صدای تماس را تکرار کنید. [یادداشت انتشار و هش فایل‌ها](https://github.com/ehsatn/EZcall/releases/latest)
