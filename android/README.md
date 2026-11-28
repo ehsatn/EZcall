@@ -77,6 +77,8 @@ On phones that support PSTN call audio access, ezcall streams audio when the rec
 
 During the first seconds the receiver talks in a relayed call, the call audio component compares that voice with the phone’s own call uplink capture. A match confirms that the voice reached the SIM call, and **Settings → Call audio** says so. No match proves nothing: some phones take that capture before the receiver’s voice is mixed in, as a Xiaomi 12 Lite (Snapdragon 778G) did while the other person heard the receiver. Every 5 seconds the component also logs how much of the receiver’s audio arrived and how loud it was.
 
+**Settings → Call audio → Call audio mode** chooses how the SIM call is handled while the receiver has it. **Automatic** redirects the call off this phone’s earpiece and microphone. **Normal call mode** keeps Telecom’s in-call mode, mutes this phone’s earpiece and leaves its microphone on, for phones whose audio hardware drops the receiver’s voice in redirect mode. The choice applies from the next call, and the component log names the mode each call used.
+
 **Settings → Call audio → Send audio report** shares the device model, chipset, Android build, setup method, the last check result and the component’s recent log as text. It contains no numbers, contacts or messages.
 
 Enable **Floating call button** in the sender’s **Settings → Call audio** and allow ezcall to display over other apps. Tap **Use audio on this phone** while the call is ringing or using the receiver. The receiver closes its call screen and the SIM call continues on Android. The same action is available in the sender’s relay notification.

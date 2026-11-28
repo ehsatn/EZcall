@@ -1072,7 +1072,8 @@ class MainActivity : AppCompatActivity() {
         val error: Int?,
         val rootGranted: Boolean,
         val uplink: UplinkHealth.Result?,
-        val reporting: Boolean
+        val reporting: Boolean,
+        val normalCallMode: Boolean
     ) {
         val shizuku get() = method == CallAudio.Setup.Method.SHIZUKU
     }
@@ -1085,7 +1086,7 @@ class MainActivity : AppCompatActivity() {
         val display = AudioDisplay(audioTitle(), active, configured, audioBusy, RelayState.current.running, paired,
             paired || (configured && LocalAdb.hasKey()),
             CallAudio.Setup.method(this), Settings.canDrawOverlays(this),
-            setupAudioError, rootGranted, uplinkResult(), audioReporting)
+            setupAudioError, rootGranted, uplinkResult(), audioReporting, CallAudio.Setup.normalCallMode(this))
         if (shownAudio == display) return
         shownAudio = display
         val info = when {
@@ -1158,7 +1159,10 @@ class MainActivity : AppCompatActivity() {
             }, space())
         }
         if (!methods) {
-            if (display.configured) addAudioReport(panel, display)
+            if (display.configured) {
+                addAudioMode(panel, display)
+                addAudioReport(panel, display)
+            }
             return
         }
         if (offersRoot) {
@@ -1207,6 +1211,26 @@ class MainActivity : AppCompatActivity() {
         }.view, accent = display.overlayEnabled), space(top = 12))
     }
 
+    private fun addAudioMode(panel: LinearLayout, display: AudioDisplay) {
+        val current = getString(if (display.normalCallMode) R.string.s_audio_mode_normal else R.string.s_audio_mode_auto)
+        panel.addView(surfaceCard(settingsRow(R.drawable.ic_call, getString(R.string.s_audio_mode), current,
+            enabled = !display.busy, action = ::chooseAudioMode).view), space(top = if (panel.childCount == 0) 0 else 12))
+        panel.addView(body(getString(R.string.s_audio_mode_help)), space(top = 8))
+    }
+
+    private fun chooseAudioMode() {
+        val normal = CallAudio.Setup.normalCallMode(this)
+        MaterialAlertDialogBuilder(this).setTitle(R.string.s_audio_mode)
+            .setSingleChoiceItems(arrayOf(getString(R.string.s_audio_mode_auto), getString(R.string.s_audio_mode_normal)),
+                if (normal) 1 else 0) { dialog, which ->
+                CallAudio.Setup.setNormalCallMode(this, which == 1)
+                dialog.dismiss()
+                renderAudio()
+            }
+            .setNegativeButton(R.string.ez_cancel, null)
+            .show()
+    }
+
     private fun addAudioReport(panel: LinearLayout, display: AudioDisplay) {
         panel.addView(surfaceCard(settingsRow(R.drawable.ic_sender_help, getString(R.string.s_audio_report),
             getString(R.string.s_audio_report_detail), enabled = !display.busy && !display.reporting,
@@ -1241,6 +1265,7 @@ class MainActivity : AppCompatActivity() {
             appendLine("ezcall Sender $version audio report")
             appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Setup: method=${CallAudio.Setup.method(context)} enabled=${CallAudio.Setup.enabled(context)} " +
+                "mode=${if (CallAudio.Setup.normalCallMode(context)) "normal" else "automatic"} " +
                 "status=${RelayState.audio} relay=${RelayState.current.running} connected=${RelayState.current.connected}")
             appendLine("Last real-call check: " + (uplink?.let {
                 "${it.result} in ${if (it.redirect) "redirect" else "in-call"} mode at ${java.util.Date(it.at)}"

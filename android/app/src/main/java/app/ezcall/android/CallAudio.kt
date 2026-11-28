@@ -64,7 +64,8 @@ internal class CallAudio(private val context: Context, private val events: Event
         val next = Stream(callId, payloadLimit, pairFrames)
         stream = next
         try {
-            AudioBridge.write(current.output, AudioBridge.START)
+            val mode = if (Setup.normalCallMode(context)) byteArrayOf(AudioBridge.START_NORMAL_MODE.toByte()) else ByteArray(0)
+            AudioBridge.write(current.output, AudioBridge.START, mode)
         } catch (_: IOException) {
             drop(current)
         }
@@ -236,6 +237,14 @@ internal class CallAudio(private val context: Context, private val events: Event
         private val usb = UsbAudioAuthorization(SystemClock::elapsedRealtime)
 
         fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
+
+        /** Keeps the SIM call in Telecom's normal mode, for phones whose audio hardware drops the receiver's voice
+         * in call redirect mode. Applies from the next call. */
+        fun normalCallMode(context: Context) = prefs(context).getBoolean("normal_call_mode", false)
+
+        fun setNormalCallMode(context: Context, enabled: Boolean) {
+            prefs(context).edit().putBoolean("normal_call_mode", enabled).apply()
+        }
 
         enum class Method {
             ROOT, SHIZUKU, WIRELESS, USB;

@@ -8,7 +8,7 @@
 
 | دستگاه | فایل | پیش‌نیاز |
 | --- | --- | --- |
-| اندروید دارای سیم‌کارت | [فرستنده ۰٫۱٫۲۷ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-6/ezcall-sender-0.1.27-release.apk) | اندروید ۱۲ یا بالاتر، قابلیت تماس و پشتیبانی از اعلان حضور به‌عنوان دستگاه جانبی بلوتوث کم‌مصرف (BLE) |
+| اندروید دارای سیم‌کارت | [فرستنده ۰٫۱٫۲۸ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-7/ezcall-sender-0.1.28-release.apk) | اندروید ۱۲ یا بالاتر، قابلیت تماس و پشتیبانی از اعلان حضور به‌عنوان دستگاه جانبی بلوتوث کم‌مصرف (BLE) |
 | گوشی اندرویدی دوم | [گیرنده ۰٫۱٫۱۶ · APK](https://github.com/ehsatn/EZcall/releases/download/android-2026-11-28-2/ezcall-receiver-0.1.16-release.apk) | اندروید ۱۲ یا بالاتر و BLE |
 | آیفون | [پیوستن به EasyCall Relay در TestFlight](https://testflight.apple.com/join/gRnJCZ5E) | iOS ۱۷ یا بالاتر و برنامهٔ TestFlight |
 

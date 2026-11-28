@@ -63,7 +63,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             while (true) {
                 val (message, payload) = AudioBridge.read(input)
                 when (message) {
-                    AudioBridge.START -> owner = start(output)
+                    AudioBridge.START -> owner = start(output, payload.singleOrNull()?.toInt() == AudioBridge.START_NORMAL_MODE)
                     AudioBridge.STOP -> {
                         val preserveGrace = payload.singleOrNull()?.toInt() == AudioBridge.STOP_FOR_RECOVERY
                         require(payload.isEmpty() || preserveGrace)
@@ -100,8 +100,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
         }
     }
 
-    private fun start(output: DataOutputStream): Media? {
-        val next = Media(output)
+    private fun start(output: DataOutputStream, normalMode: Boolean): Media? {
+        val next = Media(output, allowRedirect = !normalMode)
         synchronized(this) {
             media?.close()
             media = null
@@ -121,7 +121,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             media = next
             next.begin()
         }
-        log("Two-way call audio opened")
+        log("Two-way call audio opened (${if (next.allowRedirect) "automatic" else "normal call"} mode)")
         return next
     }
 
@@ -133,7 +133,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
     }
 
     @SuppressLint("InlinedApi") // Redirection uses telephony devices opened only on Android 13 and later.
-    private inner class Media(private val output: DataOutputStream) {
+    private inner class Media(private val output: DataOutputStream, val allowRedirect: Boolean) {
         @Volatile private var running = true
         private val uplink = ArrayBlockingQueue<ByteArray>(AudioBridge.LIVE_QUEUE_FRAMES)
         private val dtmf = ArrayBlockingQueue<Char>(12)
@@ -254,6 +254,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             val frame = ByteArray(AudioBridge.FRAME_BYTES)
             var checkCaptureAt = 0L
             var silencedSince: Long? = null
+            val stats = AudioStats("Far-end audio", "captured")
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
                 while (running) {
@@ -266,6 +267,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                     lastDownlinkAt = SystemClock.elapsedRealtime()
                     if (!running || !receiverReady) {
                         silencedSince = null
+                        stats.flush()
                         continue
                     }
                     val now = SystemClock.elapsedRealtime()
@@ -279,10 +281,15 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                             }
                         } else silencedSince = null
                     }
-                    if (receiverReady) AudioBridge.write(output, AudioBridge.PCM, frame)
+                    if (receiverReady) {
+                        stats.add(frame)
+                        AudioBridge.write(output, AudioBridge.PCM, frame)
+                    }
                 }
             } catch (error: Exception) {
                 mediaFailed("Android stopped capturing call audio.", error)
+            } finally {
+                stats.flush()
             }
         }
 
@@ -291,7 +298,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             var voice = AudioBridge.UplinkPcm()
             var tone: ByteArray? = null
             var toneOffset = 0
-            val stats = ReceiverAudioStats()
+            val stats = AudioStats("Receiver audio", "received")
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             try {
                 while (running) {
@@ -336,8 +343,8 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             }
         }
 
-        /** Shows whether the receiver's microphone audio reaches this component, and how loud it is. */
-        private inner class ReceiverAudioStats {
+        /** Shows, every 5 s, whether audio flows through this component in one direction and how loud it is. */
+        private inner class AudioStats(private val label: String, private val verb: String) {
             private var frames = 0
             private var voiced = 0
             private var gaps = 0
@@ -359,7 +366,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 if (frames + gaps == 0) return
                 val ms = AudioBridge.FRAME_SAMPLES * 1000L / AudioBridge.SAMPLE_RATE
                 val average = if (frames == 0) 0 else (sum / frames).toInt()
-                log("Receiver audio: ${frames * ms}ms received, ${gaps * ms}ms missing, ${voiced * ms}ms voiced, " +
+                log("$label: ${frames * ms}ms $verb, ${gaps * ms}ms missing, ${voiced * ms}ms voiced, " +
                     "level=${average}dB peak=${peak.toInt()}dB, ${modeName()} mode, track=${track?.playState}")
                 frames = 0
                 voiced = 0
@@ -565,7 +572,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
                 restoreTask?.cancel(false)
                 restoreTask = null
                 mutePlayback()
-                if (!redirected) redirect(owner)
+                if (!redirected && owner.allowRedirect) redirect(owner)
             }
         }
 
@@ -735,7 +742,7 @@ class CallAudioServer private constructor(private val token: ByteArray) {
             appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE}) soc=$soc")
             appendLine("Build: ${Build.FINGERPRINT}")
             appendLine("Interceptable: ${canIntercept()} mode=${runCatching { manager?.mode }.getOrNull()} telephony $telephony")
-            appendLine("Redirect: active=${handset.isRedirected()}")
+            appendLine("Redirect: active=${handset.isRedirected()} allowed=${synchronized(this@CallAudioServer) { media?.allowRedirect }}")
             appendLine("Last uplink check: $lastCheck")
             appendLine("Log:")
         }

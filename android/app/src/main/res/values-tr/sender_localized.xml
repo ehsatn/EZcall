@@ -180,4 +180,8 @@
     <string name="s_xiaomi_background_help">Xiaomi, Redmi ve POCO telefonlar uygulamaları arka planda kendileri de durdurur. Ekran kapalıyken aramaların alıcı telefona ulaşması için ezcall’da Otomatik başlatmayı açın ve pil tasarrufunu Kısıtlama yok olarak ayarlayın.</string>
     <string name="s_xiaomi_autostart">Otomatik başlatmayı aç</string>
     <string name="s_xiaomi_battery_saver">Pil tasarrufunu aç</string>
+    <string name="s_audio_mode">Arama sesi modu</string>
+    <string name="s_audio_mode_auto">Otomatik</string>
+    <string name="s_audio_mode_normal">Normal arama modu</string>
+    <string name="s_audio_mode_help">Otomatik modda, alıcı telefon aramayı üstlendiği sürece arama bu telefonun kulaklığından ve mikrofonundan ayrılır. Karşı taraf alıcı telefonu duymuyorsa Normal arama modunu seçin: bu telefonun kulaklığı sessize alınır ve mikrofonu açık kalır. Sonraki aramadan itibaren geçerlidir.</string>
 </resources>

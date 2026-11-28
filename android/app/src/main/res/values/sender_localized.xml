@@ -186,4 +186,8 @@
     <string name="s_xiaomi_background_help">Xiaomi, Redmi and POCO phones also stop apps in the background on their own. Turn on Autostart for ezcall, and set its battery saver to No restrictions, so calls still reach the receiving phone with the screen off.</string>
     <string name="s_xiaomi_autostart">Open Autostart</string>
     <string name="s_xiaomi_battery_saver">Open battery saver</string>
+    <string name="s_audio_mode">Call audio mode</string>
+    <string name="s_audio_mode_auto">Automatic</string>
+    <string name="s_audio_mode_normal">Normal call mode</string>
+    <string name="s_audio_mode_help">Automatic takes the call off this phone’s earpiece and microphone while the receiving phone has it. If the other person can’t hear the receiving phone, choose Normal call mode: this phone’s earpiece is muted and its microphone stays on. Applies from the next call.</string>
 </resources>

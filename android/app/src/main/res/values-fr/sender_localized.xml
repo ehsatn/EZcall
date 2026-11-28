@@ -181,4 +181,8 @@
     <string name="s_xiaomi_background_help">Les téléphones Xiaomi, Redmi et POCO arrêtent aussi eux-mêmes les apps en arrière-plan. Activez le démarrage automatique d’ezcall et réglez son économiseur de batterie sur Aucune restriction pour que les appels atteignent le téléphone récepteur écran éteint.</string>
     <string name="s_xiaomi_autostart">Ouvrir le démarrage automatique</string>
     <string name="s_xiaomi_battery_saver">Ouvrir l’économiseur de batterie</string>
+    <string name="s_audio_mode">Mode audio des appels</string>
+    <string name="s_audio_mode_auto">Automatique</string>
+    <string name="s_audio_mode_normal">Mode d’appel normal</string>
+    <string name="s_audio_mode_help">En automatique, l’appel quitte l’écouteur et le micro de ce téléphone tant que le téléphone récepteur le prend en charge. Si votre correspondant n’entend pas le téléphone récepteur, choisissez Mode d’appel normal : l’écouteur de ce téléphone est coupé et son micro reste actif. S’applique à partir du prochain appel.</string>
 </resources>

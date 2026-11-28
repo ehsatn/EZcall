@@ -184,4 +184,8 @@
     <string name="s_xiaomi_background_help">تُوقف هواتف Xiaomi وRedmi وPOCO التطبيقات في الخلفية بنفسها أيضًا. فعّل التشغيل التلقائي لـ ezcall واضبط توفير البطارية له على بلا قيود، كي تصل المكالمات إلى هاتف الاستقبال والشاشة مطفأة.</string>
     <string name="s_xiaomi_autostart">فتح التشغيل التلقائي</string>
     <string name="s_xiaomi_battery_saver">فتح توفير البطارية</string>
+    <string name="s_audio_mode">وضع صوت المكالمة</string>
+    <string name="s_audio_mode_auto">تلقائي</string>
+    <string name="s_audio_mode_normal">وضع المكالمة العادي</string>
+    <string name="s_audio_mode_help">في الوضع التلقائي تُفصل سماعة هذا الهاتف وميكروفونه عن المكالمة ما دام هاتف الاستقبال يتولاها. إن لم يسمع الطرف الآخر هاتف الاستقبال، فاختر وضع المكالمة العادي: تُكتم سماعة هذا الهاتف ويبقى ميكروفونه يعمل. يُطبَّق من المكالمة التالية.</string>
 </resources>

@@ -181,4 +181,8 @@
     <string name="s_xiaomi_background_help">Los teléfonos Xiaomi, Redmi y POCO también detienen apps en segundo plano por su cuenta. Activa el inicio automático de ezcall y pon su ahorro de batería en Sin restricciones para que las llamadas lleguen al teléfono receptor con la pantalla apagada.</string>
     <string name="s_xiaomi_autostart">Abrir inicio automático</string>
     <string name="s_xiaomi_battery_saver">Abrir ahorro de batería</string>
+    <string name="s_audio_mode">Modo de audio de llamada</string>
+    <string name="s_audio_mode_auto">Automático</string>
+    <string name="s_audio_mode_normal">Modo de llamada normal</string>
+    <string name="s_audio_mode_help">En automático, la llamada deja de usar el auricular y el micrófono de este teléfono mientras la tiene el teléfono receptor. Si la otra persona no oye el teléfono receptor, elige Modo de llamada normal: el auricular de este teléfono se silencia y su micrófono sigue activo. Se aplica desde la próxima llamada.</string>
 </resources>

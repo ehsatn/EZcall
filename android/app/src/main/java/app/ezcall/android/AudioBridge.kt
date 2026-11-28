@@ -12,7 +12,7 @@ import kotlin.math.sin
 // Loopback protocol between the relay and the call audio component that runs as the shell user.
 // Both sides prove the shared token before any audio flows. Messages are type, 16-bit length, payload.
 internal object AudioBridge {
-    const val VERSION = 15
+    const val VERSION = 16
     const val SAMPLE_RATE = Opus.SAMPLE_RATE
     const val FRAME_SAMPLES = Opus.FRAME_SAMPLES
     const val FRAME_BYTES = Opus.FRAME_BYTES
@@ -23,6 +23,8 @@ internal object AudioBridge {
     const val SERVER_HELLO = 0x02
     const val AUTH = 0x03
     const val START = 0x10
+    // Optional START payload: keep Telecom's normal call mode instead of redirecting the call off the handset.
+    const val START_NORMAL_MODE = 1
     const val STARTED = 0x11
     const val STOP = 0x12
     const val RECEIVER_READY = 0x13

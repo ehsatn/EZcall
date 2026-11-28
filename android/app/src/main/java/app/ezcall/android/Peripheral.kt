@@ -43,10 +43,12 @@ internal class Peripheral(
     private val testLog: () -> AudioTestLog?
 ) {
     private val manager = context.getSystemService(BluetoothManager::class.java)
+    private val mtuStore = context.getSharedPreferences("ble_link", Context.MODE_PRIVATE)
     private val advertiser = manager.adapter?.bluetoothLeAdvertiser
     private val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     private var server: BluetoothGattServer? = null
     private var advertising = false
+    private var openedAt = 0L
     @Volatile private var peer: Peer? = null
     @Volatile private var audioActive = false
     private var audioDelivery: AudioDelivery? = null
@@ -157,17 +159,15 @@ internal class Peripheral(
                         if (peer?.device != device) active.cancelConnection(device)
                         return@post
                     }
-                    stopAdvertising()
-                    val connection = Peer(device)
-                    peer = connection
-                    trace("Gatt connected")
-                    testLog()?.add("BLE GATT connected: status=$status")
-                    handler.postDelayed({
-                        if (peer === connection && !connection.ready) {
-                            disconnect(connection,
-                                "Handshake timed out, subscribed=${connection.subscribed}, hello=${connection.session != null}")
-                        }
-                    }, HANDSHAKE_TIMEOUT_MS)
+                    val sinceOpen = SystemClock.elapsedRealtime() - openedAt
+                    if (!advertising && sinceOpen < CARRIED_LINK_MS) {
+                        // The Bluetooth link outlived the previous server (other services keep it up), so Android
+                        // attaches it at once. The iPhone keeps its old session until it talks again over this link
+                        // or the link drops; restarting the server would only attach it again.
+                        trace("Existing Bluetooth link attached ${sinceOpen}ms after server open; waiting for the iPhone")
+                        return@post
+                    }
+                    adopt(device, "Gatt connected ${sinceOpen}ms after server open")
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED && peer?.device == device) {
                     trace("Gatt closed by stack, status=$status")
                     testLog()?.add("BLE disconnected: status=$status")
@@ -182,6 +182,7 @@ internal class Peripheral(
 
         override fun onMtuChanged(device: BluetoothDevice, mtu: Int) {
             handler.post {
+                rememberMtu(device, mtu)
                 peer?.takeIf { it.device == device }?.let {
                     it.capacity = (mtu - 3).coerceIn(20, 180)
                     it.mtu = mtu.coerceIn(23, 517)
@@ -199,7 +200,7 @@ internal class Peripheral(
         override fun onDescriptorReadRequest(device: BluetoothDevice, requestId: Int, offset: Int,
                                              descriptor: BluetoothGattDescriptor) {
             handler.post {
-                val connection = peer?.takeIf { it.device == device }
+                val connection = peerFor(device)
                 val audio = descriptor.characteristic?.uuid == Wire.audioOut
                 val value = when {
                     audio && connection?.audioSubscribed == true -> byteArrayOf(1, 0)
@@ -217,7 +218,7 @@ internal class Peripheral(
                                               preparedWrite: Boolean, responseNeeded: Boolean, offset: Int, value: ByteArray) {
             val input = value.copyOf()
             handler.post {
-                val connection = peer?.takeIf { it.device == device }
+                val connection = peerFor(device)
                 val audio = descriptor.characteristic?.uuid == Wire.audioOut
                 val enabled = input.contentEquals(if (audio) byteArrayOf(1, 0) else byteArrayOf(2, 0))
                 val valid = connection != null && !preparedWrite && offset == 0 && descriptor.uuid == Wire.cccd &&
@@ -257,7 +258,7 @@ internal class Peripheral(
                 return
             }
             handler.post {
-                val connection = peer?.takeIf { it.device == device }
+                val connection = peerFor(device)
                 val valid = connection?.subscribed == true && !preparedWrite && responseNeeded &&
                     offset == 0 && characteristic.uuid == Wire.receive && input.size in 1..180
                 if (!valid) {
@@ -331,6 +332,7 @@ internal class Peripheral(
         service.addCharacteristic(transmit)
         service.addCharacteristic(audioIn)
         service.addCharacteristic(audioOut)
+        openedAt = SystemClock.elapsedRealtime()
         server = manager.openGattServer(context, callback)
         check(server?.addService(service) == true)
         handler.postDelayed(discoveryDeadline, DISCOVERY_TIMEOUT_MS)
@@ -491,8 +493,54 @@ internal class Peripheral(
         onRequest(message)
     }
 
+    /** The current peer, or a device starting a session over a link that was already up when the server opened. */
+    private fun peerFor(device: BluetoothDevice): Peer? {
+        peer?.let { return it.takeIf { current -> current.device == device } }
+        if (server == null) return null
+        return adopt(device, "Gatt request on an existing Bluetooth link")
+    }
+
+    private fun adopt(device: BluetoothDevice, how: String): Peer {
+        stopAdvertising()
+        val connection = Peer(device)
+        (linkMtu[device.address] ?: savedMtu(device))?.let {
+            connection.capacity = (it - 3).coerceIn(20, 180)
+            connection.mtu = it.coerceIn(23, 517)
+        }
+        peer = connection
+        trace("$how, link MTU=${connection.mtu}")
+        testLog()?.add("BLE GATT connected")
+        handler.postDelayed({
+            if (peer === connection && !connection.ready) handshakeTimedOut(connection)
+        }, HANDSHAKE_TIMEOUT_MS)
+        return connection
+    }
+
+    private fun rememberMtu(device: BluetoothDevice, mtu: Int) {
+        linkMtu[device.address] = mtu
+        // Also kept across relay restarts in a new process, when the link to the iPhone may still be up.
+        if (savedMtu(device) != mtu) mtuStore.edit().putInt(device.address, mtu).apply()
+    }
+
+    private fun savedMtu(device: BluetoothDevice) = mtuStore.getInt(device.address, 0).takeIf { it >= 23 }
+
+
+    private fun handshakeTimedOut(connection: Peer) {
+        if (connection.subscribed || connection.session != null) {
+            disconnect(connection, "Handshake timed out, subscribed=${connection.subscribed}, hello=${connection.session != null}")
+            return
+        }
+        // The iPhone never started a session. A fresh server would face the same idle link, so keep this one open.
+        trace("Handshake timed out with no activity; keeping the Bluetooth server open")
+        testLog()?.add("BLE idle link released")
+        clearAudio(connection)
+        peer = null
+        runCatching { server?.cancelConnection(connection.device) }
+        advertise()
+    }
+
     private fun advertise() {
-        if (advertising || server == null) return
+        if (advertising || server == null || peer != null) return
         advertising = true
         handler.removeCallbacks(discoveryDeadline)
         handler.postDelayed(discoveryDeadline, DISCOVERY_TIMEOUT_MS)
@@ -631,13 +679,21 @@ internal class Peripheral(
         else BluetoothStatusCodes.ERROR_UNKNOWN
     }
 
+    // Connection-level events only, so release builds log them too for audio reports and device diagnostics.
     private fun trace(message: String) {
-        if (debug) Log.i("EzcallRelay", message)
+        Log.i("EzcallRelay", message)
     }
 
     private companion object {
+        // The ATT MTU belongs to the Bluetooth link, which outlives each relay's GATT server and Peripheral. A session
+        // resumed over a link that was already up gets no new MTU callback, and the 23-byte default leaves no room
+        // for call audio. Only touched on the main thread.
+        val linkMtu = object : LinkedHashMap<String, Int>() {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > 8
+        }
         const val MAX_QUEUE = 5 * 1024 * 1024
         const val DISCOVERY_TIMEOUT_MS = 10_000L
         const val HANDSHAKE_TIMEOUT_MS = 20_000L
+        const val CARRIED_LINK_MS = 1_000L
     }
 }
